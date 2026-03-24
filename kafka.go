@@ -1,0 +1,74 @@
+package nanopony
+
+import (
+	"crypto/tls"
+	"time"
+
+	"github.com/segmentio/kafka-go"
+	"github.com/segmentio/kafka-go/sasl/plain"
+)
+
+// KafkaWriterConfig holds Kafka writer configuration
+type KafkaWriterConfig struct {
+	Brokers      []string
+	Balancer     kafka.Balancer
+	BatchTimeout time.Duration
+	Transport    *kafka.Transport
+}
+
+// DefaultKafkaWriterConfig returns default Kafka writer configuration
+func DefaultKafkaWriterConfig() KafkaWriterConfig {
+	return KafkaWriterConfig{
+		Balancer:     &kafka.RoundRobin{},
+		BatchTimeout: 1 * time.Microsecond,
+		Transport:    nil,
+	}
+}
+
+// NewKafkaWriter creates a new Kafka writer with the given configuration
+func NewKafkaWriter(config KafkaWriterConfig) *kafka.Writer {
+	return &kafka.Writer{
+		Addr:         kafka.TCP(config.Brokers...),
+		Balancer:     config.Balancer,
+		BatchTimeout: config.BatchTimeout,
+		Transport:    config.Transport,
+	}
+}
+
+// NewKafkaWriterFromConfig creates Kafka writer from Config
+func NewKafkaWriterFromConfig(conf *Config) *kafka.Writer {
+	config := DefaultKafkaWriterConfig()
+
+	if conf.App.KafkaModels == "kafka-confluent" {
+		config.Brokers = conf.KafkaConfluent.BootstrapServers
+		config.Transport = createSASLTransport(
+			conf.KafkaConfluent.ApiKey,
+			conf.KafkaConfluent.ApiSecret,
+		)
+	} else {
+		config.Brokers = conf.Kafka.Brokers
+	}
+
+	return NewKafkaWriter(config)
+}
+
+// createSASLTransport creates a SASL/TLS transport for Confluent Cloud
+func createSASLTransport(apiKey, apiSecret string) *kafka.Transport {
+	return &kafka.Transport{
+		TLS: &tls.Config{
+			MinVersion: tls.VersionTLS12,
+		},
+		SASL: plain.Mechanism{
+			Username: apiKey,
+			Password: apiSecret,
+		},
+	}
+}
+
+// CloseKafkaWriter safely closes a Kafka writer
+func CloseKafkaWriter(writer *kafka.Writer) error {
+	if writer != nil {
+		return writer.Close()
+	}
+	return nil
+}
