@@ -58,10 +58,10 @@ type LoggerEntry struct {
 	Request         struct {
 		Payload map[string]any `json:"payload"`
 	} `json:"request"`
-	Response Response `json:"response"`
+	Response ResponseLog `json:"response"`
 }
 
-type Response struct {
+type ResponseLog struct {
 	Status  string `json:"status"`
 	Message string `json:"message"`
 }
@@ -99,7 +99,7 @@ func NewLogger(
 	return loggerEntry
 }
 
-func (le *LoggerEntry) SendToFile(level string, response Response) {
+func (le *LoggerEntry) SendToFile(level string, response ResponseLog) {
 	le.EndTimestamp = time.Now()
 	le.Duration = le.EndTimestamp.Sub(le.StartTimestamp).Milliseconds()
 	le.Level = level
@@ -115,7 +115,7 @@ func (le *LoggerEntry) SendToFile(level string, response Response) {
 func (le *LoggerEntry) LoggingData(
 	level string,
 	payload any,
-	response Response,
+	response ResponseLog,
 ) {
 	le.EndTimestamp = time.Now()
 	le.Duration = le.EndTimestamp.Sub(le.StartTimestamp).Milliseconds()
@@ -218,7 +218,7 @@ func (le *LoggerEntry) printToConsole() {
 func (le *LoggerEntry) SendToElasticSearch(
 	level string,
 	payload any,
-	response Response,
+	response ResponseLog,
 ) {
 	if EsClient == nil {
 		client, err := le.InitElasticSearch()
