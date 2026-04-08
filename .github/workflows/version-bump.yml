@@ -1,17 +1,22 @@
-name: Weekly Version Bump
+name: Version Tag on Changes
 
 on:
-  schedule:
-    # Run every Monday at 00:00 UTC
-    - cron: '0 0 * * 1'
+  push:
+    branches:
+      - main
+  pull_request:
+    types: [closed]
+    branches:
+      - main
   workflow_dispatch: # Allow manual trigger
 
 permissions:
   contents: write
 
 jobs:
-  version-bump:
+  version-tag:
     runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.merged == true) || github.event_name == 'push'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -19,78 +24,86 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Check for commits in the last week
-        id: check-commits
+      - name: Check for recent activity
+        id: check-activity
         run: |
-          # Get commits from the last 7 days
-          SINCE_DATE=$(date -d '7 days ago' --iso-8601=seconds)
-          COMMIT_COUNT=$(git log --oneline --since="$SINCE_DATE" | wc -l)
+          # Check for commits in the last 24 hours
+          COMMIT_COUNT=$(git log --oneline --since="24 hours ago" | wc -l)
           
+          # Check for merged pull requests in the last 24 hours
+          PR_MERGED=$(git log --oneline --since="24 hours ago" --merges | grep -i "merge pull request" | wc -l || echo "0")
+
+          TOTAL_ACTIVITY=$((COMMIT_COUNT + PR_MERGED))
+
           echo "Commit count: $COMMIT_COUNT"
-          echo "commit_count=$COMMIT_COUNT" >> $GITHUB_OUTPUT
+          echo "Merged PRs: $PR_MERGED"
+          echo "Total activity: $TOTAL_ACTIVITY"
           
-          if [ "$COMMIT_COUNT" -eq 0 ]; then
-            echo "No new commits in the last week. Skipping version bump."
-            echo "should_bump=false" >> $GITHUB_OUTPUT
+          echo "commit_count=$COMMIT_COUNT" >> $GITHUB_OUTPUT
+          echo "pr_merged=$PR_MERGED" >> $GITHUB_OUTPUT
+
+          if [ "$TOTAL_ACTIVITY" -eq 0 ]; then
+            echo "No new commits or merged pull requests in the last 24 hours. Skipping tag creation."
+            echo "should_tag=false" >> $GITHUB_OUTPUT
           else
-            echo "New commits found. Bumping version."
-            echo "should_bump=true" >> $GITHUB_OUTPUT
+            echo "New activity found. Creating tag."
+            echo "should_tag=true" >> $GITHUB_OUTPUT
           fi
 
       - name: Bump version
         id: bump-version
-        if: steps.check-commits.outputs.should_bump == 'true'
+        if: steps.check-activity.outputs.should_tag == 'true'
         run: |
           # Read current version
           CURRENT_VERSION=$(cat VERSION)
           echo "Current version: $CURRENT_VERSION"
-          
+
           # Split version into parts
           IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
-          
+
           # Bump patch version
           NEW_PATCH=$((PATCH + 1))
           NEW_VERSION="${MAJOR}.${MINOR}.${NEW_PATCH}"
-          
+
           echo "New version: $NEW_VERSION"
           echo "$NEW_VERSION" > VERSION
-          
+
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
           echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
 
       - name: Configure Git
-        if: steps.check-commits.outputs.should_bump == 'true'
+        if: steps.check-activity.outputs.should_tag == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Commit and push version bump
-        if: steps.check-commits.outputs.should_bump == 'true'
+        if: steps.check-activity.outputs.should_tag == 'true'
         run: |
           git add VERSION
           git commit -m "chore: bump version to v${{ steps.bump-version.outputs.new_version }} [skip ci]"
           git push origin main
 
       - name: Create Git tag
-        if: steps.check-commits.outputs.should_bump == 'true'
+        if: steps.check-activity.outputs.should_tag == 'true'
         run: |
           git tag -a "v${{ steps.bump-version.outputs.new_version }}" -m "Release v${{ steps.bump-version.outputs.new_version }}"
           git push origin "v${{ steps.bump-version.outputs.new_version }}"
 
       - name: Create GitHub Release
-        if: steps.check-commits.outputs.should_bump == 'true'
+        if: steps.check-activity.outputs.should_tag == 'true'
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const newVersion = '${{ steps.bump-version.outputs.new_version }}';
             const currentVersion = '${{ steps.bump-version.outputs.current_version }}';
-            
+
             await github.rest.repos.createRelease({
               owner: context.repo.owner,
               repo: context.repo.repo,
               tag_name: `v${newVersion}`,
               name: `Release v${newVersion}`,
-              body: `Automated weekly version bump from v${currentVersion} to v${newVersion}`,
+              body: `Automated version bump from v${currentVersion} to v${newVersion}`,
               generate_release_notes: true
             });
