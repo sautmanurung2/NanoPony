@@ -21,6 +21,7 @@ type Config struct {
 	Oracle         OracleConfig
 	Kafka          KafkaConfig
 	KafkaConfluent KafkaConfluentConfig
+	ElasticSearch  ElasticSearchConfig
 }
 
 // AppConfig holds application-level configuration
@@ -41,6 +42,15 @@ type OracleConfig struct {
 	Host         string
 	Port         string
 	DatabaseName string
+}
+
+type ElasticSearchConfig struct {
+	ElasticHost        string
+	ElasticPassword    string
+	ElasticUsername    string
+	ElasticIndexName   string
+	ElasticApiKey      string
+	ElasticPrefixIndex string
 }
 
 // KafkaConfig holds standard Kafka configuration
@@ -68,6 +78,7 @@ func NewConfig() *Config {
 		initKafka(appConfig)
 		initOracle(appConfig)
 		initOperation(appConfig)
+		initElasticSearch(appConfig)
 	}
 	return appConfig
 }
@@ -88,6 +99,7 @@ func BuildConfig(initFuncs ...func(*Config)) *Config {
 	initKafka(conf)
 	initOracle(conf)
 	initOperation(conf)
+	initElasticSearch(conf)
 
 	for _, fn := range initFuncs {
 		fn(conf)

@@ -137,6 +137,15 @@ func initKafkaConfluent(conf *Config) {
 	}
 }
 
+func initElasticSearch(conf *Config) {
+	conf.ElasticSearch.ElasticHost = os.Getenv("ELASTIC_HOST")
+	conf.ElasticSearch.ElasticPassword = os.Getenv("ELASTIC_PASSWORD")
+	conf.ElasticSearch.ElasticUsername = os.Getenv("ELASTIC_USERNAME")
+	conf.ElasticSearch.ElasticIndexName = os.Getenv("ELASTIC_INDEX_DATA")
+	conf.ElasticSearch.ElasticApiKey = os.Getenv("ELASTIC_API_KEY")
+	conf.ElasticSearch.ElasticPrefixIndex = os.Getenv("ELASTIC_PREFIX_INDEX")
+}
+
 // WithOperationValidValues sets valid values for operation environment variable.
 // This is useful for custom operation modes.
 func WithOperationValidValues(values []string) {
