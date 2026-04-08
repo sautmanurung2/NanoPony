@@ -3,6 +3,8 @@ package nanopony
 import (
 	"database/sql"
 	"fmt"
+	"log"
+	"strings"
 	"time"
 
 	go_ora "github.com/sijms/go-ora/v2"
@@ -92,4 +94,38 @@ func CloseDB(db *sql.DB) error {
 		return db.Close()
 	}
 	return nil
+}
+
+// InterpolateQuery replaces named parameters in SQL query with actual values
+func InterpolateQuery(query string, args ...any) string {
+	for _, arg := range args {
+		namedArg, ok := arg.(sql.NamedArg)
+		if !ok {
+			continue
+		}
+
+		value := formatValue(namedArg.Value)
+		query = strings.ReplaceAll(query, ":"+namedArg.Name, value)
+	}
+	return query
+}
+
+// formatValue formats a value for SQL query interpolation
+func formatValue(v any) string {
+	switch v := v.(type) {
+	case string:
+		return "'" + strings.ReplaceAll(v, "'", "''") + "'"
+	case int, int64, float64, bool:
+		return fmt.Sprintf("%v", v)
+	case nil:
+		return "NULL"
+	default:
+		return fmt.Sprintf("'%v'", v)
+	}
+}
+
+// LogInterpolatedQuery logs the interpolated SQL query with values
+func LogInterpolatedQuery(query string, args ...any) {
+	interpolated := InterpolateQuery(query, args...)
+	log.Printf("[SQL Query] %s", interpolated)
 }
