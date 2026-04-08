@@ -9,8 +9,8 @@ import (
 // Job represents a unit of work to be processed
 type Job struct {
 	ID   string
-	Data interface{}
-	Meta map[string]interface{}
+	Data any
+	Meta map[string]any
 }
 
 // JobHandler defines the handler for processing jobs
@@ -172,14 +172,14 @@ type Poller struct {
 
 // DataFetcher defines the interface for fetching data
 type DataFetcher interface {
-	Fetch() ([]interface{}, error)
+	Fetch() ([]any, error)
 }
 
 // DataFetcherFunc is a function adapter for DataFetcher
-type DataFetcherFunc func() ([]interface{}, error)
+type DataFetcherFunc func() ([]any, error)
 
 // Fetch implements DataFetcher
-func (f DataFetcherFunc) Fetch() ([]interface{}, error) {
+func (f DataFetcherFunc) Fetch() ([]any, error) {
 	return f()
 }
 
@@ -256,7 +256,7 @@ func (p *Poller) pollOnce() {
 	for _, item := range data {
 		job := Job{
 			Data: item,
-			Meta: make(map[string]interface{}),
+			Meta: make(map[string]any),
 		}
 
 		if err := p.workerPool.Submit(p.ctx, job); err != nil {

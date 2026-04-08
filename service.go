@@ -40,71 +40,71 @@ func (s *BaseService) ServiceName() string {
 
 // Processor defines the interface for processing data
 type Processor interface {
-	Process(data interface{}) error
-	ProcessWithContext(ctx context.Context, data interface{}) error
+	Process(data any) error
+	ProcessWithContext(ctx context.Context, data any) error
 }
 
 // ProcessorFunc is a function adapter for Processor
-type ProcessorFunc func(interface{}) error
+type ProcessorFunc func(any) error
 
 // Process implements Processor
-func (f ProcessorFunc) Process(data interface{}) error {
+func (f ProcessorFunc) Process(data any) error {
 	return f(data)
 }
 
 // ProcessWithContext implements Processor
-func (f ProcessorFunc) ProcessWithContext(ctx context.Context, data interface{}) error {
+func (f ProcessorFunc) ProcessWithContext(ctx context.Context, data any) error {
 	return f(data)
 }
 
 // BatchProcessor defines the interface for processing batches
 type BatchProcessor interface {
-	ProcessBatch(data []interface{}) error
-	ProcessBatchWithContext(ctx context.Context, data []interface{}) error
+	ProcessBatch(data []any) error
+	ProcessBatchWithContext(ctx context.Context, data []any) error
 }
 
 // BatchProcessorFunc is a function adapter for BatchProcessor
-type BatchProcessorFunc func([]interface{}) error
+type BatchProcessorFunc func([]any) error
 
 // ProcessBatch implements BatchProcessor
-func (f BatchProcessorFunc) ProcessBatch(data []interface{}) error {
+func (f BatchProcessorFunc) ProcessBatch(data []any) error {
 	return f(data)
 }
 
 // ProcessBatchWithContext implements BatchProcessor
-func (f BatchProcessorFunc) ProcessBatchWithContext(ctx context.Context, data []interface{}) error {
+func (f BatchProcessorFunc) ProcessBatchWithContext(ctx context.Context, data []any) error {
 	return f(data)
 }
 
 // Validator defines the interface for validating data
 type Validator interface {
-	Validate(data interface{}) error
+	Validate(data any) error
 }
 
 // ValidatorFunc is a function adapter for Validator
-type ValidatorFunc func(interface{}) error
+type ValidatorFunc func(any) error
 
 // Validate implements Validator
-func (f ValidatorFunc) Validate(data interface{}) error {
+func (f ValidatorFunc) Validate(data any) error {
 	return f(data)
 }
 
 // Transformer defines the interface for transforming data
 type Transformer interface {
-	Transform(data interface{}) (interface{}, error)
+	Transform(data any) (any, error)
 }
 
 // TransformerFunc is a function adapter for Transformer
-type TransformerFunc func(interface{}) (interface{}, error)
+type TransformerFunc func(any) (any, error)
 
 // Transform implements Transformer
-func (f TransformerFunc) Transform(data interface{}) (interface{}, error) {
+func (f TransformerFunc) Transform(data any) (any, error) {
 	return f(data)
 }
 
 // Pipeline represents a processing pipeline with validation and transformation
 type Pipeline struct {
-	validators  []Validator
+	validators   []Validator
 	transformers []Transformer
 	processor    Processor
 }
@@ -112,9 +112,9 @@ type Pipeline struct {
 // NewPipeline creates a new processing pipeline
 func NewPipeline(processor Processor) *Pipeline {
 	return &Pipeline{
-		validators:  make([]Validator, 0),
+		validators:   make([]Validator, 0),
 		transformers: make([]Transformer, 0),
-		processor:   processor,
+		processor:    processor,
 	}
 }
 
@@ -131,7 +131,7 @@ func (p *Pipeline) AddTransformer(transformer Transformer) *Pipeline {
 }
 
 // Process executes the pipeline on the given data
-func (p *Pipeline) Process(data interface{}) error {
+func (p *Pipeline) Process(data any) error {
 	// Run validators
 	for _, validator := range p.validators {
 		if err := validator.Validate(data); err != nil {

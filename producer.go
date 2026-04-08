@@ -10,8 +10,8 @@ import (
 
 // MessageProducer defines the interface for producing messages to Kafka
 type MessageProducer interface {
-	Produce(topic string, message interface{}) (bool, error)
-	ProduceWithContext(ctx context.Context, topic string, message interface{}) (bool, error)
+	Produce(topic string, message any) (bool, error)
+	ProduceWithContext(ctx context.Context, topic string, message any) (bool, error)
 	Close() error
 }
 
@@ -28,12 +28,12 @@ func NewKafkaProducer(writer *kafka.Writer) *KafkaProducer {
 }
 
 // Produce sends a message to the specified topic
-func (p *KafkaProducer) Produce(topic string, message interface{}) (bool, error) {
+func (p *KafkaProducer) Produce(topic string, message any) (bool, error) {
 	return p.ProduceWithContext(context.Background(), topic, message)
 }
 
 // ProduceWithContext sends a message with context support
-func (p *KafkaProducer) ProduceWithContext(ctx context.Context, topic string, message interface{}) (bool, error) {
+func (p *KafkaProducer) ProduceWithContext(ctx context.Context, topic string, message any) (bool, error) {
 	messageBytes, err := json.Marshal(message)
 	if err != nil {
 		return false, fmt.Errorf("failed to marshal message: %w", err)
