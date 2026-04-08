@@ -8,6 +8,8 @@ import (
 	go_ora "github.com/sijms/go-ora/v2"
 )
 
+var oracleDB *sql.DB
+
 // DatabaseConfig holds Oracle database connection configuration
 type DatabaseConfig struct {
 	Host            string
@@ -63,6 +65,8 @@ func NewOracleConnection(config DatabaseConfig) (*sql.DB, error) {
 		return nil, fmt.Errorf("failed to ping oracle database: %w", err)
 	}
 
+	oracleDB = db
+
 	return db, nil
 }
 
@@ -76,6 +80,10 @@ func NewOracleFromConfig(conf *Config) (*sql.DB, error) {
 		Password: conf.Oracle.Password,
 	}
 	return NewOracleConnection(dbConfig)
+}
+
+func GetOracleDB() *sql.DB {
+	return oracleDB
 }
 
 // CloseDB safely closes a database connection
