@@ -84,11 +84,86 @@ jobs:
           git commit -m "chore: bump version to v${{ steps.bump-version.outputs.new_version }} [skip ci]"
           git push origin main
 
+      - name: Generate changelog
+        if: steps.check-activity.outputs.should_tag == 'true'
+        run: |
+          # Get the last tag if it exists, otherwise get all commits
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          
+          if [ -n "$LAST_TAG" ]; then
+            COMMITS=$(git log "$LAST_TAG"..HEAD --oneline)
+          else
+            COMMITS=$(git log --oneline)
+          fi
+          
+          # Generate detailed changelog
+          CHANGELOG=""
+          CHANGELOG+="## 📝 Changes in v${{ steps.bump-version.outputs.new_version }}"$'\n\n'
+          CHANGELOG+="Commits since ${LAST_TAG:-$([ -n "$COMMITS" ] && git log --oneline | tail -1 | cut -d' ' -f1 || 'initial commit')}"$'\n\n'
+          
+          # Categorize commits
+          FEATURES=$(echo "$COMMITS" | grep -iE "^(feat|feature|add|new)" || true)
+          FIXES=$(echo "$COMMITS" | grep -iE "^(fix|bug|patch|hotfix)" || true)
+          IMPROVEMENTS=$(echo "$COMMITS" | grep -iE "^(improve|update|enhance|refactor|optimize)" || true)
+          DOCS=$(echo "$COMMITS" | grep -iE "^(doc|docs|readme|documentation)" || true)
+          OTHER=$(echo "$COMMITS" | grep -viE "^(feat|feature|add|new|fix|bug|patch|hotfix|improve|update|enhance|refactor|optimize|doc|docs|readme|documentation|chore|ci|test)" || true)
+          
+          if [ -n "$FEATURES" ]; then
+            CHANGELOG+="### ✨ New Features"$'\n'
+            while IFS= read -r line; do
+              [ -n "$line" ] && CHANGELOG+="- $line"$'\n'
+            done <<< "$FEATURES"
+            CHANGELOG+=$'\n'
+          fi
+          
+          if [ -n "$FIXES" ]; then
+            CHANGELOG+="### 🐛 Bug Fixes"$'\n'
+            while IFS= read -r line; do
+              [ -n "$line" ] && CHANGELOG+="- $line"$'\n'
+            done <<< "$FIXES"
+            CHANGELOG+=$'\n'
+          fi
+          
+          if [ -n "$IMPROVEMENTS" ]; then
+            CHANGELOG+="### 🚀 Improvements"$'\n'
+            while IFS= read -r line; do
+              [ -n "$line" ] && CHANGELOG+="- $line"$'\n'
+            done <<< "$IMPROVEMENTS"
+            CHANGELOG+=$'\n'
+          fi
+          
+          if [ -n "$DOCS" ]; then
+            CHANGELOG+="### 📚 Documentation"$'\n'
+            while IFS= read -r line; do
+              [ -n "$line" ] && CHANGELOG+="- $line"$'\n'
+            done <<< "$DOCS"
+            CHANGELOG+=$'\n'
+          fi
+          
+          if [ -n "$OTHER" ]; then
+            CHANGELOG+="### 🔧 Other Changes"$'\n'
+            while IFS= read -r line; do
+              [ -n "$line" ] && CHANGELOG+="- $line"$'\n'
+            done <<< "$OTHER"
+            CHANGELOG+=$'\n'
+          fi
+          
+          # Summary stats
+          TOTAL_COMMITS=$(echo "$COMMITS" | grep -c . || echo "0")
+          FILES_CHANGED=$(git diff --stat "$LAST_TAG" HEAD 2>/dev/null | tail -1 || echo "N/A")
+          
+          CHANGELOG+="### 📊 Summary"$'\n'
+          CHANGELOG+="- Total commits: $TOTAL_COMMITS"$'\n'
+          CHANGELOG+="- Files changed: $FILES_CHANGED"$'\n'
+          
+          # Save changelog to file for later use
+          echo "$CHANGELOG" > CHANGELOG.md
+
       - name: Create Git tag
         if: steps.check-activity.outputs.should_tag == 'true'
         run: |
-          git tag -a "v${{ steps.bump-version.outputs.new_version }}" -m "Release v${{ steps.bump-version.outputs.new_version }}"
-          git push origin "v${{ steps.bump-version.outputs.new_version }}"
+          git tag -a "v${{ steps.bump-version.outputs.new_version }}" -f -m "$(cat CHANGELOG.md)"
+          git push origin "v${{ steps.bump-version.outputs.new_version }}" -f
 
       - name: Create GitHub Release
         if: steps.check-activity.outputs.should_tag == 'true'
@@ -96,14 +171,23 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
+            const fs = require('fs');
             const newVersion = '${{ steps.bump-version.outputs.new_version }}';
             const currentVersion = '${{ steps.bump-version.outputs.current_version }}';
+            
+            // Read changelog from file
+            let changelog = '';
+            try {
+              changelog = fs.readFileSync('CHANGELOG.md', 'utf8');
+            } catch (e) {
+              changelog = `Automated version bump from v${currentVersion} to v${newVersion}`;
+            }
 
             await github.rest.repos.createRelease({
               owner: context.repo.owner,
               repo: context.repo.repo,
               tag_name: `v${newVersion}`,
               name: `Release v${newVersion}`,
-              body: `Automated version bump from v${currentVersion} to v${newVersion}`,
-              generate_release_notes: true
+              body: changelog,
+              generate_release_notes: false
             });
