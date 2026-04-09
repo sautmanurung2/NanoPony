@@ -4,3 +4,6 @@ example-nanopony
 layered_separation
 complete_with_layers
 nanopony-example
+src/*
+logs/
+.idea/

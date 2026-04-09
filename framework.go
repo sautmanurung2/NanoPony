@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"log"
 	"sync"
 
 	"github.com/segmentio/kafka-go"
@@ -11,15 +13,37 @@ import (
 
 // Framework errors
 var (
-	ErrQueueFull        = errors.New("job queue is full")
-	ErrConfigNotSet     = errors.New("config must be set before this operation")
-	ErrDatabaseNotSet   = errors.New("database must be set before this operation")
-	ErrKafkaNotSet      = errors.New("kafka writer must be set before this operation")
+	// ErrQueueFull is returned when the job queue is full and cannot accept new jobs
+	ErrQueueFull = errors.New("job queue is full")
+	// ErrConfigNotSet is returned when config is required but not set
+	ErrConfigNotSet = errors.New("config must be set before this operation")
+	// ErrDatabaseNotSet is returned when database is required but not set
+	ErrDatabaseNotSet = errors.New("database must be set before this operation")
+	// ErrKafkaNotSet is returned when kafka writer is required but not set
+	ErrKafkaNotSet = errors.New("kafka writer must be set before this operation")
+	// ErrWorkerPoolNotSet is returned when worker pool is required but not set
 	ErrWorkerPoolNotSet = errors.New("worker pool must be set before this operation")
-	ErrAlreadyBuilt     = errors.New("framework has already been built")
+	// ErrAlreadyBuilt is returned when Build() is called more than once
+	ErrAlreadyBuilt = errors.New("framework has already been built")
 )
 
-// Framework is the main builder for setting up the Kafka-Oracle framework
+// Framework is the main builder for setting up the Kafka-Oracle framework.
+// It uses the builder pattern to configure and wire together components
+// such as database connections, Kafka producers, worker pools, and pollers.
+//
+// Example usage:
+//
+//	fw := nanopony.NewFramework().
+//	    WithConfig(config).
+//	    WithDatabase().
+//	    WithKafkaWriter().
+//	    WithProducer().
+//	    WithWorkerPool(5, 100).
+//	    WithPoller(pollerConfig, dataFetcher).
+//	    Build()
+//
+//	fw.Start(ctx, jobHandler)
+//	defer fw.Shutdown(ctx)
 type Framework struct {
 	config       *Config
 	db           *sql.DB
@@ -33,7 +57,8 @@ type Framework struct {
 	built        bool
 }
 
-// NewFramework creates a new framework builder
+// NewFramework creates a new framework builder with default values.
+// Use the With* methods to configure components before calling Build().
 func NewFramework() *Framework {
 	return &Framework{
 		repositories: make([]Repository, 0),
@@ -42,13 +67,18 @@ func NewFramework() *Framework {
 	}
 }
 
-// WithConfig sets the configuration
+// WithConfig sets the configuration for the framework.
+// This should be called before other With* methods that depend on config.
 func (f *Framework) WithConfig(config *Config) *Framework {
 	f.config = config
 	return f
 }
 
-// WithDatabase sets up the Oracle database connection
+// WithDatabase sets up the Oracle database connection using the configured config.
+// Requires WithConfig to be called first.
+//
+// Panics if config is not set or connection fails.
+// For error-handling version, see WithDatabaseSafe.
 func (f *Framework) WithDatabase() *Framework {
 	if f.config == nil {
 		panic(ErrConfigNotSet.Error())
@@ -56,7 +86,7 @@ func (f *Framework) WithDatabase() *Framework {
 
 	db, err := NewOracleFromConfig(f.config)
 	if err != nil {
-		panic(err)
+		panic(fmt.Errorf("failed to create database connection: %w", err))
 	}
 
 	f.db = db
@@ -67,13 +97,38 @@ func (f *Framework) WithDatabase() *Framework {
 	return f
 }
 
-// WithDatabaseFromConnection allows using an existing database connection
-func (f *Framework) WithDatabaseFromConnection(db *sql.DB) *Framework {
+// WithDatabaseSafe sets up the Oracle database connection with error handling.
+// Unlike WithDatabase, this method returns an error instead of panicking.
+// This is recommended for production code.
+func (f *Framework) WithDatabaseSafe() (*Framework, error) {
+	if f.config == nil {
+		return f, ErrConfigNotSet
+	}
+
+	db, err := NewOracleFromConfig(f.config)
+	if err != nil {
+		return f, fmt.Errorf("failed to create database connection: %w", err)
+	}
+
+	f.db = db
+	f.AddCleanup(func() error {
+		return CloseDB(f.db)
+	})
+
+	return f, nil
+}
+
+// WithDatabaseFromInstance allows using an existing database connection
+// instead of creating a new one from config.
+func (f *Framework) WithDatabaseFromInstance(db *sql.DB) *Framework {
 	f.db = db
 	return f
 }
 
-// WithKafkaWriter sets up the Kafka writer
+// WithKafkaWriter sets up the Kafka writer using the configured config.
+// Requires WithConfig to be called first.
+//
+// Panics if config is not set.
 func (f *Framework) WithKafkaWriter() *Framework {
 	if f.config == nil {
 		panic(ErrConfigNotSet.Error())
@@ -88,12 +143,16 @@ func (f *Framework) WithKafkaWriter() *Framework {
 }
 
 // WithKafkaWriterFromInstance allows using an existing Kafka writer
+// instead of creating a new one from config.
 func (f *Framework) WithKafkaWriterFromInstance(writer *kafka.Writer) *Framework {
 	f.kafkaWriter = writer
 	return f
 }
 
-// WithProducer sets up the Kafka producer
+// WithProducer sets up the Kafka producer using the configured Kafka writer.
+// Requires WithKafkaWriter or WithKafkaWriterFromInstance to be called first.
+//
+// Panics if kafka writer is not set.
 func (f *Framework) WithProducer() *Framework {
 	if f.kafkaWriter == nil {
 		panic(ErrKafkaNotSet.Error())
@@ -104,24 +163,32 @@ func (f *Framework) WithProducer() *Framework {
 }
 
 // WithProducerFromInstance allows using an existing producer instance
+// instead of creating a new one.
 func (f *Framework) WithProducerFromInstance(producer *KafkaProducer) *Framework {
 	f.producer = producer
 	return f
 }
 
-// WithWorkerPool sets up the worker pool
+// WithWorkerPool sets up the worker pool with the specified number of workers and queue size.
+// Example: WithWorkerPool(5, 100) creates 5 workers with a queue size of 100.
 func (f *Framework) WithWorkerPool(numWorkers, queueSize int) *Framework {
 	f.workerPool = NewWorkerPool(numWorkers, queueSize)
 	return f
 }
 
 // WithWorkerPoolFromInstance allows using an existing worker pool
+// instead of creating a new one.
 func (f *Framework) WithWorkerPoolFromInstance(pool *WorkerPool) *Framework {
 	f.workerPool = pool
 	return f
 }
 
-// WithPoller sets up the poller
+// WithPoller sets up the poller with the given configuration and data fetcher.
+// Requires WithWorkerPool to be called first.
+//
+// The poller periodically fetches data and submits it as jobs to the worker pool.
+//
+// Panics if worker pool is not set.
 func (f *Framework) WithPoller(config PollerConfig, dataFetcher DataFetcher) *Framework {
 	if f.workerPool == nil {
 		panic(ErrWorkerPoolNotSet.Error())
@@ -132,30 +199,37 @@ func (f *Framework) WithPoller(config PollerConfig, dataFetcher DataFetcher) *Fr
 }
 
 // WithPollerFromInstance allows using an existing poller instance
+// instead of creating a new one.
 func (f *Framework) WithPollerFromInstance(poller *Poller) *Framework {
 	f.poller = poller
 	return f
 }
 
-// AddRepository adds a repository to the framework
+// AddRepository adds a repository to the framework.
+// Repositories will be closed automatically during shutdown.
 func (f *Framework) AddRepository(repo Repository) *Framework {
 	f.repositories = append(f.repositories, repo)
 	return f
 }
 
-// AddService adds a service to the framework
+// AddService adds a service to the framework.
+// Services will be initialized on Start() and shutdown on Shutdown().
 func (f *Framework) AddService(service Service) *Framework {
 	f.services = append(f.services, service)
 	return f
 }
 
-// AddCleanup adds a cleanup function to be called on shutdown
+// AddCleanup adds a cleanup function to be called during shutdown.
+// Cleanup functions are executed concurrently.
 func (f *Framework) AddCleanup(fn func() error) *Framework {
 	f.cleanupFuncs = append(f.cleanupFuncs, fn)
 	return f
 }
 
-// Build builds and returns the framework components
+// Build finalizes the configuration and returns FrameworkComponents.
+// This method should be called after all With* methods.
+//
+// Panics if Build() is called more than once.
 func (f *Framework) Build() *FrameworkComponents {
 	if f.built {
 		panic(ErrAlreadyBuilt.Error())
@@ -175,25 +249,40 @@ func (f *Framework) Build() *FrameworkComponents {
 	}
 }
 
-// FrameworkComponents holds all initialized framework components
+// FrameworkComponents holds all initialized framework components.
+// Use this struct to access components like DB, Producer, WorkerPool, etc.
 type FrameworkComponents struct {
-	Config       *Config
-	DB           *sql.DB
-	KafkaWriter  *kafka.Writer
-	Producer     *KafkaProducer
-	WorkerPool   *WorkerPool
-	Poller       *Poller
+	// Config holds the application configuration
+	Config *Config
+	// DB is the Oracle database connection
+	DB *sql.DB
+	// KafkaWriter is the Kafka writer for producing messages
+	KafkaWriter *kafka.Writer
+	// Producer is the Kafka producer wrapper
+	Producer *KafkaProducer
+	// WorkerPool manages the concurrent job processing
+	WorkerPool *WorkerPool
+	// Poller periodically fetches data and submits jobs
+	Poller *Poller
+
 	repositories []Repository
 	services     []Service
 	cleanupFuncs []func() error
 }
 
-// Start starts all framework components
+// Start starts all framework components.
+// It starts the worker pool with the given handler, starts the poller,
+// and initializes all services.
+//
+// Note: Service initialization errors are logged but do not prevent
+// the framework from starting. This is intentional to allow partial failures.
 func (fc *FrameworkComponents) Start(ctx context.Context, handler JobHandler) {
+	// Start worker pool
 	if fc.WorkerPool != nil {
 		fc.WorkerPool.Start(ctx, handler)
 	}
 
+	// Start poller
 	if fc.Poller != nil {
 		fc.Poller.Start()
 	}
@@ -201,17 +290,36 @@ func (fc *FrameworkComponents) Start(ctx context.Context, handler JobHandler) {
 	// Initialize all services
 	for _, service := range fc.services {
 		if err := service.Initialize(); err != nil {
-			// Log error but continue
-			// In production, use proper logging
+			// Log error but continue - this is intentional to allow partial failures
+			// In production, replace with proper logging (e.g., using the Logger)
+			log.Printf("[WARNING] Failed to initialize service: %v", err)
 		}
 	}
 }
 
-// Shutdown gracefully shuts down all framework components
+// Shutdown gracefully shuts down all framework components in the following order:
+// 1. Stop poller
+// 2. Stop worker pool
+// 3. Shutdown all services
+// 4. Close all repositories
+// 5. Run all cleanup functions concurrently
+//
+// Returns the first error encountered, or nil if all shutdowns succeeded.
 func (fc *FrameworkComponents) Shutdown(ctx context.Context) error {
 	var wg sync.WaitGroup
 	var errMu sync.Mutex
 	var firstErr error
+
+	// Helper function to collect errors safely
+	collectErr := func(err error) {
+		if err != nil {
+			errMu.Lock()
+			if firstErr == nil {
+				firstErr = err
+			}
+			errMu.Unlock()
+		}
+	}
 
 	// Stop poller first
 	if fc.Poller != nil {
@@ -226,36 +334,24 @@ func (fc *FrameworkComponents) Shutdown(ctx context.Context) error {
 	// Shutdown all services
 	for _, service := range fc.services {
 		if err := service.Shutdown(); err != nil {
-			errMu.Lock()
-			if firstErr == nil {
-				firstErr = err
-			}
-			errMu.Unlock()
+			collectErr(err)
 		}
 	}
 
 	// Close all repositories
 	for _, repo := range fc.repositories {
 		if err := repo.Close(); err != nil {
-			errMu.Lock()
-			if firstErr == nil {
-				firstErr = err
-			}
-			errMu.Unlock()
+			collectErr(err)
 		}
 	}
 
-	// Run cleanup functions
+	// Run cleanup functions concurrently
 	for _, cleanup := range fc.cleanupFuncs {
 		wg.Add(1)
 		go func(fn func() error) {
 			defer wg.Done()
 			if err := fn(); err != nil {
-				errMu.Lock()
-				if firstErr == nil {
-					firstErr = err
-				}
-				errMu.Unlock()
+				collectErr(err)
 			}
 		}(cleanup)
 	}
@@ -265,27 +361,27 @@ func (fc *FrameworkComponents) Shutdown(ctx context.Context) error {
 	return firstErr
 }
 
-// GetDB returns the database connection
+// GetDB returns the database connection.
 func (fc *FrameworkComponents) GetDB() *sql.DB {
 	return fc.DB
 }
 
-// GetProducer returns the Kafka producer
+// GetProducer returns the Kafka producer.
 func (fc *FrameworkComponents) GetProducer() *KafkaProducer {
 	return fc.Producer
 }
 
-// GetConfig returns the configuration
+// GetConfig returns the configuration.
 func (fc *FrameworkComponents) GetConfig() *Config {
 	return fc.Config
 }
 
-// GetWorkerPool returns the worker pool
+// GetWorkerPool returns the worker pool.
 func (fc *FrameworkComponents) GetWorkerPool() *WorkerPool {
 	return fc.WorkerPool
 }
 
-// GetPoller returns the poller
+// GetPoller returns the poller.
 func (fc *FrameworkComponents) GetPoller() *Poller {
 	return fc.Poller
 }

@@ -56,12 +56,12 @@ func BenchmarkFrameworkWithConfig(b *testing.B) {
 	}
 }
 
-// BenchmarkFrameworkWithDatabaseFromConnection tests setting DB connection
-func BenchmarkFrameworkWithDatabaseFromConnection(b *testing.B) {
+// BenchmarkFrameworkWithDatabaseFromInstance tests setting DB connection
+func BenchmarkFrameworkWithDatabaseFromInstance(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		framework := NewFramework().WithDatabaseFromConnection(nil)
+		framework := NewFramework().WithDatabaseFromInstance(nil)
 		if framework.db != nil {
 			b.Fatal("Expected db to be nil")
 		}

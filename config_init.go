@@ -6,12 +6,14 @@ import (
 	"strings"
 )
 
+// envConfig defines validation rules for an environment variable
 type envConfig struct {
-	name        string
-	validValues []string
-	defaultVal  string
+	name        string   // Environment variable name
+	validValues []string // Allowed values (empty means any value is valid)
+	defaultVal  string   // Default value if validation fails
 }
 
+// oracleEnv holds the environment variable names for Oracle connection
 type oracleEnv struct {
 	host     string
 	port     string
@@ -20,19 +22,23 @@ type oracleEnv struct {
 	password string
 }
 
+// Environment variable configurations for application settings
 var (
+	// appEnvConfig defines validation for GO_ENV
 	appEnvConfig = envConfig{
 		name:        "GO_ENV",
 		validValues: []string{"staging", "production"},
 		defaultVal:  "local",
 	}
 
+	// kafkaEnvConfig defines validation for KAFKA-MODELS
 	kafkaEnvConfig = envConfig{
 		name:        "KAFKA-MODELS",
 		validValues: []string{"kafka-staging", "kafka-production", "kafka-confluent"},
 		defaultVal:  "kafka-localhost",
 	}
 
+	// operationEnvConfig defines validation for OPERATION (any value allowed)
 	operationEnvConfig = envConfig{
 		name:        "OPERATION",
 		validValues: []string{},
@@ -40,22 +46,34 @@ var (
 	}
 )
 
-// getEnvValue retrieves an environment variable value with validation
+// getEnvValue retrieves an environment variable value with validation.
+// If the value is not in validValues list, it returns the default value.
+// If validValues is empty, any value is accepted.
 func getEnvValue(cfg envConfig) string {
 	value := strings.ToLower(os.Getenv(cfg.name))
 
+	// If no validation rules, return value as-is
 	if len(cfg.validValues) == 0 {
 		return value
 	}
 
+	// Return value if it's valid
 	if slices.Contains(cfg.validValues, value) {
 		return value
 	}
 
+	// Return default if validation fails
 	return cfg.defaultVal
 }
 
-// getOracleEnv returns Oracle environment variable names based on environment
+// getOracleEnv returns Oracle environment variable names based on the environment.
+// For "staging" environment, it returns staging variable names.
+// For all other environments, it returns production variable names.
+//
+// Example:
+//
+//	env := getOracleEnv("staging")
+//	// Returns: {host: "HOST_STAGING", port: "PORT_STAGING", ...}
 func getOracleEnv(env string) oracleEnv {
 	if env == "staging" {
 		return oracleEnv{
@@ -75,7 +93,13 @@ func getOracleEnv(env string) oracleEnv {
 	}
 }
 
-// getKafkaBrokers retrieves Kafka broker addresses from environment
+// getKafkaBrokers retrieves Kafka broker addresses from environment variables.
+// The broker variable name is determined by the environment and Kafka model.
+//
+// Mapping:
+//   - kafka-production + production env -> KAFKA_BROKERS_PRODUCTION
+//   - kafka-staging (any env) -> KAFKA_BROKERS_STAGING
+//   - Other combinations -> empty slice
 func getKafkaBrokers(conf *Config) []string {
 	env := conf.App.Env
 	kafkaModel := conf.App.KafkaModels
@@ -97,12 +121,14 @@ func getKafkaBrokers(conf *Config) []string {
 	return []string{}
 }
 
-// initApp initializes application configuration
+// initApp initializes application-level configuration (GO_ENV)
 func initApp(conf *Config) {
 	conf.App.Env = getEnvValue(appEnvConfig)
 }
 
-// initKafka initializes Kafka configuration
+// initKafka initializes Kafka configuration.
+// If the model is kafka-confluent, it delegates to initKafkaConfluent.
+// Otherwise, it loads broker addresses from environment.
 func initKafka(conf *Config) {
 	if conf.App.KafkaModels == "kafka-confluent" {
 		initKafkaConfluent(conf)
@@ -111,7 +137,8 @@ func initKafka(conf *Config) {
 	conf.Kafka.Brokers = getKafkaBrokers(conf)
 }
 
-// initOracle initializes Oracle database configuration
+// initOracle initializes Oracle database configuration from environment variables.
+// The variable names depend on the environment (staging vs production).
 func initOracle(conf *Config) {
 	env := getOracleEnv(conf.App.Env)
 	conf.Oracle.Username = os.Getenv(env.username)
@@ -126,7 +153,8 @@ func initOperation(conf *Config) {
 	conf.App.Operation = getEnvValue(operationEnvConfig)
 }
 
-// initKafkaConfluent initializes Confluent Cloud Kafka configuration
+// initKafkaConfluent initializes Confluent Cloud Kafka configuration.
+// It loads API key, secret, resource ID, and bootstrap server from environment.
 func initKafkaConfluent(conf *Config) {
 	conf.KafkaConfluent.ApiKey = os.Getenv("API_KEY_KAFKA_CONFLUENT")
 	conf.KafkaConfluent.ApiSecret = os.Getenv("API_SECRET_KAFKA_CONFLUENT")
@@ -137,6 +165,7 @@ func initKafkaConfluent(conf *Config) {
 	}
 }
 
+// initElasticSearch initializes Elasticsearch configuration from environment variables
 func initElasticSearch(conf *Config) {
 	conf.ElasticSearch.ElasticHost = os.Getenv("ELASTIC_HOST")
 	conf.ElasticSearch.ElasticPassword = os.Getenv("ELASTIC_PASSWORD")
@@ -146,8 +175,12 @@ func initElasticSearch(conf *Config) {
 	conf.ElasticSearch.ElasticPrefixIndex = os.Getenv("ELASTIC_PREFIX_INDEX")
 }
 
-// WithOperationValidValues sets valid values for operation environment variable.
-// This is useful for custom operation modes.
+// WithOperationValidValues sets valid values for the OPERATION environment variable.
+// This is useful for defining custom operation modes.
+//
+// Example:
+//
+//	WithOperationValidValues([]string{"read-only", "write", "admin"})
 func WithOperationValidValues(values []string) {
 	operationEnvConfig.validValues = values
 }

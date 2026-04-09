@@ -24,10 +24,10 @@ func TestFrameworkBuilder(t *testing.T) {
 	}
 }
 
-func TestFrameworkWithDatabaseFromConnection(t *testing.T) {
+func TestFrameworkWithDatabaseFromInstance(t *testing.T) {
 	// Create a mock database connection (nil for testing)
 	framework := NewFramework().
-		WithDatabaseFromConnection(nil)
+		WithDatabaseFromInstance(nil)
 
 	if framework.db != nil {
 		t.Error("Expected db to be nil")

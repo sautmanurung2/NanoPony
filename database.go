@@ -4,15 +4,27 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 	"time"
 
 	go_ora "github.com/sijms/go-ora/v2"
 )
 
+// oracleDB holds the global database connection.
+// This is set by NewOracleConnection and can be accessed via GetOracleDB().
+// Note: For new code, prefer passing *sql.DB explicitly rather than using this global.
 var oracleDB *sql.DB
 
-// DatabaseConfig holds Oracle database connection configuration
+// DatabaseConfig holds Oracle database connection configuration.
+// Use DefaultDatabaseConfig() to get sensible defaults.
+//
+// Example:
+//
+//	config := DefaultDatabaseConfig()
+//	config.Host = "localhost"
+//	config.Port = "1521"
+//	db, err := NewOracleConnection(config)
 type DatabaseConfig struct {
 	Host            string
 	Port            string
@@ -25,7 +37,9 @@ type DatabaseConfig struct {
 	ConnMaxLifetime time.Duration
 }
 
-// DefaultDatabaseConfig returns default database configuration
+// DefaultDatabaseConfig returns default database configuration with sensible pool settings.
+// Default pool settings: MaxIdleConns=10, MaxOpenConns=100,
+// ConnIdleTime=5min, ConnMaxLifetime=60min
 func DefaultDatabaseConfig() DatabaseConfig {
 	return DatabaseConfig{
 		MaxIdleConns:    10,
@@ -35,13 +49,34 @@ func DefaultDatabaseConfig() DatabaseConfig {
 	}
 }
 
-// NewOracleConnection creates a new Oracle database connection
+// NewOracleConnection creates a new Oracle database connection with connection pooling.
+//
+// The function:
+// 1. Builds the Oracle connection URL
+// 2. Opens the database connection
+// 3. Configures connection pool settings
+// 4. Pings the database to verify the connection
+// 5. Sets the global oracleDB variable (for backward compatibility)
+//
+// Example:
+//
+//	config := DatabaseConfig{
+//	    Host:     "localhost",
+//	    Port:     "1521",
+//	    Database: "ORCL",
+//	    Username: "user",
+//	    Password: "secret",
+//	}
+//	db, err := NewOracleConnection(config)
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	defer db.Close()
 func NewOracleConnection(config DatabaseConfig) (*sql.DB, error) {
-	port := 1521
-	if config.Port != "" {
-		if _, err := fmt.Sscanf(config.Port, "%d", &port); err != nil {
-			port = 1521
-		}
+	port, err := parsePort(config.Port)
+	if err != nil {
+		log.Printf("[WARNING] Invalid port '%s', using default 1521: %v", config.Port, err)
+		port = 1521
 	}
 
 	connStr := go_ora.BuildUrl(
@@ -58,21 +93,45 @@ func NewOracleConnection(config DatabaseConfig) (*sql.DB, error) {
 		return nil, fmt.Errorf("failed to open oracle connection: %w", err)
 	}
 
+	// Configure connection pool
 	db.SetMaxIdleConns(config.MaxIdleConns)
 	db.SetMaxOpenConns(config.MaxOpenConns)
 	db.SetConnMaxIdleTime(config.ConnIdleTime)
 	db.SetConnMaxLifetime(config.ConnMaxLifetime)
 
+	// Verify connection
 	if err := db.Ping(); err != nil {
 		return nil, fmt.Errorf("failed to ping oracle database: %w", err)
 	}
 
+	// Set global variable for backward compatibility
+	// Note: For new code, prefer using the returned *sql.DB directly
 	oracleDB = db
 
 	return db, nil
 }
 
-// NewOracleFromConfig creates Oracle connection from Config
+// parsePort converts string port to int, returning error if invalid
+func parsePort(portStr string) (int, error) {
+	if portStr == "" {
+		return 1521, nil
+	}
+
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		return 0, fmt.Errorf("invalid port number '%s': %w", portStr, err)
+	}
+
+	return port, nil
+}
+
+// NewOracleFromConfig creates Oracle connection from the application Config.
+// This is a convenience wrapper that extracts database config from the main Config.
+//
+// Example:
+//
+//	config := nanopony.NewConfig()
+//	db, err := nanopony.NewOracleFromConfig(config)
 func NewOracleFromConfig(conf *Config) (*sql.DB, error) {
 	dbConfig := DatabaseConfig{
 		Host:     conf.Oracle.Host,
@@ -84,11 +143,15 @@ func NewOracleFromConfig(conf *Config) (*sql.DB, error) {
 	return NewOracleConnection(dbConfig)
 }
 
+// GetOracleDB returns the global database connection.
+// Returns nil if no connection has been established.
+// Note: For new code, prefer passing *sql.DB explicitly.
 func GetOracleDB() *sql.DB {
 	return oracleDB
 }
 
-// CloseDB safely closes a database connection
+// CloseDB safely closes a database connection.
+// Returns nil if db is nil (safe to call with nil).
 func CloseDB(db *sql.DB) error {
 	if db != nil {
 		return db.Close()
@@ -96,7 +159,20 @@ func CloseDB(db *sql.DB) error {
 	return nil
 }
 
-// InterpolateQuery replaces named parameters in SQL query with actual values
+// InterpolateQuery replaces named parameters in SQL query with actual values.
+// This is useful for debugging and logging queries.
+//
+// WARNING: This is for LOGGING ONLY, not for executing queries.
+// Never use interpolated queries for actual database execution as they are not SQL-injection safe.
+//
+// Example:
+//
+//	query := "SELECT * FROM users WHERE id = :id AND name = :name"
+//	interpolated := InterpolateQuery(query,
+//	    sql.Named("id", 123),
+//	    sql.Named("name", "John"),
+//	)
+//	// Result: "SELECT * FROM users WHERE id = 123 AND name = 'John'"
 func InterpolateQuery(query string, args ...any) string {
 	for _, arg := range args {
 		namedArg, ok := arg.(sql.NamedArg)
@@ -110,10 +186,12 @@ func InterpolateQuery(query string, args ...any) string {
 	return query
 }
 
-// formatValue formats a value for SQL query interpolation
+// formatValue formats a value for SQL query interpolation (for logging purposes).
+// It handles strings, numbers, nil, and other types appropriately.
 func formatValue(v any) string {
 	switch v := v.(type) {
 	case string:
+		// Escape single quotes by doubling them
 		return "'" + strings.ReplaceAll(v, "'", "''") + "'"
 	case int, int64, float64, bool:
 		return fmt.Sprintf("%v", v)
@@ -124,7 +202,16 @@ func formatValue(v any) string {
 	}
 }
 
-// LogInterpolatedQuery logs the interpolated SQL query with values
+// LogInterpolatedQuery logs the interpolated SQL query with values.
+// This is useful for debugging database queries.
+//
+// Example:
+//
+//	LogInterpolatedQuery(
+//	    "SELECT * FROM users WHERE id = :id",
+//	    sql.Named("id", 123),
+//	)
+//	// Output: [SQL Query] SELECT * FROM users WHERE id = 123
 func LogInterpolatedQuery(query string, args ...any) {
 	interpolated := InterpolateQuery(query, args...)
 	log.Printf("[SQL Query] %s", interpolated)

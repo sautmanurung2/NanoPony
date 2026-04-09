@@ -16,6 +16,8 @@ import (
 )
 
 var (
+	// EsClient is the global Elasticsearch client instance.
+	// This is set automatically when logging to Elasticsearch.
 	EsClient *elasticsearch.Client
 	_        = godotenv.Load()
 
@@ -23,49 +25,91 @@ var (
 	onceLogger    sync.Once
 )
 
+// initLoggerFile initializes the log file writer (singleton pattern).
+// It creates a lumberjack logger with rotation settings.
 func initLoggerFile() {
 	onceLogger.Do(func() {
-		ensureLogDirectoryExists()
+		if err := ensureLogDirectoryExists(); err != nil {
+			fmt.Printf("Failed to create log directory: %s\n", err)
+			// Note: In production, you may want to handle this differently
+			// For now, we continue without file logging if directory creation fails
+			return
+		}
 
 		logFileName := generateLogFileName()
 		logFilePath := path.Join("./src/logs", logFileName)
 
 		logFileWriter = &lumberjack.Logger{
 			Filename:   logFilePath,
-			MaxSize:    100,
-			MaxBackups: 3,
-			MaxAge:     28,
+			MaxSize:    100, // megabytes
+			MaxBackups: 3,   // number of old files to keep
+			MaxAge:     28,  // days
 			Compress:   false,
 		}
 	})
 }
 
+// LoggerEntry represents a structured log entry with rich metadata.
+// It supports multiple output modes: console, file, Elasticsearch, or hybrid.
+//
+// Example:
+//
+//	logger := NewLogger("MyService", "user123", "ref-001", "", "System", "ProcessData", "User", "")
+//	logger.LoggingData("INFO", requestData, ResponseLog{Status: "success", Message: "Processed"})
 type LoggerEntry struct {
-	StartTimestamp  time.Time `json:"start_timestamp"`
-	EndTimestamp    time.Time `json:"end_timestamp"`
-	ReferenceId     string    `json:"reference_id"`
-	ReferenceNumber string    `json:"reference_number"`
-	ProcessName     string    `json:"process_name"`
-	SystemName      string    `json:"system_name"`
-	Entity          string    `json:"entity"`
-	Additionals     string    `json:"additionals"`
-	Duration        int64     `json:"duration"`
-	Service         string    `json:"service"`
-	Path            string    `json:"path"`
-	Level           string    `json:"level"`
-	UserLogin       string    `json:"user_login"`
-	NodeCode        string    `json:"node_code"`
-	Request         struct {
-		Payload map[string]any `json:"payload"`
-	} `json:"request"`
-	Response ResponseLog `json:"response"`
+	StartTimestamp  time.Time     `json:"start_timestamp"`
+	EndTimestamp    time.Time     `json:"end_timestamp"`
+	ReferenceId     string        `json:"reference_id"`
+	ReferenceNumber string        `json:"reference_number"`
+	ProcessName     string        `json:"process_name"`
+	SystemName      string        `json:"system_name"`
+	Entity          string        `json:"entity"`
+	Additionals     string        `json:"additionals"`
+	Duration        int64         `json:"duration"`
+	Service         string        `json:"service"`
+	Path            string        `json:"path"`
+	Level           string        `json:"level"`
+	UserLogin       string        `json:"user_login"`
+	NodeCode        string        `json:"node_code"`
+	Request         RequestLog    `json:"request"`
+	Response        ResponseLog   `json:"response"`
 }
 
+// RequestLog represents the request portion of a log entry
+type RequestLog struct {
+	Payload map[string]any `json:"payload"`
+}
+
+// ResponseLog represents the response portion of a log entry
 type ResponseLog struct {
 	Status  string `json:"status"`
 	Message string `json:"message"`
 }
 
+// NewLogger creates a new structured logger entry.
+//
+// Parameters:
+//   - serviceName: Name of the service (will be prefixed with "GO_")
+//   - userLogin: User who triggered the operation
+//   - referenceId: Unique reference ID for tracking
+//   - referenceNumber: Additional reference number
+//   - systemName: System name (will be prefixed with "GO-Producer-")
+//   - processName: Name of the process
+//   - entity: Entity being processed
+//   - additionals: Additional information
+//
+// Example:
+//
+//	logger := NewLogger(
+//	    "UserService",
+//	    "admin",
+//	    "req-123",
+//	    "",
+//	    "CoreSystem",
+//	    "ProcessUser",
+//	    "User",
+//	    "",
+//	)
 func NewLogger(
 	serviceName string,
 	userLogin string,
@@ -99,6 +143,8 @@ func NewLogger(
 	return loggerEntry
 }
 
+// SendToFile writes the log entry to a rotating log file.
+// It calculates duration and sets the log level before writing.
 func (le *LoggerEntry) SendToFile(level string, response ResponseLog) {
 	le.EndTimestamp = time.Now()
 	le.Duration = le.EndTimestamp.Sub(le.StartTimestamp).Milliseconds()
@@ -106,12 +152,26 @@ func (le *LoggerEntry) SendToFile(level string, response ResponseLog) {
 	le.Response = response
 	logMessage, _ := json.Marshal(le)
 
+	if logFileWriter == nil {
+		fmt.Fprintf(os.Stderr, "Log file writer not initialized\n")
+		return
+	}
+
 	_, err := fmt.Fprintf(logFileWriter, "%s\n", string(logMessage))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to write log: %v\n", err)
 	}
 }
 
+// LoggingData processes and logs data based on the configured LOG_OUTPUT_MODE.
+// Supported modes: fluentd (console), elasticsearch, hybrid (both), or empty (default to hybrid).
+//
+// Example:
+//
+//	logger.LoggingData("INFO", payload, ResponseLog{
+//	    Status:  "success",
+//	    Message: "Data processed successfully",
+//	})
 func (le *LoggerEntry) LoggingData(
 	level string,
 	payload any,
@@ -124,7 +184,7 @@ func (le *LoggerEntry) LoggingData(
 
 	payloadMap, err := processPayload(payload)
 	if err != nil {
-		_, _ = fmt.Fprintf(logFileWriter, "Error processing payload: %v\n", err)
+		fmt.Printf("Error processing payload: %v\n", err)
 		return
 	}
 
@@ -148,6 +208,7 @@ func (le *LoggerEntry) LoggingData(
 	}
 }
 
+// processPayload converts various payload types into a map for JSON logging
 func processPayload(payload any) (map[string]any, error) {
 	var payloadMap map[string]any
 
@@ -185,6 +246,7 @@ func processPayload(payload any) (map[string]any, error) {
 	return payloadMap, nil
 }
 
+// generateLogFileName creates a log filename with current date
 func generateLogFileName() string {
 	currentTime := time.Now()
 	year := currentTime.Year()
@@ -194,17 +256,19 @@ func generateLogFileName() string {
 	return fmt.Sprintf("orion-to-core-%d-%02d-%02d.log", year, month, day)
 }
 
-func ensureLogDirectoryExists() {
+// ensureLogDirectoryExists creates the log directory if it doesn't exist.
+// Returns an error if directory creation fails.
+func ensureLogDirectoryExists() error {
 	logFilePath := "./logs"
 	if _, err := os.Stat(logFilePath); os.IsNotExist(err) {
-		err := os.Mkdir(logFilePath, os.ModePerm)
-		if err != nil {
-			fmt.Printf("Failed to create log directory: %s\n", err)
-			os.Exit(1)
+		if err := os.Mkdir(logFilePath, os.ModePerm); err != nil {
+			return fmt.Errorf("failed to create log directory: %w", err)
 		}
 	}
+	return nil
 }
 
+// printToConsole prints the log entry to console as JSON
 func (le *LoggerEntry) printToConsole() {
 	data, err := json.Marshal(le)
 	if err != nil {
@@ -215,18 +279,17 @@ func (le *LoggerEntry) printToConsole() {
 	fmt.Println(string(data))
 }
 
+// SendToElasticSearch sends the log entry to Elasticsearch.
+// It initializes the Elasticsearch client if not already done.
 func (le *LoggerEntry) SendToElasticSearch(
 	level string,
 	payload any,
 	response ResponseLog,
 ) {
-	if EsClient == nil {
-		client, err := le.InitElasticSearch()
-		if err != nil {
-			_, _ = fmt.Fprintf(logFileWriter, "Failed to initialize Elasticsearch client: %v\n", err)
-			return
-		}
-		EsClient = client
+	// Initialize Elasticsearch client if needed
+	if err := ensureElasticsearchClient(); err != nil {
+		fmt.Printf("Failed to initialize Elasticsearch client: %v\n", err)
+		return
 	}
 
 	esClient := EsClient
@@ -237,47 +300,64 @@ func (le *LoggerEntry) SendToElasticSearch(
 
 	payloadMap, err := processPayload(payload)
 	if err != nil {
-		_, _ = fmt.Fprintf(logFileWriter, "Error processing payload: %v\n", err)
+		fmt.Printf("Error processing payload: %v\n", err)
 		return
 	}
 
 	le.Request.Payload = payloadMap
 	data, err := json.Marshal(le)
 	if err != nil {
-		_, _ = fmt.Fprintf(logFileWriter, "Error marshaling message to JSON: %v\n", err)
+		fmt.Printf("Error marshaling message to JSON: %v\n", err)
 		return
 	}
 
 	esIndexWithDate := appConfig.ElasticSearch.ElasticPrefixIndex + time.Now().Format("20060102")
 	esResult, err := esClient.Index(esIndexWithDate, bytes.NewReader(data))
 	if err != nil {
-		_, _ = fmt.Fprintf(logFileWriter, "Error indexing message to Elasticsearch: %v\n", err)
+		fmt.Printf("Error indexing message to Elasticsearch: %v\n", err)
 		return
 	}
 	defer esResult.Body.Close()
 
 	body, err := io.ReadAll(esResult.Body)
 	if err != nil {
-		fmt.Println("Failed to read Elasticsearch response body:", err)
+		fmt.Printf("Failed to read Elasticsearch response body: %v\n", err)
 		return
 	}
 
 	var esResponse map[string]any
 	if err := json.Unmarshal(body, &esResponse); err != nil {
-		fmt.Println("Failed to parse Elasticsearch response:", err)
+		fmt.Printf("Failed to parse Elasticsearch response: %v\n", err)
 		return
 	}
 
 	if errorMsg, hasError := esResponse["error"]; hasError {
-		fmt.Printf("error send to elastic: ❌ Document rejected by Elasticsearch: %s\n", errorMsg)
-		_, _ = fmt.Fprintf(logFileWriter, "Elasticsearch rejected document: %v\n", errorMsg)
+		fmt.Printf("[ERROR] Document rejected by Elasticsearch: %v\n", errorMsg)
 		return
 	}
-
-	_, _ = fmt.Fprintf(logFileWriter, "%s\n", string(data))
 }
 
-func (le *LoggerEntry) InitElasticSearch() (*elasticsearch.Client, error) {
+// ensureElasticsearchClient initializes EsClient jika belum ada
+func ensureElasticsearchClient() error {
+	if EsClient != nil {
+		return nil
+	}
+
+	client, err := initElasticsearch()
+	if err != nil {
+		return err
+	}
+
+	EsClient = client
+	return nil
+}
+
+// initElasticsearch initializes and tests the Elasticsearch client
+func initElasticsearch() (*elasticsearch.Client, error) {
+	if appConfig == nil {
+		return nil, fmt.Errorf("application config is nil")
+	}
+
 	esConfig := elasticsearch.Config{
 		Addresses: []string{appConfig.ElasticSearch.ElasticHost},
 		Username:  appConfig.ElasticSearch.ElasticUsername,
@@ -287,17 +367,15 @@ func (le *LoggerEntry) InitElasticSearch() (*elasticsearch.Client, error) {
 
 	esClient, err := elasticsearch.NewClient(esConfig)
 	if err != nil {
-		_, _ = fmt.Fprintf(logFileWriter, "Error creating the client: %s\n", err)
+		return nil, fmt.Errorf("failed to create Elasticsearch client: %w", err)
 	}
 
 	res, err := esClient.Info()
 	if err != nil {
-		_, _ = fmt.Fprintf(logFileWriter, "Error getting Elasticsearch info: %v\n", err)
+		return nil, fmt.Errorf("failed to get Elasticsearch info: %w", err)
 	}
 
 	defer res.Body.Close()
-
-	_, _ = fmt.Fprintf(logFileWriter, "Connected to Elasticsearch\n")
 
 	return esClient, nil
 }
