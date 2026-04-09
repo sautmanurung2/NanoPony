@@ -15,9 +15,8 @@
 7. [Processing Pipeline](#6-processing-pipeline)
 8. [Repository & Service](#7-repository--service)
 9. [Framework Builder](#8-framework-builder)
-10. [Proto File Compiler](#proto-file-compiler)
-11. [Alur Penggunaan Tipikal](#alur-penggunaan-tipikal)
-12. [Best Practices](#best-practices)
+10. [Alur Penggunaan Tipikal](#alur-penggunaan-tipikal)
+11. [Best Practices](#best-practices)
 
 ---
 
@@ -723,82 +722,6 @@ Lihat contoh lengkap di `examples/complete_with_layers/` yang menunjukkan:
 - Service layer untuk business logic
 
 ---
-
-## Proto File Compiler
-
-NanoPony menyediakan CLI tool untuk mengompilasi file `.proto` menjadi kode Go (`.pb.go`).
-
-### Instalasi
-
-```bash
-go install github.com/sautmanurung2/nanopony/cmd/nanopony@latest
-```
-
-### Penggunaan Dasar
-
-```bash
-# Kompilasi proto file
-nanopony --proto service.proto
-
-# Dengan output directory
-nanopony --proto service.proto --output ./gen
-
-# Dengan import path
-nanopony --proto service.proto -I ./protos --output ./gen
-```
-
-### Contoh Proto File
-
-```protobuf
-syntax = "proto3";
-
-package user;
-
-option go_package = "./pb;userpb";
-
-message User {
-  string id = 1;
-  string name = 2;
-  string email = 3;
-}
-
-service UserService {
-  rpc GetUser (GetUserRequest) returns (GetUserResponse);
-}
-
-message GetUserRequest {
-  string id = 1;
-}
-
-message GetUserResponse {
-  User user = 1;
-}
-```
-
-### Requirements
-
-1. **protoc** - Protocol Buffers Compiler
-   ```bash
-   # Ubuntu/Debian
-   sudo apt install protobuf-compiler
-   
-   # macOS
-   brew install protobuf
-   ```
-
-2. **protoc-gen-go** - Go plugin
-   ```bash
-   go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-   ```
-
-3. **protoc-gen-go-grpc** (opsional, untuk gRPC)
-   ```bash
-   go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
-   ```
-
-### Dokumentasi Lengkap
-
-Lihat [PROTO_COMPILER_GUIDE.md](PROTO_COMPILER_GUIDE.md) untuk panduan lengkap.
 
 ---
 

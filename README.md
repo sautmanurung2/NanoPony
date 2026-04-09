@@ -287,31 +287,6 @@ err := executor.WithTransaction(func(tx *sql.Tx) error {
 })
 ```
 
-## CLI Tool: Proto File Compiler
-
-NanoPony includes a CLI tool for compiling `.proto` files into Go code.
-
-### Installation
-
-```bash
-go install github.com/sautmanurung2/nanopony/cmd/nanopony@latest
-```
-
-### Usage
-
-```bash
-# Compile proto file
-nanopony --proto service.proto
-
-# With custom output directory
-nanopony --proto service.proto --output ./gen
-
-# With proto import path
-nanopony --proto service.proto -I ./protos --output ./gen
-```
-
-See [cmd/nanopony/README.md](cmd/nanopony/README.md) for complete documentation.
-
 ## Running Examples
 
 ```bash
