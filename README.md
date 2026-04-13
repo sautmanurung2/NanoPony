@@ -5,6 +5,16 @@
 
 **NanoPony** adalah framework Go untuk integrasi Kafka-Oracle dengan arsitektur yang clean, reusable, dan production-ready.
 
+## 📚 Dokumentasi Lengkap
+
+| Dokumen | Deskripsi | Link |
+|---------|-----------|------|
+| **📖 Dokumentasi Lengkap** | Panduan komprehensif semua komponen framework | [DOKUMENTASI.md](DOKUMENTASI.md) |
+| **🏗️ Arsitektur** | Diagram arsitektur, pola desain, dan alur data | [ARCHITECTURE.md](ARCHITECTURE.md) |
+| **🔧 Panduan Testing** | Cara menjalankan test, coverage, dan best practices | [TESTING_GUIDE.md](TESTING_GUIDE.md) |
+| **📊 Benchmark Report** | Hasil benchmark performa dan memory leak test | [BENCHMARK_REPORT.md](BENCHMARK_REPORT.md) |
+| **⚙️ Worker Pool Deep Dive** | Penjelasan detail cara kerja worker pool | [WORKER_POOL_EXPLAINED.md](WORKER_POOL_EXPLAINED.md) |
+
 ## Fitur
 
 - ✅ **Kafka Producer & Consumer** - Integrasi dengan Kafka menggunakan `kafka-go`
@@ -234,6 +244,8 @@ pool.Submit(ctx, nanopony.Job{
 pool.Stop()
 ```
 
+> 📖 **Deep Dive:** Baca [WORKER_POOL_EXPLAINED.md](WORKER_POOL_EXPLAINED.md) untuk penjelasan detail tentang cara kerja worker pool, blocking behavior, dan optimasi.
+
 ### Poller
 
 ```go
@@ -287,17 +299,44 @@ err := executor.WithTransaction(func(tx *sql.Tx) error {
 })
 ```
 
+## 📊 Performa & Benchmark
+
+Framework NanoPony telah melalui pengujian performa menyeluruh:
+
+- ✅ **Memory Leak Test**: 8 test cycles - **NO LEAK DETECTED**
+- ✅ **Framework Creation**: 0.25 ns/op, 0 B/op (ultra fast)
+- ✅ **WorkerPool Submit Parallel**: 924.8 ns/op, 7 B/op (efficient)
+- ✅ **Pipeline Process Parallel**: 28.48 ns/op (sangat cepat)
+- ✅ **Concurrent Safe**: 20 instances dengan memory growth hanya +23 KB
+
+> 📖 **Detail:** Baca [BENCHMARK_REPORT.md](BENCHMARK_REPORT.md) untuk hasil lengkap.
+
+## 🧪 Testing
+
+Framework ini dilengkapi comprehensive test suite:
+
+```bash
+# Semua test
+go test ./... -v
+
+# Dengan race detection
+go test -race ./... -v
+
+# Benchmark
+go test -bench=. -benchmem
+
+# Coverage
+go test -coverprofile=coverage.out ./...
+go tool cover -html=coverage.out
+```
+
+> 📖 **Panduan:** Baca [TESTING_GUIDE.md](TESTING_GUIDE.md) untuk cara menjalankan test, coverage goals, dan debugging tips.
+
 ## Running Examples
 
 ```bash
 cd examples
 go run main.go
-```
-
-## Testing
-
-```bash
-go test ./... -v
 ```
 
 ## Best Practices
@@ -308,6 +347,12 @@ go test ./... -v
 4. **Gunakan Context** untuk cancellation dan timeout
 5. **Handle errors** dengan proper error handling
 6. **Use Pipeline** untuk complex data processing dengan validation dan transformation
+7. **Reuse WorkerPool** - jangan create/destroy频繁, buat sekali di startup
+8. **Monitor error channel** - range over `pool.Errors()` untuk tracking job failures
+
+> 📖 **Arsitektur:** Baca [ARCHITECTURE.md](ARCHITECTURE.md) untuk diagram arsitektur lengkap dan pola desain.
+> 
+> 📖 **Dokumentasi:** Baca [DOKUMENTASI.md](DOKUMENTASI.md) untuk panduan penggunaan setiap komponen.
 
 ## Project Structure
 
@@ -319,12 +364,18 @@ NanoPony/
 ├── kafka.go               # Kafka writer/reader
 ├── producer.go            # Kafka producer & consumer
 ├── worker.go              # Worker pool & poller
+├── service.go             # Service, Pipeline, Processor
 ├── repository.go          # Repository base interface
-├── service.go             # Service base interface
 ├── framework.go           # Main framework builder
-├── *_test.go              # Unit tests
+├── logger.go              # Structured logging with rotation
+├── *_test.go              # Unit tests & benchmarks
 ├── README.md              # This file
 ├── go.mod                 # Go module definition
+├── ARCHITECTURE.md        # 📐 Arsitektur & pola desain
+├── BENCHMARK_REPORT.md    # 📊 Hasil benchmark & memory test
+├── TESTING_GUIDE.md       # 🧪 Panduan testing
+├── DOKUMENTASI.md         # 📖 Dokumentasi lengkap komponen
+├── WORKER_POOL_EXPLAINED.md # ⚙️ Deep dive worker pool
 └── examples/              # Example application
     ├── main.go            # Complete example
     └── go.mod
