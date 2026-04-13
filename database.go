@@ -93,11 +93,11 @@ func NewOracleConnection(config DatabaseConfig) (*sql.DB, error) {
 		return nil, fmt.Errorf("failed to open oracle connection: %w", err)
 	}
 
-	// Configure connection pool
-	db.SetMaxIdleConns(config.MaxIdleConns)
-	db.SetMaxOpenConns(config.MaxOpenConns)
-	db.SetConnMaxIdleTime(config.ConnIdleTime)
-	db.SetConnMaxLifetime(config.ConnMaxLifetime)
+	dbConfig := DefaultDatabaseConfig()
+	db.SetMaxIdleConns(dbConfig.MaxIdleConns)
+	db.SetMaxOpenConns(dbConfig.MaxOpenConns)
+	db.SetConnMaxIdleTime(dbConfig.ConnIdleTime)
+	db.SetConnMaxLifetime(dbConfig.ConnMaxLifetime)
 
 	// Verify connection
 	if err := db.Ping(); err != nil {
