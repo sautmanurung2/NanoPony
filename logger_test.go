@@ -197,7 +197,7 @@ func TestInitElasticsearch(t *testing.T) {
 	// Reset global client
 	EsClient = nil
 
-	_, err := initElasticsearch()
+	_, err := InitElasticsearch()
 
 	if err != nil {
 		t.Logf("Expected error (Elasticsearch may not be available): %v", err)

@@ -27,7 +27,7 @@ var (
 	// appEnvConfig defines validation for GO_ENV
 	appEnvConfig = envConfig{
 		name:        "GO_ENV",
-		validValues: []string{"staging", "production"},
+		validValues: []string{"localhost", "staging", "production"},
 		defaultVal:  "local",
 	}
 
