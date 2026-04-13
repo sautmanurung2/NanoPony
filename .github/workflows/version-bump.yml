@@ -63,7 +63,25 @@ jobs:
 
           # Bump patch version
           NEW_PATCH=$((PATCH + 1))
-          NEW_VERSION="${MAJOR}.${MINOR}.${NEW_PATCH}"
+          
+          # Special handling for multiples of 10 and 100
+          if [ $((NEW_PATCH % 100)) -eq 0 ]; then
+            # Every 100 patches: bump major, reset minor and patch
+            NEW_MAJOR=$((MAJOR + 1))
+            NEW_MINOR=0
+            NEW_PATCH=0
+          elif [ $((NEW_PATCH % 10)) -eq 0 ]; then
+            # Every 10 patches: bump minor, reset patch
+            NEW_MAJOR=$MAJOR
+            NEW_MINOR=$((MINOR + 1))
+            NEW_PATCH=0
+          else
+            # Normal patch bump
+            NEW_MAJOR=$MAJOR
+            NEW_MINOR=$MINOR
+          fi
+          
+          NEW_VERSION="${NEW_MAJOR}.${NEW_MINOR}.${NEW_PATCH}"
 
           echo "New version: $NEW_VERSION"
           echo "$NEW_VERSION" > VERSION

@@ -102,7 +102,7 @@ func getOracleEnv(env string) oracleEnv {
 //   - Other combinations -> empty slice
 func getKafkaBrokers(conf *Config) []string {
 	env := conf.App.Env
-	kafkaModel := conf.App.KafkaModels
+	kafkaModel := initKafkaModels(conf)
 
 	var brokerEnv string
 	switch {
@@ -119,6 +119,12 @@ func getKafkaBrokers(conf *Config) []string {
 	}
 
 	return []string{}
+}
+
+// initKafkaModels initializes Kafka_models configuration (KAFKA-MODELS)
+func initKafkaModels(conf *Config) string {
+	conf.App.KafkaModels = getEnvValue(kafkaEnvConfig)
+	return conf.App.KafkaModels
 }
 
 // initApp initializes application-level configuration (GO_ENV)
