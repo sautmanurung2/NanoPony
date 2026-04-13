@@ -144,7 +144,7 @@ NanoPony menggunakan environment variables untuk konfigurasi:
 | Variable | Deskripsi | Contoh |
 |----------|-----------|--------|
 | `GO_ENV` | Environment aplikasi | `local`, `staging`, `production` |
-| `KAFKA-MODELS` | Model Kafka | `kafka-localhost`, `kafka-staging`, `kafka-production`, `kafka-confluent` |
+| `KAFKA_MODELS` | Model Kafka | `kafka-localhost`, `kafka-staging`, `kafka-production`, `kafka-confluent` |
 | `KAFKA_BROKERS_STAGING` | Broker Kafka staging | `broker1:9092,broker2:9092` |
 | `KAFKA_BROKERS_PRODUCTION` | Broker Kafka production | `broker1:9092,broker2:9092` |
 | `HOST_STAGING` | Host Oracle staging | `oracle-staging.example.com` |

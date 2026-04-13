@@ -31,9 +31,9 @@ var (
 		defaultVal:  "local",
 	}
 
-	// kafkaEnvConfig defines validation for KAFKA-MODELS
+	// kafkaEnvConfig defines validation for KAFKA_MODELS
 	kafkaEnvConfig = envConfig{
-		name:        "KAFKA-MODELS",
+		name:        "KAFKA_MODELS",
 		validValues: []string{"kafka-staging", "kafka-production", "kafka-confluent"},
 		defaultVal:  "kafka-localhost",
 	}
