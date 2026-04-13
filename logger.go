@@ -57,22 +57,22 @@ func initLoggerFile() {
 //	logger := NewLogger("MyService", "user123", "ref-001", "", "System", "ProcessData", "User", "")
 //	logger.LoggingData("INFO", requestData, ResponseLog{Status: "success", Message: "Processed"})
 type LoggerEntry struct {
-	StartTimestamp  time.Time     `json:"start_timestamp"`
-	EndTimestamp    time.Time     `json:"end_timestamp"`
-	ReferenceId     string        `json:"reference_id"`
-	ReferenceNumber string        `json:"reference_number"`
-	ProcessName     string        `json:"process_name"`
-	SystemName      string        `json:"system_name"`
-	Entity          string        `json:"entity"`
-	Additionals     string        `json:"additionals"`
-	Duration        int64         `json:"duration"`
-	Service         string        `json:"service"`
-	Path            string        `json:"path"`
-	Level           string        `json:"level"`
-	UserLogin       string        `json:"user_login"`
-	NodeCode        string        `json:"node_code"`
-	Request         RequestLog    `json:"request"`
-	Response        ResponseLog   `json:"response"`
+	StartTimestamp  time.Time   `json:"start_timestamp"`
+	EndTimestamp    time.Time   `json:"end_timestamp"`
+	ReferenceId     string      `json:"reference_id"`
+	ReferenceNumber string      `json:"reference_number"`
+	ProcessName     string      `json:"process_name"`
+	SystemName      string      `json:"system_name"`
+	Entity          string      `json:"entity"`
+	Additionals     string      `json:"additionals"`
+	Duration        int64       `json:"duration"`
+	Service         string      `json:"service"`
+	Path            string      `json:"path"`
+	Level           string      `json:"level"`
+	UserLogin       string      `json:"user_login"`
+	NodeCode        string      `json:"node_code"`
+	Request         RequestLog  `json:"request"`
+	Response        ResponseLog `json:"response"`
 }
 
 // RequestLog represents the request portion of a log entry
@@ -343,7 +343,7 @@ func ensureElasticsearchClient() error {
 		return nil
 	}
 
-	client, err := initElasticsearch()
+	client, err := InitElasticsearch()
 	if err != nil {
 		return err
 	}
@@ -352,8 +352,8 @@ func ensureElasticsearchClient() error {
 	return nil
 }
 
-// initElasticsearch initializes and tests the Elasticsearch client
-func initElasticsearch() (*elasticsearch.Client, error) {
+// InitElasticsearch initializes and tests the Elasticsearch client
+func InitElasticsearch() (*elasticsearch.Client, error) {
 	if appConfig == nil {
 		return nil, fmt.Errorf("application config is nil")
 	}
