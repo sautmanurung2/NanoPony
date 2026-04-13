@@ -108,7 +108,9 @@ func getKafkaBrokers(conf *Config) []string {
 	switch {
 	case kafkaModel == "kafka-production" && env == "production":
 		brokerEnv = "KAFKA_BROKERS_PRODUCTION"
-	case kafkaModel == "kafka-staging":
+	case kafkaModel == "kafka-staging" && env == "staging":
+		brokerEnv = "KAFKA_BROKERS_STAGING"
+	case kafkaModel == "kafka-staging" && env == "localhost":
 		brokerEnv = "KAFKA_BROKERS_STAGING"
 	default:
 		return []string{}
