@@ -71,3 +71,94 @@ func TestPollerConfig(t *testing.T) {
 		t.Errorf("Expected batch size 100, got %d", config.BatchSize)
 	}
 }
+
+func TestPollerBatchSizeLimit(t *testing.T) {
+	pool := NewWorkerPool(1, 5)
+	ctx := context.Background()
+
+	processed := 0
+	pool.Start(ctx, func(ctx context.Context, job Job) error {
+		time.Sleep(10 * time.Millisecond)
+		processed++
+		return nil
+	})
+	defer pool.Stop()
+
+	// Create fetcher that returns more data than batch size
+	fetchCount := 0
+	fetcher := DataFetcherFunc(func() ([]any, error) {
+		fetchCount++
+		if fetchCount >= 3 {
+			return []any{}, nil
+		}
+		// Return 20 items, but batch size will limit to 5
+		data := make([]any, 20)
+		for i := range data {
+			data[i] = "item"
+		}
+		return data, nil
+	})
+
+	config := DefaultPollerConfig()
+	config.Interval = 50 * time.Millisecond
+	config.JobSlotSize = 1
+	config.BatchSize = 5 // Limit batch size
+
+	poller := NewPoller(config, pool, fetcher)
+	poller.Start()
+
+	// Wait for polling to complete
+	time.Sleep(200 * time.Millisecond)
+	poller.Stop()
+
+	// Each poll should only process 5 items (not 20)
+	// With 2 successful polls, should have ~10 items processed
+	if processed > 15 {
+		t.Errorf("Expected ~10 jobs processed (limited by BatchSize=5), got %d", processed)
+	}
+}
+
+func TestPollerBlockingSubmitPreventsJobLoss(t *testing.T) {
+	pool := NewWorkerPool(1, 3)
+	ctx := context.Background()
+
+	processed := 0
+	pool.Start(ctx, func(ctx context.Context, job Job) error {
+		time.Sleep(10 * time.Millisecond)
+		processed++
+		return nil
+	})
+	defer pool.Stop()
+
+	// Create fetcher that returns 10 items
+	fetchCount := 0
+	fetcher := DataFetcherFunc(func() ([]any, error) {
+		fetchCount++
+		if fetchCount >= 2 {
+			return []any{}, nil
+		}
+		data := make([]any, 10)
+		for i := range data {
+			data[i] = "item"
+		}
+		return data, nil
+	})
+
+	config := DefaultPollerConfig()
+	config.Interval = 50 * time.Millisecond
+	config.JobSlotSize = 1
+	config.BatchSize = 10
+
+	poller := NewPoller(config, pool, fetcher)
+	poller.Start()
+
+	// Wait for all jobs to be processed
+	time.Sleep(300 * time.Millisecond)
+	poller.Stop()
+
+	// ALL jobs should be processed (no job loss with SubmitBlocking)
+	expectedJobs := 10 // 1 poll * 10 items
+	if processed != expectedJobs {
+		t.Errorf("Expected %d jobs processed (no job loss), got %d", expectedJobs, processed)
+	}
+}

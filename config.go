@@ -20,6 +20,8 @@ import "github.com/joho/godotenv"
 // App, Oracle, Kafka, Confluent Cloud, and Elasticsearch.
 //
 // Configuration is loaded from environment variables automatically.
+// The Dynamic field allows loading arbitrary environment variables without
+// modifying the framework code.
 type Config struct {
 	// App holds application-level configuration (environment, Kafka model, operation mode)
 	App AppConfig
@@ -31,6 +33,10 @@ type Config struct {
 	KafkaConfluent KafkaConfluentConfig
 	// ElasticSearch holds Elasticsearch connection details
 	ElasticSearch ElasticSearchConfig
+	// Dynamic is a map for arbitrary environment variables.
+	// This allows adding new env vars without modifying the framework.
+	// Use prefixes like "CUSTOM_" to group related variables.
+	Dynamic map[string]string
 }
 
 // AppConfig holds application-level configuration
@@ -86,7 +92,7 @@ var appConfig *Config
 //
 // Environment Variables Required:
 //   - GO_ENV: local, staging, or production
-//   - KAFKA-MODELS: kafka-localhost, kafka-staging, kafka-production, or kafka-confluent
+//   - KAFKA_MODELS: kafka-localhost, kafka-staging, kafka-production, or kafka-confluent
 //
 // Example:
 //
@@ -94,8 +100,11 @@ var appConfig *Config
 func NewConfig() *Config {
 	_ = godotenv.Load()
 	if appConfig == nil {
-		appConfig = &Config{}
+		appConfig = &Config{
+			Dynamic: make(map[string]string),
+		}
 		initApp(appConfig)
+		initKafkaModels(appConfig) // Initialize Kafka models first
 		initKafka(appConfig)
 		initOracle(appConfig)
 		initOperation(appConfig)
@@ -124,9 +133,12 @@ func ResetConfig() {
 //	})
 func BuildConfig(initFuncs ...func(*Config)) *Config {
 	_ = godotenv.Load()
-	conf := &Config{}
+	conf := &Config{
+		Dynamic: make(map[string]string),
+	}
 
 	initApp(conf)
+	initKafkaModels(conf) // Initialize Kafka models first
 	initKafka(conf)
 	initOracle(conf)
 	initOperation(conf)
@@ -137,4 +149,24 @@ func BuildConfig(initFuncs ...func(*Config)) *Config {
 	}
 
 	return conf
+}
+
+// LoadDynamic loads environment variables with the given prefix into the Dynamic map.
+// If prefix is empty, it loads ALL environment variables (use with caution).
+// This allows dynamic configuration without modifying the framework code.
+//
+// Example:
+//
+//	// Load all CUSTOM_* environment variables
+//	config.LoadDynamic("CUSTOM_")
+//
+//	// This will load CUSTOM_API_URL, CUSTOM_TIMEOUT, etc.
+func (c *Config) LoadDynamic(prefix string) {
+	if c.Dynamic == nil {
+		c.Dynamic = make(map[string]string)
+	}
+	envVars := getEnvByPrefix(prefix)
+	for key, value := range envVars {
+		c.Dynamic[key] = value
+	}
 }

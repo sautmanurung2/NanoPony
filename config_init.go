@@ -52,6 +52,11 @@ var (
 func getEnvValue(cfg envConfig) string {
 	value := strings.ToLower(os.Getenv(cfg.name))
 
+	// If value doesn't exist, return default
+	if value == "" {
+		return cfg.defaultVal
+	}
+
 	// If no validation rules, return value as-is
 	if len(cfg.validValues) == 0 {
 		return value
@@ -123,7 +128,7 @@ func getKafkaBrokers(conf *Config) []string {
 	return []string{}
 }
 
-// initKafkaModels initializes Kafka_models configuration (KAFKA-MODELS)
+// initKafkaModels initializes Kafka_models configuration (KAFKA_MODELS)
 func initKafkaModels(conf *Config) string {
 	conf.App.KafkaModels = getEnvValue(kafkaEnvConfig)
 	return conf.App.KafkaModels
@@ -191,4 +196,36 @@ func initElasticSearch(conf *Config) {
 //	WithOperationValidValues([]string{"read-only", "write", "admin"})
 func WithOperationValidValues(values []string) {
 	operationEnvConfig.validValues = values
+}
+
+// getEnvByPrefix retrieves all environment variables with a given prefix.
+// This is used by LoadDynamic to dynamically load configuration.
+//
+// Example:
+//
+//	// Get all CUSTOM_* environment variables
+//	vars := getEnvByPrefix("CUSTOM_")
+//	// Returns map with keys like "CUSTOM_API_URL", "CUSTOM_TIMEOUT", etc.
+func getEnvByPrefix(prefix string) map[string]string {
+	result := make(map[string]string)
+
+	// Get all environment variables
+	for _, env := range os.Environ() {
+		// Split on first "=" to get key and value
+		parts := strings.SplitN(env, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+
+		key := parts[0]
+		value := parts[1]
+
+		// If prefix is empty, load everything
+		// If prefix is set, only load vars with that prefix
+		if prefix == "" || strings.HasPrefix(key, prefix) {
+			result[key] = value
+		}
+	}
+
+	return result
 }

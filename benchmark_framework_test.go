@@ -493,13 +493,14 @@ func TestFrameworkConcurrentMemoryLeak(t *testing.T) {
 	initialMem := m1.Alloc
 
 	// Run multiple frameworks concurrently
+	// Use BuildConfig() to avoid race condition on config singleton
 	concurrent := 20
 	done := make(chan bool, concurrent)
 
 	for i := 0; i < concurrent; i++ {
 		go func(idx int) {
-			ResetConfig()
-			config := NewConfig()
+			// Use BuildConfig() to create an isolated config (no singleton race)
+			config := BuildConfig()
 
 			framework := NewFramework().
 				WithConfig(config).

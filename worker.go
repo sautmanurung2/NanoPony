@@ -171,6 +171,31 @@ func (wp *WorkerPool) Submit(ctx context.Context, job Job) error {
 	}
 }
 
+// SubmitBlocking submits a job to the worker pool for processing.
+// This method is BLOCKING and will wait until there is space in the queue
+// or the context is cancelled. This prevents job loss when the queue is full.
+//
+// This is the RECOMMENDED method for production use as it provides
+// backpressure mechanism to prevent overwhelming the worker pool.
+//
+// Example:
+//
+//	err := pool.SubmitBlocking(ctx, Job{
+//	    ID:   "job-1",
+//	    Data: map[string]interface{}{"key": "value"},
+//	})
+//	// Job will wait in the caller until queue has space
+//	// No job will be lost!
+func (wp *WorkerPool) SubmitBlocking(ctx context.Context, job Job) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case wp.jobChan <- job:
+		return nil
+		// No default case - will block until queue has space
+	}
+}
+
 // Stop stops the worker pool gracefully.
 // It cancels the context, closes the job channel, and waits for all workers to finish.
 // If the pool is not running, this method is a no-op.
@@ -371,7 +396,13 @@ func (p *Poller) pollOnce() {
 		return
 	}
 
-	// Submit each data item as a job
+	// Enforce batch size limit to prevent overwhelming the queue
+	if p.config.BatchSize > 0 && len(data) > p.config.BatchSize {
+		log.Printf("[WARN] Poller: limiting batch size from %d to %d (BatchSize config)", len(data), p.config.BatchSize)
+		data = data[:p.config.BatchSize]
+	}
+
+	// Submit each data item as a job using blocking submit
 	for i, item := range data {
 		job := Job{
 			ID:   fmt.Sprintf("poll-%d", i),
@@ -382,9 +413,13 @@ func (p *Poller) pollOnce() {
 			},
 		}
 
-		if err := p.workerPool.Submit(p.ctx, job); err != nil {
-			// Log job submission failures instead of silently skipping
-			log.Printf("[ERROR] Poller: failed to submit job: %v", err)
+		// Use SubmitBlocking to prevent job loss
+		// This will wait until queue has space (backpressure mechanism)
+		if err := p.workerPool.SubmitBlocking(p.ctx, job); err != nil {
+			// Only log errors (context cancellation is expected during shutdown)
+			if p.ctx.Err() == nil {
+				log.Printf("[ERROR] Poller: failed to submit job: %v", err)
+			}
 		}
 	}
 
