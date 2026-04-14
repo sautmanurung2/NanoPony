@@ -80,7 +80,16 @@ func getEnvValue(cfg envConfig) string {
 //	env := getOracleEnv("staging")
 //	// Returns: {host: "HOST_STAGING", port: "PORT_STAGING", ...}
 func getOracleEnv(env string) oracleEnv {
-	if env == "staging" {
+	switch env {
+	case "staging":
+		return oracleEnv{
+			host:     "HOST_STAGING",
+			port:     "PORT_STAGING",
+			database: "DATABASE_STAGING",
+			username: "USERNAME_STAGING",
+			password: "PASSWORD_STAGING",
+		}
+	case "localhost":
 		return oracleEnv{
 			host:     "HOST_STAGING",
 			port:     "PORT_STAGING",

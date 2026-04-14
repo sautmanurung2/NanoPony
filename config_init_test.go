@@ -37,11 +37,11 @@ func TestGetOracleEnv(t *testing.T) {
 			name: "local environment",
 			env:  "local",
 			expected: oracleEnv{
-				host:     "HOST_PRODUCTION",
-				port:     "PORT_PRODUCTION",
-				database: "DATABASE_PRODUCTION",
-				username: "USERNAME_PRODUCTION",
-				password: "PASSWORD_PRODUCTION",
+				host:     "HOST_STAGING",
+				port:     "PORT_STAGING",
+				database: "DATABASE_STAGING",
+				username: "USERNAME_STAGING",
+				password: "PASSWORD_STAGING",
 			},
 		},
 	}
@@ -58,11 +58,11 @@ func TestGetOracleEnv(t *testing.T) {
 
 func TestGetKafkaBrokers(t *testing.T) {
 	tests := []struct {
-		name        string
-		env         string
-		kafkaModel  string
-		brokers     string
-		expected    []string
+		name       string
+		env        string
+		kafkaModel string
+		brokers    string
+		expected   []string
 	}{
 		{
 			name:       "kafka-staging",
