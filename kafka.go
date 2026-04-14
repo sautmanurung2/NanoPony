@@ -50,9 +50,13 @@ func NewKafkaWriterFromConfig(conf *Config) *kafka.Writer {
 		return writer
 	} else {
 		config.Brokers = conf.Kafka.Brokers
+		writer := &kafka.Writer{
+			Addr:         kafka.TCP(config.Brokers...),
+			Balancer:     config.Balancer,
+			BatchTimeout: config.BatchTimeout,
+		}
+		return writer
 	}
-
-	return NewKafkaWriter(config)
 }
 
 // createSASLTransport creates a SASL/TLS transport for Confluent Cloud
