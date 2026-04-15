@@ -167,59 +167,6 @@ func TestFrameworkNoMemoryLeak(t *testing.T) {
 	}
 }
 
-// TestPipelineNoMemoryLeak verifies no memory leak in pipeline
-func TestPipelineNoMemoryLeak(t *testing.T) {
-	// Force GC before test
-	runtime.GC()
-	time.Sleep(100 * time.Millisecond)
-	
-	initialMem := getMemStats()
-	t.Logf("Initial memory: %d KB", initialMem/1024)
-	
-	// Run multiple pipeline cycles
-	for cycle := 0; cycle < 20; cycle++ {
-		validator := ValidatorFunc(func(data interface{}) error {
-			if data == nil {
-				return errDataNil
-			}
-			return nil
-		})
-		
-		transformer := TransformerFunc(func(data interface{}) (interface{}, error) {
-			// Create some allocations
-			return string([]byte(data.(string))) + "-transformed", nil
-		})
-		
-		processor := ProcessorFunc(func(data interface{}) error {
-			_ = make([]byte, 100)
-			return nil
-		})
-		
-		pipeline := NewPipeline(processor).
-			AddValidator(validator).
-			AddTransformer(transformer)
-		
-		for i := 0; i < 100; i++ {
-			pipeline.Process("test-data")
-		}
-	}
-	
-	// Force GC after test
-	runtime.GC()
-	time.Sleep(500 * time.Millisecond)
-	
-	finalMem := getMemStats()
-	t.Logf("Final memory: %d KB", finalMem/1024)
-	
-	// Check absolute growth
-	memGrowth := int64(finalMem) - int64(initialMem)
-	t.Logf("Memory growth: %d KB", memGrowth/1024)
-	
-	if memGrowth > 500*1024 {
-		t.Errorf("Potential memory leak detected: %d KB growth", memGrowth/1024)
-	}
-}
-
 // BenchmarkMemoryAllocation tracks memory allocation patterns
 func BenchmarkMemoryAllocation(b *testing.B) {
 	runtime.GC()

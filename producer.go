@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/segmentio/kafka-go"
 )
@@ -101,7 +102,8 @@ type MessageHandler func(message []byte) error
 //	    return nil
 //	})
 type KafkaConsumer struct {
-	reader *kafka.Reader
+	reader     *kafka.Reader
+	retryDelay time.Duration
 }
 
 // KafkaConsumerConfig holds configuration for creating a consumer
@@ -115,10 +117,14 @@ type KafkaConsumerConfig struct {
 	// StartOffset is the initial offset to start from.
 	// Use kafka.FirstOffset or kafka.LastOffset. Defaults to LastOffset.
 	StartOffset int64
+	// RetryDelay is the delay before retrying after a handler error.
+	// Default is 1 second. Set to 0 to disable (immediate retry).
+	RetryDelay time.Duration
 }
 
 // NewKafkaConsumer creates a new Kafka consumer with the given configuration.
 // If StartOffset is 0, it defaults to LastOffset.
+// If RetryDelay is 0, it defaults to 1 second backoff on handler errors.
 func NewKafkaConsumer(config KafkaConsumerConfig) *KafkaConsumer {
 	readerConfig := kafka.ReaderConfig{
 		Brokers:     config.Brokers,
@@ -133,7 +139,8 @@ func NewKafkaConsumer(config KafkaConsumerConfig) *KafkaConsumer {
 	}
 
 	return &KafkaConsumer{
-		reader: kafka.NewReader(readerConfig),
+		reader:     kafka.NewReader(readerConfig),
+		retryDelay: config.RetryDelay,
 	}
 }
 
@@ -144,11 +151,17 @@ func NewKafkaConsumer(config KafkaConsumerConfig) *KafkaConsumer {
 // 1. Read message from Kafka
 // 2. Call handler with message value
 // 3. If handler succeeds, commit the message
-// 4. If handler fails, skip the message (do not commit)
+// 4. If handler fails, wait for RetryDelay before retry (default 1s backoff)
 //
 // Note: If the handler returns an error, the message is NOT committed
 // and will be re-delivered on the next consumption cycle.
 func (c *KafkaConsumer) ConsumeWithContext(ctx context.Context, handler MessageHandler) error {
+	// Default retry delay if not configured
+	retryDelay := c.retryDelay
+	if retryDelay == 0 {
+		retryDelay = 1 * time.Second
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -162,7 +175,14 @@ func (c *KafkaConsumer) ConsumeWithContext(ctx context.Context, handler MessageH
 			// Process the message with handler
 			if err := handler(msg.Value); err != nil {
 				// Handler failed - message is NOT committed
-				// It will be re-delivered on next read
+				// Log error and apply backoff before retry to prevent tight loops
+				LogFramework("WARNING", "KafkaConsumer", fmt.Sprintf("handler error: %v (retrying after %v)", err, retryDelay))
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-time.After(retryDelay):
+					// Backoff complete, continue to retry
+				}
 				continue
 			}
 

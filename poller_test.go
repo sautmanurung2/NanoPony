@@ -2,6 +2,7 @@ package nanopony
 
 import (
 	"context"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -76,19 +77,19 @@ func TestPollerBatchSizeLimit(t *testing.T) {
 	pool := NewWorkerPool(1, 5)
 	ctx := context.Background()
 
-	processed := 0
+	var processed atomic.Int64
 	pool.Start(ctx, func(ctx context.Context, job Job) error {
 		time.Sleep(10 * time.Millisecond)
-		processed++
+		processed.Add(1)
 		return nil
 	})
 	defer pool.Stop()
 
 	// Create fetcher that returns more data than batch size
-	fetchCount := 0
+	var fetchCount atomic.Int64
 	fetcher := DataFetcherFunc(func() ([]any, error) {
-		fetchCount++
-		if fetchCount >= 3 {
+		count := fetchCount.Add(1)
+		if count >= 3 {
 			return []any{}, nil
 		}
 		// Return 20 items, but batch size will limit to 5
@@ -113,8 +114,8 @@ func TestPollerBatchSizeLimit(t *testing.T) {
 
 	// Each poll should only process 5 items (not 20)
 	// With 2 successful polls, should have ~10 items processed
-	if processed > 15 {
-		t.Errorf("Expected ~10 jobs processed (limited by BatchSize=5), got %d", processed)
+	if processed.Load() > 15 {
+		t.Errorf("Expected ~10 jobs processed (limited by BatchSize=5), got %d", processed.Load())
 	}
 }
 
@@ -122,19 +123,19 @@ func TestPollerBlockingSubmitPreventsJobLoss(t *testing.T) {
 	pool := NewWorkerPool(1, 3)
 	ctx := context.Background()
 
-	processed := 0
+	var processed atomic.Int64
 	pool.Start(ctx, func(ctx context.Context, job Job) error {
 		time.Sleep(10 * time.Millisecond)
-		processed++
+		processed.Add(1)
 		return nil
 	})
 	defer pool.Stop()
 
 	// Create fetcher that returns 10 items
-	fetchCount := 0
+	var fetchCount atomic.Int64
 	fetcher := DataFetcherFunc(func() ([]any, error) {
-		fetchCount++
-		if fetchCount >= 2 {
+		count := fetchCount.Add(1)
+		if count >= 2 {
 			return []any{}, nil
 		}
 		data := make([]any, 10)
@@ -157,8 +158,8 @@ func TestPollerBlockingSubmitPreventsJobLoss(t *testing.T) {
 	poller.Stop()
 
 	// ALL jobs should be processed (no job loss with SubmitBlocking)
-	expectedJobs := 10 // 1 poll * 10 items
-	if processed != expectedJobs {
-		t.Errorf("Expected %d jobs processed (no job loss), got %d", expectedJobs, processed)
+	expectedJobs := int64(10) // 1 poll * 10 items
+	if processed.Load() != expectedJobs {
+		t.Errorf("Expected %d jobs processed (no job loss), got %d", expectedJobs, processed.Load())
 	}
 }

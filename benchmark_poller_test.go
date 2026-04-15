@@ -2,6 +2,7 @@ package nanopony
 
 import (
 	"context"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -104,32 +105,32 @@ func TestPollerMemoryLeak(t *testing.T) {
 func TestPollerLongRunning(t *testing.T) {
 	pool := NewWorkerPool(5, 1000)
 	ctx := context.Background()
-	
-	processed := 0
+
+	var processed atomic.Int64
 	pool.Start(ctx, func(ctx context.Context, job Job) error {
-		processed++
+		processed.Add(1)
 		return nil
 	})
 	defer pool.Stop()
-	
-	fetchCount := 0
+
+	var fetchCount atomic.Int64
 	fetcher := DataFetcherFunc(func() ([]interface{}, error) {
-		fetchCount++
-		if fetchCount > 100 {
+		count := fetchCount.Add(1)
+		if count > 100 {
 			return []interface{}{}, nil
 		}
 		return []interface{}{"data"}, nil
 	})
-	
+
 	config := DefaultPollerConfig()
 	config.Interval = 10 * time.Millisecond
-	
+
 	poller := NewPoller(config, pool, fetcher)
 	poller.Start()
-	
+
 	// Run for 2 seconds
 	time.Sleep(2 * time.Second)
 	poller.Stop()
-	
-	t.Logf("Total fetches: %d, Total processed: %d", fetchCount, processed)
+
+	t.Logf("Total fetches: %d, Total processed: %d", fetchCount.Load(), processed.Load())
 }

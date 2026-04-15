@@ -13,7 +13,12 @@
 //	components := framework.Build()
 package nanopony
 
-import "github.com/joho/godotenv"
+import (
+	"fmt"
+	"sync"
+
+	"github.com/joho/godotenv"
+)
 
 // Config holds all configuration for the framework.
 // This struct contains all subsystem configurations:
@@ -84,7 +89,9 @@ type KafkaConfluentConfig struct {
 
 // appConfig is the global configuration singleton.
 // Use NewConfig() or BuildConfig() to initialize it.
+// Protected by configMutex for thread safety.
 var appConfig *Config
+var configMutex sync.RWMutex
 
 // NewConfig initializes and returns a new Config instance.
 // It loads environment variables from .env file if present.
@@ -99,18 +106,65 @@ var appConfig *Config
 //	config := nanopony.NewConfig()
 func NewConfig() *Config {
 	_ = godotenv.Load()
-	if appConfig == nil {
-		appConfig = &Config{
-			Dynamic: make(map[string]string),
-		}
-		initApp(appConfig)
-		initKafkaModels(appConfig) // Initialize Kafka models first
-		initKafka(appConfig)
-		initOracle(appConfig)
-		initOperation(appConfig)
-		initElasticSearch(appConfig)
+
+	configMutex.RLock()
+	if appConfig != nil {
+		configMutex.RUnlock()
+		return appConfig
 	}
+	configMutex.RUnlock()
+
+	configMutex.Lock()
+	defer configMutex.Unlock()
+
+	// Double-check after acquiring write lock
+	if appConfig != nil {
+		return appConfig
+	}
+
+	appConfig = &Config{
+		Dynamic: make(map[string]string),
+	}
+	initApp(appConfig)
+	initKafkaModels(appConfig)
+	initKafka(appConfig)
+	initOracle(appConfig)
+	initOperation(appConfig)
+	initElasticSearch(appConfig)
+
 	return appConfig
+}
+
+// Validate checks if the configuration is valid and all required fields are set.
+// This is used for fail-fast behavior during framework initialization.
+func (c *Config) Validate() error {
+	if c.App.Env == "" {
+		return fmt.Errorf("GO_ENV is not set (local, staging, or production)")
+	}
+	if c.App.KafkaModels == "" {
+		return fmt.Errorf("KAFKA_MODELS is not set")
+	}
+
+	// Validate Kafka based on chosen model
+	switch c.App.KafkaModels {
+	case "kafka-confluent":
+		if len(c.KafkaConfluent.BootstrapServers) == 0 {
+			return fmt.Errorf("KAFKA_CONFLUENT bootstrap servers are not set")
+		}
+		if c.KafkaConfluent.ApiKey == "" || c.KafkaConfluent.ApiSecret == "" {
+			return fmt.Errorf("KAFKA_CONFLUENT credentials (API Key/Secret) are not set")
+		}
+	case "kafka-staging", "kafka-production":
+		// For staging/production, brokers must be set
+		if len(c.Kafka.Brokers) == 0 {
+			return fmt.Errorf("KAFKA brokers are not set for model %s", c.App.KafkaModels)
+		}
+	}
+
+	// Oracle validation is handled by NewOracleFromConfig when WithDatabase() is called.
+	// We only check if the model is set for now.
+
+	return nil
 }
 
 // ResetConfig resets the configuration singleton.
@@ -120,6 +174,8 @@ func NewConfig() *Config {
 //
 //	defer nanopony.ResetConfig() // Reset after test
 func ResetConfig() {
+	configMutex.Lock()
+	defer configMutex.Unlock()
 	appConfig = nil
 }
 
@@ -138,7 +194,7 @@ func BuildConfig(initFuncs ...func(*Config)) *Config {
 	}
 
 	initApp(conf)
-	initKafkaModels(conf) // Initialize Kafka models first
+	initKafkaModels(conf)
 	initKafka(conf)
 	initOracle(conf)
 	initOperation(conf)
@@ -147,6 +203,10 @@ func BuildConfig(initFuncs ...func(*Config)) *Config {
 	for _, fn := range initFuncs {
 		fn(conf)
 	}
+
+	configMutex.Lock()
+	appConfig = conf
+	configMutex.Unlock()
 
 	return conf
 }

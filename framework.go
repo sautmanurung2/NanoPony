@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
+	"strings"
 	"sync"
 
 	"github.com/segmentio/kafka-go"
@@ -229,11 +229,24 @@ func (f *Framework) AddCleanup(fn func() error) *Framework {
 // Build finalizes the configuration and returns FrameworkComponents.
 // This method should be called after all With* methods.
 //
-// Panics if Build() is called more than once.
+// Panics:
+//   - if Build() is called more than once
+//   - if Config is missing (WithConfig was not called)
+//   - if Config validation fails (e.g., missing environment variables)
 func (f *Framework) Build() *FrameworkComponents {
 	if f.built {
 		panic(ErrAlreadyBuilt.Error())
 	}
+
+	if f.config == nil {
+		panic("Config is required. Call WithConfig() before Build().")
+	}
+
+	// Perform fail-fast validation of environment configuration
+	if err := f.config.Validate(); err != nil {
+		panic(fmt.Sprintf("Configuration validation failed: %v", err))
+	}
+
 	f.built = true
 
 	return &FrameworkComponents{
@@ -291,8 +304,7 @@ func (fc *FrameworkComponents) Start(ctx context.Context, handler JobHandler) {
 	for _, service := range fc.services {
 		if err := service.Initialize(); err != nil {
 			// Log error but continue - this is intentional to allow partial failures
-			// In production, replace with proper logging (e.g., using the Logger)
-			log.Printf("[WARNING] Failed to initialize service: %v", err)
+			LogFramework("WARNING", "ServiceInit", fmt.Sprintf("Failed to initialize service: %v", err))
 		}
 	}
 }
@@ -304,19 +316,18 @@ func (fc *FrameworkComponents) Start(ctx context.Context, handler JobHandler) {
 // 4. Close all repositories
 // 5. Run all cleanup functions concurrently
 //
-// Returns the first error encountered, or nil if all shutdowns succeeded.
+// If multiple errors occur, they are all collected and returned as an aggregated error.
+// Returns nil if all shutdowns succeeded.
 func (fc *FrameworkComponents) Shutdown(ctx context.Context) error {
 	var wg sync.WaitGroup
 	var errMu sync.Mutex
-	var firstErr error
+	var allErrors []error
 
 	// Helper function to collect errors safely
 	collectErr := func(err error) {
 		if err != nil {
 			errMu.Lock()
-			if firstErr == nil {
-				firstErr = err
-			}
+			allErrors = append(allErrors, err)
 			errMu.Unlock()
 		}
 	}
@@ -334,14 +345,14 @@ func (fc *FrameworkComponents) Shutdown(ctx context.Context) error {
 	// Shutdown all services
 	for _, service := range fc.services {
 		if err := service.Shutdown(); err != nil {
-			collectErr(err)
+			collectErr(fmt.Errorf("service shutdown failed: %w", err))
 		}
 	}
 
 	// Close all repositories
 	for _, repo := range fc.repositories {
 		if err := repo.Close(); err != nil {
-			collectErr(err)
+			collectErr(fmt.Errorf("repository close failed: %w", err))
 		}
 	}
 
@@ -351,24 +362,51 @@ func (fc *FrameworkComponents) Shutdown(ctx context.Context) error {
 		go func(fn func() error) {
 			defer wg.Done()
 			if err := fn(); err != nil {
-				collectErr(err)
+				collectErr(fmt.Errorf("cleanup failed: %w", err))
 			}
 		}(cleanup)
 	}
 
 	wg.Wait()
 
-	return firstErr
+	// Return aggregated errors or nil
+	if len(allErrors) == 0 {
+		return nil
+	}
+	if len(allErrors) == 1 {
+		return allErrors[0]
+	}
+
+	// Join all errors for comprehensive error reporting
+	var errMsgs []string
+	for _, err := range allErrors {
+		errMsgs = append(errMsgs, err.Error())
+	}
+	return errors.New("multiple shutdown errors: " + strings.Join(errMsgs, "; "))
 }
 
 // GetDB returns the database connection.
+// Returns nil if database was not configured.
+// Use HasDB() to check before use.
 func (fc *FrameworkComponents) GetDB() *sql.DB {
 	return fc.DB
 }
 
+// HasDB returns true if a database connection was configured.
+func (fc *FrameworkComponents) HasDB() bool {
+	return fc.DB != nil
+}
+
 // GetProducer returns the Kafka producer.
+// Returns nil if producer was not configured.
+// Use HasProducer() to check before use.
 func (fc *FrameworkComponents) GetProducer() *KafkaProducer {
 	return fc.Producer
+}
+
+// HasProducer returns true if a Kafka producer was configured.
+func (fc *FrameworkComponents) HasProducer() bool {
+	return fc.Producer != nil
 }
 
 // GetConfig returns the configuration.
@@ -376,12 +414,31 @@ func (fc *FrameworkComponents) GetConfig() *Config {
 	return fc.Config
 }
 
+// HasConfig returns true if configuration was set.
+func (fc *FrameworkComponents) HasConfig() bool {
+	return fc.Config != nil
+}
+
 // GetWorkerPool returns the worker pool.
+// Returns nil if worker pool was not configured.
+// Use HasWorkerPool() to check before use.
 func (fc *FrameworkComponents) GetWorkerPool() *WorkerPool {
 	return fc.WorkerPool
 }
 
+// HasWorkerPool returns true if a worker pool was configured.
+func (fc *FrameworkComponents) HasWorkerPool() bool {
+	return fc.WorkerPool != nil
+}
+
 // GetPoller returns the poller.
+// Returns nil if poller was not configured.
+// Use HasPoller() to check before use.
 func (fc *FrameworkComponents) GetPoller() *Poller {
 	return fc.Poller
+}
+
+// HasPoller returns true if a poller was configured.
+func (fc *FrameworkComponents) HasPoller() bool {
+	return fc.Poller != nil
 }

@@ -3,8 +3,8 @@ package nanopony
 import (
 	"context"
 	"fmt"
-	"log"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -73,9 +73,11 @@ type WorkerPool struct {
 	handler    JobHandler
 	mu         sync.RWMutex
 	running    bool
+	stopOnce   sync.Once
 }
 
 // NewWorkerPool creates a new worker pool with the specified number of workers and queue size.
+// Context is set when Start() is called.
 //
 // Parameters:
 //   - numWorkers: Number of concurrent goroutines to process jobs
@@ -85,18 +87,16 @@ type WorkerPool struct {
 //
 //	pool := NewWorkerPool(5, 100)
 func NewWorkerPool(numWorkers, queueSize int) *WorkerPool {
-	ctx, cancel := context.WithCancel(context.Background())
 	return &WorkerPool{
 		numWorkers: numWorkers,
 		jobChan:    make(chan Job, queueSize),
 		errChan:    make(chan error, queueSize),
-		ctx:        ctx,
-		cancel:     cancel,
 	}
 }
 
 // Start starts the worker pool with the given handler.
 // The pool will spawn numWorkers goroutines to process jobs concurrently.
+// The provided context controls the lifecycle of all workers.
 //
 // If the pool is already running, this method is a no-op.
 func (wp *WorkerPool) Start(ctx context.Context, handler JobHandler) {
@@ -107,13 +107,15 @@ func (wp *WorkerPool) Start(ctx context.Context, handler JobHandler) {
 		return
 	}
 
+	// Create a cancellable child context derived from the caller's context
+	wp.ctx, wp.cancel = context.WithCancel(ctx)
 	wp.handler = handler
 	wp.running = true
 
 	// Spawn worker goroutines
 	for i := 0; i < wp.numWorkers; i++ {
 		wp.wg.Add(1)
-		go wp.worker(ctx, i)
+		go wp.worker(wp.ctx, i)
 	}
 }
 
@@ -141,7 +143,7 @@ func (wp *WorkerPool) worker(ctx context.Context, id int) {
 					// Error sent successfully
 				default:
 					// Error channel full, log warning instead of silently discarding
-					log.Printf("[WARNING] Error channel full, discarding error: %v", err)
+					LogFramework("WARNING", "WorkerPool", fmt.Sprintf("Error channel full, discarding error: %v", err))
 				}
 			}
 		}
@@ -200,22 +202,29 @@ func (wp *WorkerPool) SubmitBlocking(ctx context.Context, job Job) error {
 // It cancels the context, closes the job channel, and waits for all workers to finish.
 // If the pool is not running, this method is a no-op.
 func (wp *WorkerPool) Stop() {
-	wp.mu.Lock()
-	defer wp.mu.Unlock()
+	wp.stopOnce.Do(func() {
+		wp.mu.Lock()
+		if !wp.running {
+			wp.mu.Unlock()
+			return
+		}
 
-	if !wp.running {
-		return
-	}
+		// Cancel context to signal workers to stop
+		wp.cancel()
+		// Close job channel to prevent new submissions
+		close(wp.jobChan)
+		wp.mu.Unlock()
 
-	// Cancel context to signal workers to stop
-	wp.cancel()
-	// Close job channel to prevent new submissions
-	close(wp.jobChan)
-	// Wait for all workers to finish
-	wp.wg.Wait()
-	// Close error channel
-	close(wp.errChan)
-	wp.running = false
+		// Wait for all workers to finish WITHOUT holding the mutex.
+		// This prevents deadlocking other methods like IsRunning().
+		wp.wg.Wait()
+
+		// Final cleanup
+		wp.mu.Lock()
+		close(wp.errChan)
+		wp.running = false
+		wp.mu.Unlock()
+	})
 }
 
 // Errors returns the error channel for monitoring job processing errors.
@@ -286,6 +295,8 @@ type Poller struct {
 	wg          sync.WaitGroup
 	running     bool
 	mu          sync.RWMutex
+	jobCounter  int64  // Atomic counter for unique job IDs
+	sessionID   string // Unique session ID for job ID prefix
 }
 
 // DataFetcher defines the interface for fetching data during polling.
@@ -319,6 +330,9 @@ func (f DataFetcherFunc) Fetch() ([]any, error) {
 //   - dataFetcher: DataFetcher to fetch data from
 func NewPoller(config PollerConfig, workerPool *WorkerPool, dataFetcher DataFetcher) *Poller {
 	ctx, cancel := context.WithCancel(context.Background())
+	// Use timestamp for session ID to ensure unique job IDs across restarts
+	sessionID := time.Now().Format("20060102150405")
+
 	poller := &Poller{
 		config:      config,
 		jobSlots:    make(chan struct{}, config.JobSlotSize),
@@ -326,6 +340,7 @@ func NewPoller(config PollerConfig, workerPool *WorkerPool, dataFetcher DataFetc
 		dataFetcher: dataFetcher,
 		ctx:         ctx,
 		cancel:      cancel,
+		sessionID:   sessionID,
 	}
 
 	// Pre-fill job slots (acts as semaphore for rate limiting)
@@ -385,7 +400,7 @@ func (p *Poller) pollOnce() {
 	// Fetch data from source
 	data, err := p.dataFetcher.Fetch()
 	if err != nil {
-		log.Printf("[ERROR] Poller: failed to fetch data: %v", err)
+		LogFramework("ERROR", "Poller", fmt.Sprintf("failed to fetch data: %v", err))
 		p.releaseSlot()
 		return
 	}
@@ -398,18 +413,21 @@ func (p *Poller) pollOnce() {
 
 	// Enforce batch size limit to prevent overwhelming the queue
 	if p.config.BatchSize > 0 && len(data) > p.config.BatchSize {
-		log.Printf("[WARN] Poller: limiting batch size from %d to %d (BatchSize config)", len(data), p.config.BatchSize)
+		LogFramework("WARNING", "Poller", fmt.Sprintf("limiting batch size from %d to %d (BatchSize config)", len(data), p.config.BatchSize))
 		data = data[:p.config.BatchSize]
 	}
 
 	// Submit each data item as a job using blocking submit
-	for i, item := range data {
+	for _, item := range data {
+		// Use atomic counter and sessionID to ensure unique job IDs across restarts
+		jobID := atomic.AddInt64(&p.jobCounter, 1)
+		now := time.Now()
 		job := Job{
-			ID:   fmt.Sprintf("poll-%d", i),
+			ID:   fmt.Sprintf("poll-%s-%d", p.sessionID, jobID),
 			Data: item,
 			Meta: map[string]any{
 				"source":    "poller",
-				"timestamp": time.Now().Unix(),
+				"timestamp": now.Unix(),
 			},
 		}
 
@@ -418,7 +436,7 @@ func (p *Poller) pollOnce() {
 		if err := p.workerPool.SubmitBlocking(p.ctx, job); err != nil {
 			// Only log errors (context cancellation is expected during shutdown)
 			if p.ctx.Err() == nil {
-				log.Printf("[ERROR] Poller: failed to submit job: %v", err)
+				LogFramework("ERROR", "Poller", fmt.Sprintf("failed to submit job: %v", err))
 			}
 		}
 	}

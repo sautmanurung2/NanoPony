@@ -6,6 +6,7 @@ import (
 	"log"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	go_ora "github.com/sijms/go-ora/v2"
@@ -13,8 +14,9 @@ import (
 
 // oracleDB holds the global database connection.
 // This is set by NewOracleConnection and can be accessed via GetOracleDB().
-// Note: For new code, prefer passing *sql.DB explicitly rather than using this global.
+// Protected by dbMutex for thread safety.
 var oracleDB *sql.DB
+var dbMutex sync.RWMutex
 
 // DatabaseConfig holds Oracle database connection configuration.
 // Use DefaultDatabaseConfig() to get sensible defaults.
@@ -93,20 +95,39 @@ func NewOracleConnection(config DatabaseConfig) (*sql.DB, error) {
 		return nil, fmt.Errorf("failed to open oracle connection: %w", err)
 	}
 
-	dbConfig := DefaultDatabaseConfig()
-	db.SetMaxIdleConns(dbConfig.MaxIdleConns)
-	db.SetMaxOpenConns(dbConfig.MaxOpenConns)
-	db.SetConnMaxIdleTime(dbConfig.ConnIdleTime)
-	db.SetConnMaxLifetime(dbConfig.ConnMaxLifetime)
+	// Use user-provided pool settings if set, otherwise fall back to defaults
+	defaults := DefaultDatabaseConfig()
+	if config.MaxIdleConns > 0 {
+		db.SetMaxIdleConns(config.MaxIdleConns)
+	} else {
+		db.SetMaxIdleConns(defaults.MaxIdleConns)
+	}
+	if config.MaxOpenConns > 0 {
+		db.SetMaxOpenConns(config.MaxOpenConns)
+	} else {
+		db.SetMaxOpenConns(defaults.MaxOpenConns)
+	}
+	if config.ConnIdleTime > 0 {
+		db.SetConnMaxIdleTime(config.ConnIdleTime)
+	} else {
+		db.SetConnMaxIdleTime(defaults.ConnIdleTime)
+	}
+	if config.ConnMaxLifetime > 0 {
+		db.SetConnMaxLifetime(config.ConnMaxLifetime)
+	} else {
+		db.SetConnMaxLifetime(defaults.ConnMaxLifetime)
+	}
 
 	// Verify connection
 	if err := db.Ping(); err != nil {
 		return nil, fmt.Errorf("failed to ping oracle database: %w", err)
 	}
 
-	// Set global variable for backward compatibility
+	// Set global variable for backward compatibility (thread-safe)
 	// Note: For new code, prefer using the returned *sql.DB directly
+	dbMutex.Lock()
 	oracleDB = db
+	dbMutex.Unlock()
 
 	return db, nil
 }
@@ -147,6 +168,8 @@ func NewOracleFromConfig(conf *Config) (*sql.DB, error) {
 // Returns nil if no connection has been established.
 // Note: For new code, prefer passing *sql.DB explicitly.
 func GetOracleDB() *sql.DB {
+	dbMutex.RLock()
+	defer dbMutex.RUnlock()
 	return oracleDB
 }
 
@@ -159,10 +182,28 @@ func CloseDB(db *sql.DB) error {
 	return nil
 }
 
+// InterpolateQueryForLoggingOnly replaces named parameters in SQL query with actual values.
+//
+// ⚠️  WARNING: FOR LOGGING/DEBUGGING ONLY. DO NOT use this for executing queries.
+// Interpolated queries are NOT safe against SQL injection and should NEVER be executed.
+// Use parameterized queries (with sql.Named) for actual database operations.
+//
+// Example:
+//
+//	query := "SELECT * FROM users WHERE id = :id AND name = :name"
+//	interpolated := InterpolateQueryForLoggingOnly(query,
+//	    sql.Named("id", 123),
+//	    sql.Named("name", "John"),
+//	)
+//	// Result: "SELECT * FROM users WHERE id = 123 AND name = 'John'"
+func InterpolateQueryForLoggingOnly(query string, args ...any) string {
+	return InterpolateQuery(query, args...)
+}
+
 // InterpolateQuery replaces named parameters in SQL query with actual values.
 // This is useful for debugging and logging queries.
 //
-// WARNING: This is for LOGGING ONLY, not for executing queries.
+// ⚠️  WARNING: This is for LOGGING ONLY, not for executing queries.
 // Never use interpolated queries for actual database execution as they are not SQL-injection safe.
 //
 // Example:
@@ -204,6 +245,9 @@ func formatValue(v any) string {
 
 // LogInterpolatedQuery logs the interpolated SQL query with values.
 // This is useful for debugging database queries.
+//
+// ⚠️  WARNING: FOR LOGGING ONLY. The interpolated query is NEVER executed.
+// Consider using InterpolateQueryForLoggingOnly() for explicit intent.
 //
 // Example:
 //

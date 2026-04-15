@@ -72,7 +72,7 @@ func getEnvValue(cfg envConfig) string {
 }
 
 // getOracleEnv returns Oracle environment variable names based on the environment.
-// For "staging" environment, it returns staging variable names.
+// For "staging" or "localhost"/"local" environments, it returns staging variable names.
 // For all other environments, it returns production variable names.
 //
 // Example:
@@ -89,7 +89,7 @@ func getOracleEnv(env string) oracleEnv {
 			username: "USERNAME_STAGING",
 			password: "PASSWORD_STAGING",
 		}
-	case "localhost":
+	case "localhost", "local":
 		return oracleEnv{
 			host:     "HOST_STAGING",
 			port:     "PORT_STAGING",

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"path"
 	"sync"
@@ -15,15 +14,64 @@ import (
 	"github.com/natefinch/lumberjack"
 )
 
+const (
+	// LogDir is the default directory for log files.
+	LogDir = "./logs"
+)
+
 var (
 	// EsClient is the global Elasticsearch client instance.
 	// This is set automatically when logging to Elasticsearch.
-	EsClient *elasticsearch.Client
-	_        = godotenv.Load()
+	// Protected by esClientMutex for thread safety.
+	EsClient      *elasticsearch.Client
+	esClientMutex sync.RWMutex
+	_             = godotenv.Load()
 
 	logFileWriter *lumberjack.Logger
 	onceLogger    sync.Once
+
+	// logChan is the buffered channel for asynchronous logging.
+	logChan chan logRequest
+	// onceWorker ensures the log worker is started only once.
+	onceWorker sync.Once
 )
+
+// logRequest represents a request to log data asynchronously.
+type logRequest struct {
+	entry    *LoggerEntry
+	payload  any
+	response ResponseLog
+	mode     string // "file", "console", "elasticsearch", "hybrid"
+}
+
+// initLogWorker starts the background goroutine that processes log requests.
+func initLogWorker() {
+	onceWorker.Do(func() {
+		// Buffer size of 1000 to handle bursts of logs
+		logChan = make(chan logRequest, 1000)
+		go func() {
+			for req := range logChan {
+				processLogRequest(req)
+			}
+		}()
+	})
+}
+
+// processLogRequest performs the actual I/O for a log request.
+func processLogRequest(req logRequest) {
+	switch req.mode {
+	case "console":
+		req.entry.printToConsole()
+	case "file":
+		req.entry.sendToFileNow(req.response)
+	case "elasticsearch":
+		req.entry.sendToElasticSearchNow(req.entry.Level, req.payload, req.response)
+	case "hybrid":
+		req.entry.printToConsole()
+		req.entry.sendToFileNow(req.response)
+		req.entry.sendToElasticSearchNow(req.entry.Level, req.payload, req.response)
+	}
+}
 
 // initLoggerFile initializes the log file writer (singleton pattern).
 // It creates a lumberjack logger with rotation settings.
@@ -31,13 +79,11 @@ func initLoggerFile() {
 	onceLogger.Do(func() {
 		if err := ensureLogDirectoryExists(); err != nil {
 			fmt.Printf("Failed to create log directory: %s\n", err)
-			// Note: In production, you may want to handle this differently
-			// For now, we continue without file logging if directory creation fails
 			return
 		}
 
 		logFileName := generateLogFileName()
-		logFilePath := path.Join("./src/logs", logFileName)
+		logFilePath := path.Join(LogDir, logFileName)
 
 		logFileWriter = &lumberjack.Logger{
 			Filename:   logFilePath,
@@ -125,6 +171,7 @@ func NewLogger(
 	systemNames := "GO-Producer-" + systemName
 
 	initLoggerFile()
+	initLogWorker() // Start async log worker
 
 	loggerEntry := &LoggerEntry{
 		StartTimestamp:  time.Now(),
@@ -136,20 +183,31 @@ func NewLogger(
 		SystemName:      systemNames,
 		Entity:          entity,
 		Additionals:     additionals,
-		Path:            dir,
+		Path:            dir, // Working directory removed - use LOG_NODE_CODE instead
 		NodeCode:        "",
 	}
 
 	return loggerEntry
 }
 
-// SendToFile writes the log entry to a rotating log file.
-// It calculates duration and sets the log level before writing.
+// SendToFile queues the log entry to be written to a rotating log file asynchronously.
 func (le *LoggerEntry) SendToFile(level string, response ResponseLog) {
 	le.EndTimestamp = time.Now()
 	le.Duration = le.EndTimestamp.Sub(le.StartTimestamp).Milliseconds()
 	le.Level = level
 	le.Response = response
+
+	if logChan != nil {
+		select {
+		case logChan <- logRequest{entry: le, response: response, mode: "file"}:
+		default:
+			fmt.Fprintf(os.Stderr, "[WARNING] Log channel full, dropping log to file\n")
+		}
+	}
+}
+
+// sendToFileNow writes the log entry to a rotating log file immediately.
+func (le *LoggerEntry) sendToFileNow(response ResponseLog) {
 	logMessage, _ := json.Marshal(le)
 
 	if logFileWriter == nil {
@@ -163,15 +221,7 @@ func (le *LoggerEntry) SendToFile(level string, response ResponseLog) {
 	}
 }
 
-// LoggingData processes and logs data based on the configured LOG_OUTPUT_MODE.
-// Supported modes: fluentd (console), elasticsearch, hybrid (both), or empty (default to hybrid).
-//
-// Example:
-//
-//	logger.LoggingData("INFO", payload, ResponseLog{
-//	    Status:  "success",
-//	    Message: "Data processed successfully",
-//	})
+// LoggingData queues log data to be processed asynchronously based on LOG_OUTPUT_MODE.
 func (le *LoggerEntry) LoggingData(
 	level string,
 	payload any,
@@ -182,29 +232,30 @@ func (le *LoggerEntry) LoggingData(
 	le.Level = level
 	le.Response = response
 
-	payloadMap, err := processPayload(payload)
-	if err != nil {
-		fmt.Printf("Error processing payload: %v\n", err)
-		return
-	}
-
-	le.Request.Payload = payloadMap
 	outputMode := os.Getenv("LOG_OUTPUT_MODE")
 	if outputMode == "" {
 		outputMode = "hybrid"
 	}
 
-	switch outputMode {
-	case "fluentd":
-		le.printToConsole()
-	case "elasticsearch":
-		le.SendToElasticSearch(level, payload, response)
-	case "hybrid":
-		le.printToConsole()
-		le.SendToElasticSearch(level, payload, response)
-	default:
-		fmt.Printf("[Warning] Unknown LOG_OUTPUT_MODE: %s. Defaulting to console.\n", outputMode)
-		le.printToConsole()
+	if logChan != nil {
+		select {
+		case logChan <- logRequest{
+			entry:    le,
+			payload:  payload,
+			response: response,
+			mode:     outputMode,
+		}:
+		default:
+			fmt.Printf("[WARNING] Log channel full, dropping log (mode: %s)\n", outputMode)
+		}
+	} else {
+		// Fallback if worker not started
+		processLogRequest(logRequest{
+			entry:    le,
+			payload:  payload,
+			response: response,
+			mode:     outputMode,
+		})
 	}
 }
 
@@ -259,9 +310,8 @@ func generateLogFileName() string {
 // ensureLogDirectoryExists creates the log directory if it doesn't exist.
 // Returns an error if directory creation fails.
 func ensureLogDirectoryExists() error {
-	logFilePath := "./logs"
-	if _, err := os.Stat(logFilePath); os.IsNotExist(err) {
-		if err := os.Mkdir(logFilePath, os.ModePerm); err != nil {
+	if _, err := os.Stat(LogDir); os.IsNotExist(err) {
+		if err := os.Mkdir(LogDir, os.ModePerm); err != nil {
 			return fmt.Errorf("failed to create log directory: %w", err)
 		}
 	}
@@ -279,9 +329,28 @@ func (le *LoggerEntry) printToConsole() {
 	fmt.Println(string(data))
 }
 
-// SendToElasticSearch sends the log entry to Elasticsearch.
-// It initializes the Elasticsearch client if not already done.
+// SendToElasticSearch queues the log entry to be sent to Elasticsearch asynchronously.
 func (le *LoggerEntry) SendToElasticSearch(
+	level string,
+	payload any,
+	response ResponseLog,
+) {
+	if logChan != nil {
+		select {
+		case logChan <- logRequest{
+			entry:    le,
+			payload:  payload,
+			response: response,
+			mode:     "elasticsearch",
+		}:
+		default:
+			fmt.Printf("[WARNING] Log channel full, dropping log to Elasticsearch\n")
+		}
+	}
+}
+
+// sendToElasticSearchNow sends the log entry to Elasticsearch immediately.
+func (le *LoggerEntry) sendToElasticSearchNow(
 	level string,
 	payload any,
 	response ResponseLog,
@@ -293,11 +362,6 @@ func (le *LoggerEntry) SendToElasticSearch(
 	}
 
 	esClient := EsClient
-	le.EndTimestamp = time.Now()
-	le.Duration = le.EndTimestamp.Sub(le.StartTimestamp).Milliseconds()
-	le.Level = level
-	le.Response = response
-
 	payloadMap, err := processPayload(payload)
 	if err != nil {
 		fmt.Printf("Error processing payload: %v\n", err)
@@ -318,27 +382,49 @@ func (le *LoggerEntry) SendToElasticSearch(
 		return
 	}
 	defer esResult.Body.Close()
-
-	body, err := io.ReadAll(esResult.Body)
-	if err != nil {
-		fmt.Printf("Failed to read Elasticsearch response body: %v\n", err)
-		return
-	}
-
-	var esResponse map[string]any
-	if err := json.Unmarshal(body, &esResponse); err != nil {
-		fmt.Printf("Failed to parse Elasticsearch response: %v\n", err)
-		return
-	}
-
-	if errorMsg, hasError := esResponse["error"]; hasError {
-		fmt.Printf("[ERROR] Document rejected by Elasticsearch: %v\n", errorMsg)
-		return
-	}
 }
 
-// ensureElasticsearchClient initializes EsClient jika belum ada
+// LogFramework is a global helper for internal framework logging.
+// It creates a generic logger entry for system-level messages.
+func LogFramework(level, process, message string) {
+	logger := NewLogger(
+		"NanoPony",
+		"system",
+		"internal",
+		"",
+		"Framework",
+		process,
+		"System",
+		"",
+	)
+	logger.LoggingData(level, nil, ResponseLog{
+		Status:  level,
+		Message: message,
+	})
+}
+
+// LogInternal is a helper for logging internal messages using an existing LoggerEntry.
+func (le *LoggerEntry) LogInternal(level, process, message string) {
+	le.ProcessName = process
+	le.LoggingData(level, nil, ResponseLog{
+		Status:  level,
+		Message: message,
+	})
+}
+
+// ensureElasticsearchClient initializes EsClient jika belum ada (thread-safe)
 func ensureElasticsearchClient() error {
+	esClientMutex.RLock()
+	if EsClient != nil {
+		esClientMutex.RUnlock()
+		return nil
+	}
+	esClientMutex.RUnlock()
+
+	esClientMutex.Lock()
+	defer esClientMutex.Unlock()
+
+	// Double-check after acquiring write lock
 	if EsClient != nil {
 		return nil
 	}
