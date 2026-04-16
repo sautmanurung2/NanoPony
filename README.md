@@ -7,17 +7,18 @@
 
 ## 📚 Dokumentasi Lengkap
 
-| Dokumen | Deskripsi | Link |
-|---------|-----------|------|
-| **📖 Dokumentasi Lengkap** | Panduan komprehensif semua komponen framework | [DOKUMENTASI.md](DOKUMENTASI.md) |
-| **🏗️ Arsitektur** | Diagram arsitektur, pola desain, dan alur data | [ARCHITECTURE.md](ARCHITECTURE.md) |
-| **🔧 Panduan Testing** | Cara menjalankan test, coverage, dan best practices | [TESTING_GUIDE.md](TESTING_GUIDE.md) |
-| **📊 Benchmark Report** | Hasil benchmark performa dan memory leak test | [BENCHMARK_REPORT.md](BENCHMARK_REPORT.md) |
-| **⚙️ Worker Pool Deep Dive** | Penjelasan detail cara kerja worker pool | [WORKER_POOL_EXPLAINED.md](WORKER_POOL_EXPLAINED.md) |
+| Dokumen                      | Deskripsi                                           | Link                                                 |
+| ---------------------------- | --------------------------------------------------- | ---------------------------------------------------- |
+| **📖 Dokumentasi Lengkap**   | Panduan komprehensif semua komponen framework       | [DOKUMENTASI.md](DOKUMENTASI.md)                     |
+| **🏗️ Arsitektur**            | Diagram arsitektur, pola desain, dan alur data      | [ARCHITECTURE.md](ARCHITECTURE.md)                   |
+| **🔧 Panduan Testing**       | Cara menjalankan test, coverage, dan best practices | [TESTING_GUIDE.md](TESTING_GUIDE.md)                 |
+| **📊 Benchmark Report**      | Hasil benchmark performa dan memory leak test       | [BENCHMARK_REPORT.md](BENCHMARK_REPORT.md)           |
+| **⚙️ Worker Pool Deep Dive** | Penjelasan detail cara kerja worker pool            | [WORKER_POOL_EXPLAINED.md](WORKER_POOL_EXPLAINED.md) |
 
 ## Fitur Lengkap
 
 ### 🏗️ Core Framework & Builder Pattern
+
 - ✅ **Fluent Builder Pattern** - Setup yang clean dan readable dengan method chaining
 - ✅ **Lifecycle Management** - Start/Shutdown terkoordinasi untuk semua komponen
 - ✅ **Dependency Injection** - Support untuk custom instances atau auto-create dari config
@@ -27,6 +28,7 @@
 - ✅ **Error Types** - Built-in errors: `ErrQueueFull`, `ErrConfigNotSet`, `ErrDatabaseNotSet`, dll
 
 ### ⚙️ Configuration System
+
 - ✅ **Environment-based Config** - Konfigurasi via environment variables
 - ✅ **Multi-environment Support** - Local, Staging, Production
 - ✅ **Auto .env Loading** - Otomatis load dari `.env` file via `godotenv`
@@ -35,8 +37,17 @@
 - ✅ **Confluent Cloud Support** - SASL/TLS authentication untuk Confluent Cloud
 - ✅ **Custom Operation Modes** - Dapat menambahkan validasi operation mode custom
 - ✅ **BuildConfig Pattern** - Alternative builder dengan custom initializer functions
+- ✅ **Dynamic Config** - Load environment variables arbitrary dengan prefix tertentu via `LoadDynamic()`
+
+### 🧠 Memory Monitoring
+
+- ✅ **Real-time Statistics** - Mengambil statistik alokasi memori dan jumlah goroutine
+- ✅ **Human-readable Format** - Auto conversion bytes ke KB/MB/GB
+- ✅ **Background Monitoring** - Monitoring memori secara periodik via background goroutine
+- ✅ **Stop/Halt Control** - Stop monitoring kapan saja dengan return function
 
 ### 🗄️ Oracle Database
+
 - ✅ **Connection Pooling** - Configurable: MaxIdleConns, MaxOpenConns, ConnMaxIdleTime, ConnMaxLifetime
 - ✅ **Auto URL Building** - Oracle URL generation via `go_ora.BuildUrl`
 - ✅ **Connection Health Check** - Auto ping saat inisialisasi
@@ -46,6 +57,7 @@
 - ✅ **Sensible Defaults** - MaxIdleConns=10, MaxOpenConns=100, IdleTime=5min, Lifetime=60min
 
 ### 📦 Repository Pattern
+
 - ✅ **BaseRepository** - Embeddable struct dengan DB connection
 - ✅ **QueryExecutor Interface** - Abstraksi untuk Query, QueryRow, Exec, Prepare
 - ✅ **TransactionExecutor** - WithTransaction helper dengan auto commit/rollback
@@ -53,27 +65,31 @@
 - ✅ **Interface-based Design** - Mudah untuk mocking dan testing
 
 ### 🚀 Worker Pool
+
 - ✅ **Concurrent Job Processing** - Multiple workers untuk proses jobs secara parallel
 - ✅ **Bounded Queue** - Backpressure dengan queue size limit
-- ✅ **Non-blocking Submit** - Returns `ErrQueueFull` jika queue penuh (tidak blocking)
+- ✅ **Non-blocking Submit** - Returns `ErrQueueFull` jika queue penuh
+- ✅ **Submit Blocking** - Menunggu sampai queue tersedia (recommended untuk feedback backpressure)
 - ✅ **Thread-safe** - sync.RWMutex untuk state management
 - ✅ **Error Channel** - Monitoring job failures via `Errors()` channel
 - ✅ **Graceful Shutdown** - Cancel context → Close channel → Wait workers → Close error channel
 - ✅ **Idempotent Start/Stop** - Aman dipanggil berkali-kali
-- ✅ **Job Metadata** - Job struct dengan ID, Data (any), Meta (map[string]any)
+- ✅ **Job Metadata** - Job struct dengan ID (auto-prefix session), Data (any), Meta (map[string]any)
 - ✅ **Overflow Protection** - Warning log jika error channel penuh
 
 ### 🔄 Poller
+
 - ✅ **Periodic Data Fetching** - Polling data dengan interval configurable
 - ✅ **Batch Processing** - BatchSize untuk kontrol jumlah data per poll
 - ✅ **Retry Mechanism** - MaxRetries dan RetryDelay untuk error handling
 - ✅ **Job Slot Semaphore** - JobSlotSize untuk rate limiting concurrent operations
-- ✅ **Auto Metadata Injection** - ID, source, timestamp untuk setiap polled job
+- ✅ **Auto Metadata Injection** - ID (session-based), source, timestamp untuk setiap polled job
 - ✅ **DataFetcher Interface** - Interface untuk custom data sources
 - ✅ **Function Adapter** - DataFetcherFunc untuk kemudahan penggunaan
 - ✅ **Empty Data Handling** - Graceful handling jika tidak ada data
 
 ### 📨 Kafka Producer
+
 - ✅ **MessageProducer Interface** - Abstraksi untuk producing messages
 - ✅ **Context Support** - ProduceWithContext untuk cancellation dan timeout
 - ✅ **JSON Serialization** - Auto marshal messages ke JSON
@@ -81,6 +97,7 @@
 - ✅ **Safe Close** - Proper resource cleanup
 
 ### 📥 Kafka Consumer
+
 - ✅ **Reader-based Consumer** - Menggunakan kafka-go Reader
 - ✅ **Consumer Groups** - Support untuk GroupID
 - ✅ **Offset Management** - StartOffset config (FirstOffset, LastOffset)
@@ -89,36 +106,29 @@
 - ✅ **Context Support** - ConsumeWithContext untuk graceful shutdown
 
 ### 🎯 Kafka Writer Configuration
+
 - ✅ **Multiple Brokers** - Support untuk multiple Kafka brokers
 - ✅ **Load Balancing** - Round-robin balancer (default)
 - ✅ **Batch Timeout** - Configurable batch timeout
 - ✅ **SASL/TLS Transport** - Untuk Confluent Cloud authentication
 - ✅ **Auto Config Resolution** - Resolve brokers berdasarkan environment + model
 
-### 🔄 Pipeline Processing
-- ✅ **Validator Interface** - Data validation dengan fail-fast strategy
-- ✅ **Transformer Interface** - Data transformation dengan chain pattern
-- ✅ **Processor Interface** - Final data processing
-- ✅ **BatchProcessor Interface** - Batch processing support
-- ✅ **Function Adapters** - ValidatorFunc, TransformerFunc, ProcessorFunc, BatchProcessorFunc
-- ✅ **Pipeline Builder** - `NewPipeline().AddValidator().AddTransformer()`
-- ✅ **Context Support** - ProcessWithContext untuk semua interfaces
-- ✅ **Fail-fast Validation** - Stop on first validation error
-- ✅ **Transformation Chain** - Output dari transformer sebelumnya jadi input berikutnya
-
 ### 📝 Logging System
+
 - ✅ **Structured Logging** - Rich metadata: timestamps, duration, reference IDs, process names, dll
-- ✅ **Multiple Output Modes** - Console (fluentd), Elasticsearch, atau Hybrid (default)
+- ✅ **Multiple Output Modes** - Console, File, Elasticsearch, atau Hybrid (Configurable via `LOG_OUTPUT_MODE`)
+- ✅ **Async Logging** - Buffered channel (cap: 1000) untuk performa tinggi tanpa blocking main process
 - ✅ **Log File Rotation** - Via lumberjack: MaxSize=100MB, MaxBackups=3, MaxAge=28 days
 - ✅ **Auto Date-based Indexing** - Elasticsearch index pattern: `{prefix}YYYYMMDD`
 - ✅ **Elasticsearch Integration** - Auto-init client, test connectivity
 - ✅ **Multiple Auth Methods** - Username/Password atau APIKey untuk Elasticsearch
 - ✅ **Payload Processing** - Auto-convert map, string, []byte, any ke map[string]any
 - ✅ **Request/Response Logging** - Structured RequestLog dan ResponseLog
-- ✅ **Service Name Prefixing** - Auto prefix dengan "GO_" dan "GO-Producer-"
-- ✅ **Log Directory** - `./logs/orion-to-core-YYYY-MM-DD.log`
+- ✅ **Service Name Prefixing** - Auto prefix dengan "GO\_" dan "GO-Producer-"
+- ✅ **Log Directory** - Defaults ke `./logs/orion-to-core-YYYY-MM-DD.log` (Auto-created)
 
 ### 🔧 Service Lifecycle Management
+
 - ✅ **Service Interface** - Initialize() dan Shutdown() methods
 - ✅ **BaseService** - Embeddable struct dengan default no-op implementations
 - ✅ **ServiceName Accessor** - Get service name untuk debugging
@@ -127,6 +137,7 @@
 - ✅ **Partial Failure Tolerance** - Service init errors di-log sebagai warning, tidak prevent startup
 
 ### 🛡️ Concurrency & Safety
+
 - ✅ **Context Propagation** - Throughout all components (worker pool, poller, producer, consumer)
 - ✅ **Thread-safe Operations** - sync.RWMutex, sync.WaitGroup, sync.Once
 - ✅ **Bounded Channels** - Backpressure via bounded channels
@@ -137,6 +148,7 @@
 - ✅ **Singleton Patterns** - Config dan logger dengan sync.Once
 
 ### 🧪 Testing & Quality
+
 - ✅ **Comprehensive Test Suite** - Unit tests untuk semua komponen utama
 - ✅ **Race Detection** - Thread-safe verified dengan `go test -race`
 - ✅ **Benchmark Tests** - Performance testing untuk semua critical paths
@@ -144,9 +156,9 @@
 - ✅ **Table-driven Tests** - Best practices untuk test coverage
 
 ### 📊 Performance Highlights
+
 - ⚡ **Framework Creation**: 0.25 ns/op, 0 B/op (ultra fast)
 - ⚡ **WorkerPool Submit Parallel**: 924.8 ns/op, 7 B/op (efficient)
-- ⚡ **Pipeline Process Parallel**: 28.48 ns/op (sangat cepat)
 - ⚡ **Memory Leak Test**: 8 test cycles - NO LEAK DETECTED
 - ⚡ **Concurrent Safe**: 20 instances dengan memory growth hanya +23 KB
 
@@ -242,7 +254,10 @@ func main() {
     signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
     <-sigChan
 
-    components.Shutdown(ctx)
+    // Graceful Shutdown
+    if err := components.Shutdown(ctx); err != nil {
+        log.Printf("Error during shutdown: %v", err)
+    }
 }
 
 type myDataFetcher struct{}
@@ -273,31 +288,32 @@ NanoPony menggunakan environment variables untuk konfigurasi:
 
 ### Environment Variables
 
-| Variable | Deskripsi | Contoh |
-|----------|-----------|--------|
-| `GO_ENV` | Environment aplikasi | `local`, `staging`, `production` |
-| `KAFKA_MODELS` | Model Kafka | `kafka-localhost`, `kafka-staging`, `kafka-production`, `kafka-confluent` |
-| `KAFKA_BROKERS_STAGING` | Broker Kafka staging | `broker1:9092,broker2:9092` |
-| `KAFKA_BROKERS_PRODUCTION` | Broker Kafka production | `broker1:9092,broker2:9092` |
-| `HOST_STAGING` | Host Oracle staging | `oracle-staging.example.com` |
-| `PORT_STAGING` | Port Oracle staging | `1521` |
-| `DATABASE_STAGING` | Database name staging | `ORCL` |
-| `USERNAME_STAGING` | Username Oracle staging | `user` |
-| `PASSWORD_STAGING` | Password Oracle staging | `secret` |
-| `HOST_PRODUCTION` | Host Oracle production | `oracle.example.com` |
-| `PORT_PRODUCTION` | Port Oracle production | `1521` |
-| `DATABASE_PRODUCTION` | Database name production | `ORCL` |
-| `USERNAME_PRODUCTION` | Username Oracle production | `user` |
-| `PASSWORD_PRODUCTION` | Password Oracle production | `secret` |
-| `API_KEY_KAFKA_CONFLUENT` | API Key Confluent Cloud | `xxx` |
-| `API_SECRET_KAFKA_CONFLUENT` | API Secret Confluent Cloud | `xxx` |
-| `BOOTSTRAP_SERVER_KAFKA_CONFLUENT` | Bootstrap server Confluent | `pkc-xxx.us-east-1.aws.confluent.cloud:9092` |
+| Variable                           | Deskripsi                  | Contoh                                                                    |
+| ---------------------------------- | -------------------------- | ------------------------------------------------------------------------- |
+| `GO_ENV`                           | Environment aplikasi       | `local`, `staging`, `production`                                          |
+| `KAFKA_MODELS`                     | Model Kafka                | `kafka-localhost`, `kafka-staging`, `kafka-production`, `kafka-confluent` |
+| `KAFKA_BROKERS_STAGING`            | Broker Kafka staging       | `broker1:9092,broker2:9092`                                               |
+| `KAFKA_BROKERS_PRODUCTION`         | Broker Kafka production    | `broker1:9092,broker2:9092`                                               |
+| `HOST_STAGING`                     | Host Oracle staging        | `oracle-staging.example.com`                                              |
+| `PORT_STAGING`                     | Port Oracle staging        | `1521`                                                                    |
+| `DATABASE_STAGING`                 | Database name staging      | `ORCL`                                                                    |
+| `USERNAME_STAGING`                 | Username Oracle staging    | `user`                                                                    |
+| `PASSWORD_STAGING`                 | Password Oracle staging    | `secret`                                                                  |
+| `HOST_PRODUCTION`                  | Host Oracle production     | `oracle.example.com`                                                      |
+| `PORT_PRODUCTION`                  | Port Oracle production     | `1521`                                                                    |
+| `DATABASE_PRODUCTION`              | Database name production   | `ORCL`                                                                    |
+| `USERNAME_PRODUCTION`              | Username Oracle production | `user`                                                                    |
+| `PASSWORD_PRODUCTION`              | Password Oracle production | `secret`                                                                  |
+| `API_KEY_KAFKA_CONFLUENT`          | API Key Confluent Cloud    | `xxx`                                                                     |
+| `API_SECRET_KAFKA_CONFLUENT`       | API Secret Confluent Cloud | `xxx`                                                                     |
+| `BOOTSTRAP_SERVER_KAFKA_CONFLUENT` | Bootstrap server Confluent | `pkc-xxx.us-east-1.aws.confluent.cloud:9092`                              |
+| `LOG_OUTPUT_MODE`                  | Mode output log            | `console`, `file`, `elasticsearch`, `hybrid`                              |
 
 ### Contoh `.env` File
 
 ```env
 GO_ENV=staging
-KAFKA-MODELS=kafka-staging
+KAFKA_MODELS=kafka-staging
 KAFKA_BROKERS_STAGING=broker1:9092,broker2:9092
 HOST_STAGING=oracle-staging.example.com
 PORT_STAGING=1521
@@ -318,6 +334,9 @@ config := nanopony.NewConfig()
 config := nanopony.BuildConfig(func(c *nanopony.Config) {
     c.App.Env = "custom"
 })
+
+// Load dynamic environment variables
+config.LoadDynamic("CUSTOM_")
 ```
 
 ### Database (Oracle)
@@ -383,30 +402,15 @@ poller := nanopony.NewPoller(pollerConfig, workerPool, dataFetcher)
 poller.Start()
 ```
 
-### Pipeline (Validator + Transformer + Processor)
+### Memory Monitoring
 
 ```go
-validator := nanopony.ValidatorFunc(func(data interface{}) error {
-    if data == nil {
-        return errors.New("data cannot be nil")
-    }
-    return nil
-})
+// Print memory summary
+nanopony.PrintMemoryStats()
 
-transformer := nanopony.TransformerFunc(func(data interface{}) (interface{}, error) {
-    return data.(string) + "-transformed", nil
-})
-
-processor := nanopony.ProcessorFunc(func(data interface{}) error {
-    fmt.Printf("Processing: %v\n", data)
-    return nil
-})
-
-pipeline := nanopony.NewPipeline(processor).
-    AddValidator(validator).
-    AddTransformer(transformer)
-
-err := pipeline.Process("test")
+// Start background monitor
+stop := nanopony.MonitorMemory(5 * time.Second)
+defer stop()
 ```
 
 ### Transaction Support
@@ -428,7 +432,7 @@ Framework NanoPony telah melalui pengujian performa menyeluruh:
 - ✅ **Memory Leak Test**: 8 test cycles - **NO LEAK DETECTED**
 - ✅ **Framework Creation**: 0.25 ns/op, 0 B/op (ultra fast)
 - ✅ **WorkerPool Submit Parallel**: 924.8 ns/op, 7 B/op (efficient)
-- ✅ **Pipeline Process Parallel**: 28.48 ns/op (sangat cepat)
+- ✅ **Memory Leak Test**: 8 test cycles - NO LEAK DETECTED
 - ✅ **Concurrent Safe**: 20 instances dengan memory growth hanya +23 KB
 
 > 📖 **Detail:** Baca [BENCHMARK_REPORT.md](BENCHMARK_REPORT.md) untuk hasil lengkap.
@@ -468,39 +472,48 @@ go run main.go
 3. **Implementasikan interface** `Repository` dan `Service` untuk code yang terstruktur
 4. **Gunakan Context** untuk cancellation dan timeout
 5. **Handle errors** dengan proper error handling
-6. **Use Pipeline** untuk complex data processing dengan validation dan transformation
-7. **Reuse WorkerPool** - jangan create/destroy频繁, buat sekali di startup
-8. **Monitor error channel** - range over `pool.Errors()` untuk tracking job failures
+6. **Reuse WorkerPool** - jangan create/destroy频繁, buat sekali di startup
+7. **Monitor error channel** - range over `pool.Errors()` untuk tracking job failures
 
 > 📖 **Arsitektur:** Baca [ARCHITECTURE.md](ARCHITECTURE.md) untuk diagram arsitektur lengkap dan pola desain.
-> 
+>
 > 📖 **Dokumentasi:** Baca [DOKUMENTASI.md](DOKUMENTASI.md) untuk panduan penggunaan setiap komponen.
+>
+> 📖 **Contoh Lainnya:** Lihat folder `/examples` untuk implementasi:
+>
+> - `dynamic_config`: Penggunaan konfigurasi dinamis.
+> - `memory_monitoring`: Integrasi monitoring memori.
+> - `layered_separation`: Pemisahan layer repository dan service yang clean.
 
 ## Project Structure
 
 ```
 NanoPony/
-├── config.go              # Configuration structures
-├── config_init.go         # Configuration initialization
-├── database.go            # Oracle database connection
-├── kafka.go               # Kafka writer/reader
-├── producer.go            # Kafka producer & consumer
-├── worker.go              # Worker pool & poller
-├── service.go             # Service, Pipeline, Processor
-├── repository.go          # Repository base interface
-├── framework.go           # Main framework builder
-├── logger.go              # Structured logging with rotation
+├── config.go              # Konfigurasi sistem
+├── config_init.go         # Inisialisasi environment vars
+├── database.go            # Koneksi Oracle DB & pooling
+├── kafka.go               # Wrapper kafka-go reader/writer
+├── producer.go            # Logic Kafka producer & consumer
+├── worker.go              # Worker pool & poller logic
+├── service.go             # Base service interfaces
+├── repository.go          # Base repository & transaction helper
+├── framework.go           # Main builder & lifecycle management
+├── logger.go              # Structured logging (Console/File/ES)
+├── memory.go              # Memory monitoring utilities
 ├── *_test.go              # Unit tests & benchmarks
-├── README.md              # This file
+├── README.md              # File ini
 ├── go.mod                 # Go module definition
 ├── ARCHITECTURE.md        # 📐 Arsitektur & pola desain
 ├── BENCHMARK_REPORT.md    # 📊 Hasil benchmark & memory test
 ├── TESTING_GUIDE.md       # 🧪 Panduan testing
 ├── DOKUMENTASI.md         # 📖 Dokumentasi lengkap komponen
 ├── WORKER_POOL_EXPLAINED.md # ⚙️ Deep dive worker pool
-└── examples/              # Example application
-    ├── main.go            # Complete example
-    └── go.mod
+├── src/                   # Source tambahan (logs, etc)
+└── examples/              # Koleksi contoh aplikasi
+    ├── main.go
+    ├── dynamic_config/
+    ├── memory_monitoring/
+    └── layered_separation/
 ```
 
 ## Requirements
