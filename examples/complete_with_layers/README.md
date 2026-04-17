@@ -1,14 +1,14 @@
-# Contoh Lengkap: Interface, Repository & Service Layer
+# Contoh Lengkap: Arsitektur Layer (Interface, Repository & Service)
 
-Contoh ini menampilkan arsitektur 3-tier yang proper menggunakan NanoPony framework.
+Contoh ini menampilkan arsitektur 3-tier yang proper menggunakan framework NanoPony. Arsitektur ini dirancang untuk skalabilitas, kemudahan maintenance, dan kemudahan testing.
 
 ## Arsitektur
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                    Main Application                      │
+│                    Aplikasi Utama                        │
 │                                                          │
-│  Controller/Handler → Service Layer → Repository Layer  │
+│  Handler/Main → Service Layer → Repository Layer        │
 │                        ↓                    ↓            │
 │                  Kafka Producer      Oracle Database     │
 └─────────────────────────────────────────────────────────┘
@@ -18,27 +18,26 @@ Contoh ini menampilkan arsitektur 3-tier yang proper menggunakan NanoPony framew
 
 ```
 complete_with_layers/
-├── main.go          # Contoh lengkap implementasi
-├── go.mod           # Go module definition
+├── main.go          # Contoh lengkap implementasi (Handler, Service, Repo)
+├── go.mod           # Definisi modul Go
 └── README.md        # Dokumentasi ini
 ```
 
 ## Komponen yang Ditampilkan
 
-### 1. **Domain Interfaces**
+### 1. **Domain Entities**
 
-Definisi interface untuk entity:
-- `User` - Entity user
-- `Order` - Entity order
+Definisi struct untuk objek bisnis:
+- `User` - Entity user (ID, Nama, Email, Status)
+- `Order` - Entity order (ID, UserID, Produk, Jumlah, Status)
 
 ### 2. **Repository Layer**
 
-Interface dan implementasi untuk akses data:
+Layer yang bertanggung jawab untuk akses data langsung ke database.
 
 ```go
-// Interface
+// Interface (Kontrak)
 type UserRepository interface {
-    nanopony.Repository
     GetByID(id int) (*User, error)
     GetAll() ([]User, error)
     GetActiveUsers() ([]User, error)
@@ -48,45 +47,46 @@ type UserRepository interface {
 
 // Implementasi
 type userRepositoryImpl struct {
-    *nanopony.BaseRepository
+    DB *sql.DB
 }
 ```
 
 **Fitur:**
-- Embed `nanopony.BaseRepository` untuk akses DB
-- CRUD operations
-- Custom queries untuk use cases spesifik
+- Mengisolasi logika SQL dari logika bisnis.
+- Menggunakan `*sql.DB` untuk eksekusi query.
+- Memudahkan penggantian sumber data (misal: mock untuk testing).
 
 ### 3. **Service Layer**
 
-Interface dan implementasi untuk business logic:
+Layer yang berisi logika bisnis dan mengorkestrasi beberapa repositori atau layanan eksternal (seperti Kafka).
 
 ```go
-// Interface
+// Interface (Kontrak)
 type UserService interface {
-    nanopony.Service
     GetUserWithOrders(ctx context.Context, userID int) (*User, []Order, error)
     ActivateUser(ctx context.Context, userID int) error
     SendUserEventToKafka(ctx context.Context, userID int, event string) error
+    ServiceName() string
 }
 
 // Implementasi
 type userServiceImpl struct {
-    *nanopony.BaseService
-    userRepo  UserRepository
-    orderRepo OrderRepository
-    producer  *nanopony.KafkaProducer
+    serviceName string
+    userRepo    UserRepository
+    orderRepo   OrderRepository
+    producer    *nanopony.KafkaProducer
 }
 ```
 
 **Fitur:**
-- Embed `nanopony.BaseService` untuk lifecycle management
-- Dependency injection untuk repositories
-- Business use cases (multi-step processes)
-- Transaction support
-- Kafka integration
+- **Dependency Injection**: Mengonsumsi repositori melalui interface.
+- **Orkestrasi**: Menggabungkan data dari beberapa repositori.
+- **Integrasi Kafka**: Mengirim event bisnis setelah operasi berhasil.
+- **Manajemen Transaksi**: Menangani `Begin`, `Commit`, dan `Rollback` secara manual untuk kontrol penuh.
 
 ### 4. **Data Fetcher untuk Poller**
+
+Implementasi interface `nanopony.DataFetcher` untuk mengambil data secara berkala.
 
 ```go
 type pendingOrderFetcher struct {
@@ -95,11 +95,13 @@ type pendingOrderFetcher struct {
 
 func (f *pendingOrderFetcher) Fetch() ([]interface{}, error) {
     orders, err := f.orderRepo.GetPendingOrders()
-    // Convert ke []interface{} untuk worker pool
+    // Konversi ke []interface{} agar bisa diterima oleh worker pool
 }
 ```
 
-### 5. **Framework Integration**
+### 5. **Integrasi Framework**
+
+Menggunakan `nanopony.NewFramework()` untuk merakit semua komponen.
 
 ```go
 framework := nanopony.NewFramework().
@@ -107,9 +109,9 @@ framework := nanopony.NewFramework().
     WithKafkaWriterFromInstance(kafkaWriter).
     WithProducerFromInstance(producer).
     WithWorkerPool(5, 100).
-    WithPoller(config, fetcher).
-    AddService(userService).
-    AddService(orderService)
+    WithPoller(nanopony.DefaultPollerConfig(), &pendingOrderFetcher{orderRepo: orderRepo})
+
+components := framework.Build()
 ```
 
 ## Cara Menjalankan
@@ -121,275 +123,34 @@ go run main.go
 
 ## Output yang Diharapkan
 
-```
-╔══════════════════════════════════════════════════════════╗
-║   NanoPony Example: Interface, Repository & Service     ║
-╚══════════════════════════════════════════════════════════╝
+Aplikasi akan menampilkan langkah-langkah inisialisasi dan mensimulasikan beberapa operasi bisnis:
+1. Inisialisasi konfigurasi.
+2. Pembuatan repositori dan service.
+3. Menjalankan framework (Worker Pool & Poller).
+4. Demonstrasi Use Case:
+   - Mengambil data User beserta Order-nya.
+   - Mengaktifkan User (Simulasi Transaksi).
+   - Membuat Order (Simulasi Validasi).
+   - Memproses Pending Orders (Simulasi Batch).
+   - Mengirim event ke Kafka.
 
-[1] Initializing configuration...
-[2] Database connection (skipped for demo)
-[3] Initializing Kafka producer...
-    ✓ Kafka producer initialized
-[4] Creating repositories...
-    ✓ UserRepository created
-    ✓ OrderRepository created
-[5] Creating services with dependency injection...
-    ✓ UserService created
-    ✓ OrderService created
-[6] Building framework...
-    ✓ Framework built successfully
-[7] Starting framework...
-    ✓ Framework started
-[8] Demonstrating service layer operations...
-═══════════════════════════════════════════════════════════
+## Best Practices yang Diterapkan
 
->>> Example 1: Get User with Orders
-User: User 1 (user1@example.com)
-Status: INACTIVE
-Total Orders: 2
+### ✅ 1. Pemisahan Interface (Interface Segregation)
+Komponen saling berinteraksi melalui interface, bukan implementasi konkret, sehingga memudahkan pengujian unit (mocking).
 
-Orders:
-  - Order #1: Laptop (Rp 12000000.00) [PENDING]
-  - Order #2: Mouse (Rp 250000.00) [COMPLETED]
+### ✅ 2. Injeksi Dependensi (Dependency Injection)
+Semua dependensi dimasukkan melalui constructor (`NewUserService`, `NewUserRepository`), membuat kode lebih bersih dan mudah diuji.
 
->>> Example 2: Activate User
-[UserService] User 2 activated successfully
+### ✅ 3. Manajemen Transaksi Manual
+Transaksi database dikelola secara eksplisit di level Service menggunakan `db.BeginTx`, memberikan kontrol penuh atas atomisitas operasi bisnis.
 
->>> Example 3: Create Order with Pipeline Validation
-[MockOrderRepository] Create order: Laptop Gaming (Rp 15000000.00)
-[OrderService] Order 100 created and notification sent
+### ✅ 4. Validasi Logika Bisnis
+Validasi dilakukan di dalam metode service sebelum data dikirim ke repositori untuk disimpan.
 
->>> Example 4: Create Invalid Order (Validation Should Fail)
-    ✓ Validation caught error: order pipeline failed: validation failed: order amount must be positive
-
->>> Example 5: Process Pending Orders
-[OrderService] Found 2 pending orders to process
-[OrderService] Processing order 1 for user User 1 (user1@example.com)
-
->>> Example 6: Send Event to Kafka
-[UserService] Event 'USER_LOGIN' sent to Kafka for user 1
-
-═══════════════════════════════════════════════════════════
-
-[9] Framework running. Press Ctrl+C to shutdown...
-```
-
-## Contoh Use Cases
-
-### 1. Get User dengan Orders
-
-```go
-user, orders, err := userService.GetUserWithOrders(ctx, 1)
-```
-
-**Proses:**
-1. Service memanggil repository untuk get user
-2. Service memanggil repository untuk get orders
-3. Service combine data dan return
-
-### 2. Activate User dengan Transaction & Kafka
-
-```go
-err := userService.ActivateUser(ctx, 2)
-```
-
-**Proses:**
-1. Begin transaction
-2. Update user status di database
-3. Get user data
-4. Send event ke Kafka
-5. Commit transaction (atau rollback jika error)
-
-### 3. Create Order dengan Pipeline
-
-```go
-order := &Order{
-    ID:      100,
-    UserID:  1,
-    Product: "Laptop",
-    Amount:  15000000,
-}
-err := orderService.CreateOrderAndNotify(ctx, order)
-```
-
-**Proses:**
-1. Pipeline validator: Validate order data
-2. Pipeline processor:
-   - Set status dan timestamp
-   - Create order di database
-   - Send notification ke Kafka
-
-### 4. Process Pending Orders (Batch)
-
-```go
-err := orderService.ProcessPendingOrders(ctx)
-```
-
-**Proses:**
-1. Get all pending orders dari repository
-2. For each order:
-   - Get user info
-   - Process order (update status)
-   - Send notification ke Kafka
-   - Update status ke completed
-
-## Best Practices yang Ditampilkan
-
-### ✅ 1. Interface Segregation
-
-```go
-// Interface untuk kontrak
-type UserService interface {
-    nanopony.Service
-    GetUserWithOrders(ctx context.Context, userID int) (*User, []Order, error)
-    // ...
-}
-
-// Implementasi concrete
-type userServiceImpl struct {
-    *nanopony.BaseService
-    userRepo  UserRepository
-    orderRepo OrderRepository
-    producer  *nanopony.KafkaProducer
-}
-```
-
-### ✅ 2. Dependency Injection
-
-```go
-func NewUserService(
-    userRepo UserRepository, 
-    orderRepo OrderRepository, 
-    producer *nanopony.KafkaProducer
-) UserService {
-    return &userServiceImpl{
-        BaseService: nanopony.NewBaseService("UserService"),
-        userRepo:    userRepo,
-        orderRepo:   orderRepo,
-        producer:    producer,
-    }
-}
-```
-
-### ✅ 3. Transaction Support
-
-```go
-executor := nanopony.NewTransactionExecutor(db)
-err := executor.WithTransaction(func(tx *sql.Tx) error {
-    // Multiple operations dalam transaction
-    s.userRepo.UpdateStatus(userID, "ACTIVE")
-    user, _ := s.userRepo.GetByID(userID)
-    s.producer.ProduceWithContext(ctx, "user-events", event)
-    return nil
-})
-```
-
-### ✅ 4. Pipeline Pattern
-
-```go
-pipeline := nanopony.NewPipeline(processor).
-    AddValidator(validator)
-
-err := pipeline.Process(order)
-```
-
-### ✅ 5. Service Lifecycle
-
-```go
-func (s *userServiceImpl) Initialize() error {
-    log.Printf("[%s] Service initialized", s.ServiceName())
-    return nil
-}
-
-func (s *userServiceImpl) Shutdown() error {
-    log.Printf("[%s] Service shutdown", s.ServiceName())
-    return nil
-}
-```
-
-### ✅ 6. Repository Pattern
-
-```go
-type UserRepository interface {
-    nanopony.Repository  // Embed base interface
-    GetByID(id int) (*User, error)
-    // ...
-}
-```
-
-## Production Setup
-
-Untuk production dengan database dan Kafka nyata:
-
-```go
-func main() {
-    // 1. Connect to database
-    db, err := nanopony.NewOracleFromConfig(config)
-    if err != nil {
-        log.Fatal(err)
-    }
-    defer db.Close()
-
-    // 2. Create repositories dengan real DB
-    userRepo := NewUserRepository(db)
-    orderRepo := NewOrderRepository(db)
-
-    // 3. Create Kafka producer
-    kafkaWriter := nanopony.NewKafkaWriterFromConfig(config)
-    producer := nanopony.NewKafkaProducer(kafkaWriter)
-
-    // 4. Create services
-    userService := NewUserService(userRepo, orderRepo, producer)
-    orderService := NewOrderService(orderRepo, userRepo, producer)
-
-    // 5. Build framework
-    framework := nanopony.NewFramework().
-        WithConfig(config).
-        WithDatabase().
-        WithKafkaWriter().
-        WithProducer().
-        WithWorkerPool(5, 100).
-        WithPoller(config, &pendingOrderFetcher{orderRepo}).
-        AddService(userService).
-        AddService(orderService)
-
-    components := framework.Build()
-    
-    // 6. Start dan jalankan
-    ctx := context.Background()
-    components.Start(ctx, jobHandler)
-    
-    // ... wait for shutdown
-}
-```
-
-## Dependency Graph
-
-```
-UserService
-  ├── UserRepository (data access)
-  ├── OrderRepository (data access)
-  └── KafkaProducer (event publishing)
-
-OrderService
-  ├── OrderRepository (data access)
-  ├── UserRepository (data access)
-  └── KafkaProducer (event publishing)
-
-Poller
-  └── OrderRepository (fetch pending orders)
-      └── WorkerPool (submit jobs)
-```
+### ✅ 5. Penanganan Shutdown yang Aman (Graceful Shutdown)
+Menggunakan `components.Shutdown(ctx)` untuk memastikan poller berhenti dan semua worker menyelesaikan tugasnya sebelum aplikasi benar-benar berhenti.
 
 ## Kesimpulan
 
-Contoh ini menunjukkan:
-
-✅ **Clean Architecture** - Separation of concerns yang jelas  
-✅ **Interface-Based Design** - Loose coupling antar layer  
-✅ **Dependency Injection** - Easy untuk testing dan maintenance  
-✅ **Transaction Management** - Data consistency dengan transaction support  
-✅ **Pipeline Processing** - Validation dan processing yang composable  
-✅ **Event-Driven** - Kafka integration untuk asynchronous events  
-✅ **Service Lifecycle** - Initialize dan shutdown yang proper  
-✅ **Framework Integration** - Semua komponen NanoPony bekerja bersama
+Contoh ini adalah cetak biru (blueprint) yang direkomendasikan untuk membangun aplikasi menggunakan **NanoPony**. Dengan memisahkan tanggung jawab ke dalam layer-layer yang jelas, aplikasi Anda akan menjadi lebih stabil, mudah diuji, dan siap untuk lingkungan produksi.

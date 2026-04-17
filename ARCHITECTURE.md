@@ -23,7 +23,7 @@
 
 ## Ringkasan
 
-**NanoPony** adalah framework Go (`github.com/sautmanurung2/nanopony`) yang menyediakan platform integrasi Kafka-Oracle yang komprehensif dengan kemampuan worker pool dan polling. Framework ini dirancang menggunakan pola builder yang fluent untuk menghubungkan koneksi database, Kafka producer/consumer, worker pool konkuren, data poller, dan pipeline pemrosesan.
+**NanoPony** adalah framework Go (`github.com/sautmanurung2/nanopony`) yang menyediakan platform integrasi Kafka-Oracle yang komprehensif dengan kemampuan worker pool dan polling. Framework ini dirancang menggunakan pola builder yang fluent untuk menghubungkan koneksi database, Kafka producer/consumer, worker pool konkuren, dan data poller.
 
 **Fitur Utama:**
 - ✅ **Kafka Producer & Consumer** - Integrasi dengan Kafka menggunakan `kafka-go`
@@ -290,7 +290,7 @@ type KafkaWriterConfig struct {
 | `WithPollerFromInstance(poller)` | Tidak ada | Menerima poller yang ada |
 | `AddCleanup(fn)` | Tidak ada | Mendaftarkan fungsi cleanup |
 
-**`Build()`** mengembalikan `FrameworkComponents` - struct yang mengekspos semua komponen yang telah di-wire ditambah slice privat untuk repository, service, dan fungsi cleanup. Panic pada double-build.
+**`Build()`** mengembalikan `FrameworkComponents` - struct yang mengekspos semua komponen yang telah di-wire ditambah slice privat untuk fungsi cleanup. Panic pada double-build.
 
 **`FrameworkComponents.Start(ctx, handler)`:**
 1. Memulai WorkerPool dengan handler
@@ -378,7 +378,6 @@ type KafkaWriterConfig struct {
         │
         ├── WorkerPool.Start(ctx, handler)
         ├── Poller.Start()
-        └── Service.Initialize() untuk setiap service
         │
         │  ... berjalan ...
         │
@@ -400,7 +399,6 @@ type KafkaWriterConfig struct {
 | **Singleton** | `Config` (via global `appConfig`), writer file `LoggerEntry` (`sync.Once`) | Instance tunggal di seluruh aplikasi |
 | **Factory** | `NewOracleConnection`, `NewKafkaWriter`, `NewWorkerPool`, `NewPoller` | Pembuatan objek tanpa mengekspos logika instansiasi |
 | **Strategy** | Routing mode output di Logger, routing model Kafka di config | Algoritma yang dapat dipertukarkan saat runtime |
-| **Adapter** | Function adapters: `DataFetcherFunc`, `ProcessorFunc`, `ValidatorFunc`, `TransformerFunc`, `BatchProcessorFunc` | Konversi interface ke interface yang diharapkan |
 | **Worker Pool** | `WorkerPool` - goroutine pool bounded dengan channel | Gunakan ulang goroutine untuk memproses banyak tugas |
 | **Semaphore** | Channel `jobSlots` Poller untuk rate limiting poll konkuren | Kontrol akses ke resource |
 | **Dependency Injection** | Semua method `With*FromInstance()` memungkinkan injeksi komponen yang telah dibuat sebelumnya | Injeksi dependency daripada membuatnya |
@@ -575,24 +573,6 @@ func main() {
     log.Println("Shutdown selesai")
 }
 
-```
-
----
-
-## Peta File
-
-    name string
-}
-
-func (s *myService) Initialize() error {
-    log.Printf("Menginisialisasi %s", s.name)
-    return nil
-}
-
-func (s *myService) Shutdown() error {
-    log.Printf("Shutdown %s", s.name)
-    return nil
-}
 ```
 
 ---

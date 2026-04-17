@@ -1,4 +1,4 @@
-// Example: Lengkap dengan Interface, Repository, dan Service Layer
+// Contoh: Lengkap dengan Interface, Repository, dan Service Layer
 // Menampilkan arsitektur 3-tier yang proper untuk aplikasi production
 //
 // Arsitektur:
@@ -6,7 +6,7 @@
 //                         ↓
 //                   Kafka Producer
 //
-// Run: go run main.go
+// Jalankan: go run main.go
 package main
 
 import (
@@ -48,12 +48,11 @@ type Order struct {
 
 // ============================================================================
 // REPOSITORY INTERFACES
-// Interface untuk akses data (contract)
+// Interface untuk akses data (kontrak)
 // ============================================================================
 
 // UserRepository mendefinisikan operasi data user
 type UserRepository interface {
-	nanopony.Repository // Embed base repository
 	GetByID(id int) (*User, error)
 	GetAll() ([]User, error)
 	GetActiveUsers() ([]User, error)
@@ -63,7 +62,6 @@ type UserRepository interface {
 
 // OrderRepository mendefinisikan operasi data order
 type OrderRepository interface {
-	nanopony.Repository // Embed base repository
 	GetByID(id int) (*Order, error)
 	GetPendingOrders() ([]Order, error)
 	GetOrdersByUserID(userID int) ([]Order, error)
@@ -73,22 +71,22 @@ type OrderRepository interface {
 
 // ============================================================================
 // SERVICE INTERFACES
-// Interface untuk business logic (contract)
+// Interface untuk business logic (kontrak)
 // ============================================================================
 
 // UserService mendefinisikan business operations untuk user
 type UserService interface {
-	nanopony.Service // Embed base service
 	GetUserWithOrders(ctx context.Context, userID int) (*User, []Order, error)
 	ActivateUser(ctx context.Context, userID int) error
 	SendUserEventToKafka(ctx context.Context, userID int, event string) error
+	ServiceName() string
 }
 
 // OrderService mendefinisikan business operations untuk order
 type OrderService interface {
-	nanopony.Service // Embed base service
 	ProcessPendingOrders(ctx context.Context) error
 	CreateOrderAndNotify(ctx context.Context, order *Order) error
+	ServiceName() string
 }
 
 // ============================================================================
@@ -98,13 +96,13 @@ type OrderService interface {
 
 // userRepositoryImpl implementasi UserRepository
 type userRepositoryImpl struct {
-	*nanopony.BaseRepository // Embed base repository untuk akses DB
+	DB *sql.DB
 }
 
 // NewUserRepository membuat instance UserRepository
 func NewUserRepository(db *sql.DB) UserRepository {
 	return &userRepositoryImpl{
-		BaseRepository: nanopony.NewBaseRepository(db),
+		DB: db,
 	}
 }
 
@@ -184,13 +182,13 @@ func (r *userRepositoryImpl) UpdateStatus(id int, status string) error {
 
 // orderRepositoryImpl implementasi OrderRepository
 type orderRepositoryImpl struct {
-	*nanopony.BaseRepository
+	DB *sql.DB
 }
 
 // NewOrderRepository membuat instance OrderRepository
 func NewOrderRepository(db *sql.DB) OrderRepository {
 	return &orderRepositoryImpl{
-		BaseRepository: nanopony.NewBaseRepository(db),
+		DB: db,
 	}
 }
 
@@ -275,30 +273,24 @@ func (r *orderRepositoryImpl) UpdateStatus(id int, status string) error {
 
 // userServiceImpl implementasi UserService
 type userServiceImpl struct {
-	*nanopony.BaseService
-	userRepo  UserRepository
-	orderRepo OrderRepository
-	producer  *nanopony.KafkaProducer
+	serviceName string
+	userRepo    UserRepository
+	orderRepo   OrderRepository
+	producer    *nanopony.KafkaProducer
 }
 
 // NewUserService membuat instance UserService
 func NewUserService(userRepo UserRepository, orderRepo OrderRepository, producer *nanopony.KafkaProducer) UserService {
 	return &userServiceImpl{
-		BaseService: nanopony.NewBaseService("UserService"),
+		serviceName: "UserService",
 		userRepo:    userRepo,
 		orderRepo:   orderRepo,
 		producer:    producer,
 	}
 }
 
-func (s *userServiceImpl) Initialize() error {
-	log.Printf("[%s] Service initialized", s.ServiceName())
-	return nil
-}
-
-func (s *userServiceImpl) Shutdown() error {
-	log.Printf("[%s] Service shutdown", s.ServiceName())
-	return nil
+func (s *userServiceImpl) ServiceName() string {
+	return s.serviceName
 }
 
 // GetUserWithOrders mendapatkan user beserta orders-nya (use case)
@@ -320,43 +312,46 @@ func (s *userServiceImpl) GetUserWithOrders(ctx context.Context, userID int) (*U
 
 // ActivateUser mengaktifkan user dan mengirim event ke Kafka (business process)
 func (s *userServiceImpl) ActivateUser(ctx context.Context, userID int) error {
-	// Gunakan transaction untuk consistency
-	executor := nanopony.NewTransactionExecutor(s.userRepo.(*userRepositoryImpl).DB)
+	// Logic transaksi manual
+	db := s.userRepo.(*userRepositoryImpl).DB
 
-	err := executor.WithTransaction(func(tx *sql.Tx) error {
-		// Update status di database
-		if err := s.userRepo.UpdateStatus(userID, "ACTIVE"); err != nil {
-			return fmt.Errorf("failed to update status: %w", err)
-		}
-
-		// Get user data
-		user, err := s.userRepo.GetByID(userID)
-		if err != nil {
-			return fmt.Errorf("failed to get user: %w", err)
-		}
-
-		// Send event to Kafka
-		event := map[string]interface{}{
-			"event_type": "USER_ACTIVATED",
-			"user_id":    user.ID,
-			"user_name":  user.Name,
-			"timestamp":  time.Now().Unix(),
-		}
-
-		success, err := s.producer.ProduceWithContext(ctx, "user-events", event)
-		if err != nil {
-			return fmt.Errorf("failed to send kafka message: %w", err)
-		}
-
-		if !success {
-			return fmt.Errorf("kafka message not sent successfully")
-		}
-
-		return nil
-	})
-
+	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("activate user transaction failed: %w", err)
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Update status di database
+	if err := s.userRepo.UpdateStatus(userID, "ACTIVE"); err != nil {
+		return fmt.Errorf("failed to update status: %w", err)
+	}
+
+	// Get user data
+	user, err := s.userRepo.GetByID(userID)
+	if err != nil {
+		return fmt.Errorf("failed to get user: %w", err)
+	}
+
+	// Commit transaction
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	// Send event to Kafka (di luar transaksi)
+	event := map[string]interface{}{
+		"event_type": "USER_ACTIVATED",
+		"user_id":    user.ID,
+		"user_name":  user.Name,
+		"timestamp":  time.Now().Unix(),
+	}
+
+	success, err := s.producer.ProduceWithContext(ctx, "user-events", event)
+	if err != nil {
+		return fmt.Errorf("failed to send kafka message: %w", err)
+	}
+
+	if !success {
+		return fmt.Errorf("kafka message not sent successfully")
 	}
 
 	log.Printf("[%s] User %d activated successfully", s.ServiceName(), userID)
@@ -392,30 +387,24 @@ func (s *userServiceImpl) SendUserEventToKafka(ctx context.Context, userID int, 
 
 // orderServiceImpl implementasi OrderService
 type orderServiceImpl struct {
-	*nanopony.BaseService
-	orderRepo OrderRepository
-	userRepo  UserRepository
-	producer  *nanopony.KafkaProducer
+	serviceName string
+	orderRepo   OrderRepository
+	userRepo    UserRepository
+	producer    *nanopony.KafkaProducer
 }
 
 // NewOrderService membuat instance OrderService
 func NewOrderService(orderRepo OrderRepository, userRepo UserRepository, producer *nanopony.KafkaProducer) OrderService {
 	return &orderServiceImpl{
-		BaseService: nanopony.NewBaseService("OrderService"),
+		serviceName: "OrderService",
 		orderRepo:   orderRepo,
 		userRepo:    userRepo,
 		producer:    producer,
 	}
 }
 
-func (s *orderServiceImpl) Initialize() error {
-	log.Printf("[%s] Service initialized", s.ServiceName())
-	return nil
-}
-
-func (s *orderServiceImpl) Shutdown() error {
-	log.Printf("[%s] Service shutdown", s.ServiceName())
-	return nil
+func (s *orderServiceImpl) ServiceName() string {
+	return s.serviceName
 }
 
 // ProcessPendingOrders memproses semua pending orders (batch processing)
@@ -471,50 +460,30 @@ func (s *orderServiceImpl) ProcessPendingOrders(ctx context.Context) error {
 
 // CreateOrderAndNotify membuat order baru dan mengirim notifikasi
 func (s *orderServiceImpl) CreateOrderAndNotify(ctx context.Context, order *Order) error {
-	// Validate order data
+	// Validasi manual
 	if order.UserID == 0 || order.Product == "" || order.Amount <= 0 {
-		return fmt.Errorf("invalid order data")
+		return fmt.Errorf("order amount must be positive and user/product must be set")
 	}
 
-	// Use pipeline for validation and processing
-	validator := nanopony.ValidatorFunc(func(data interface{}) error {
-		o, ok := data.(*Order)
-		if !ok {
-			return fmt.Errorf("invalid order type")
-		}
-		if o.Amount <= 0 {
-			return fmt.Errorf("order amount must be positive")
-		}
-		return nil
-	})
+	order.Status = "PENDING"
+	order.CreatedAt = time.Now()
 
-	processor := nanopony.ProcessorFunc(func(data interface{}) error {
-		order := data.(*Order)
-		order.Status = "PENDING"
-		order.CreatedAt = time.Now()
+	// Create order in database
+	if err := s.orderRepo.Create(order); err != nil {
+		return fmt.Errorf("failed to create order: %w", err)
+	}
 
-		// Create order in database
-		if err := s.orderRepo.Create(order); err != nil {
-			return fmt.Errorf("failed to create order: %w", err)
-		}
+	// Send notification to Kafka
+	notification := map[string]interface{}{
+		"event_type": "ORDER_CREATED",
+		"order_id":   order.ID,
+		"product":    order.Product,
+		"amount":     order.Amount,
+		"timestamp":  time.Now().Unix(),
+	}
 
-		// Send notification to Kafka
-		notification := map[string]interface{}{
-			"event_type": "ORDER_CREATED",
-			"order_id":   order.ID,
-			"product":    order.Product,
-			"amount":     order.Amount,
-			"timestamp":  time.Now().Unix(),
-		}
-
-		_, err := s.producer.ProduceWithContext(ctx, "order-events", notification)
-		return err
-	})
-
-	pipeline := nanopony.NewPipeline(processor).AddValidator(validator)
-
-	if err := pipeline.Process(order); err != nil {
-		return fmt.Errorf("order pipeline failed: %w", err)
+	if _, err := s.producer.ProduceWithContext(ctx, "order-events", notification); err != nil {
+		return fmt.Errorf("failed to send kafka message: %w", err)
 	}
 
 	log.Printf("[%s] Order %d created and notification sent", s.ServiceName(), order.ID)
@@ -586,63 +555,50 @@ func main() {
 	fmt.Println("╚══════════════════════════════════════════════════════════╝")
 	fmt.Println()
 
-	// 1. Initialize configuration
-	fmt.Println("[1] Initializing configuration...")
+	// 1. Inisialisasi konfigurasi
+	fmt.Println("[1] Inisialisasi konfigurasi...")
 	config := nanopony.NewConfig()
 
 	// 2. Setup database connection (mock untuk demo)
-	// Dalam production, uncomment baris berikut:
-	// db, err := nanopony.NewOracleFromConfig(config)
-	// if err != nil {
-	//     log.Fatalf("Failed to connect to database: %v", err)
-	// }
-	
-	// Untuk demo, kita skip database dan fokus ke arsitektur
 	fmt.Println("[2] Database connection (skipped for demo)")
 	fmt.Println()
 
 	// 3. Setup Kafka writer dan producer (mock untuk demo)
-	fmt.Println("[3] Initializing Kafka producer...")
+	fmt.Println("[3] Inisialisasi Kafka producer...")
 	kafkaWriter := nanopony.NewKafkaWriterFromConfig(config)
 	producer := nanopony.NewKafkaProducer(kafkaWriter)
 	fmt.Println("    ✓ Kafka producer initialized")
 	fmt.Println()
 
-	// 4. Create repositories
-	// Dalam production dengan database:
-	// userRepo := NewUserRepository(db)
-	// orderRepo := NewOrderRepository(db)
+	// 4. Membuat repositories (menggunakan nil untuk DB karena demo)
+	fmt.Println("[4] Membuat repositories...")
+	userRepo := NewUserRepository(nil)
+	orderRepo := NewOrderRepository(nil)
 	
-	// Untuk demo, kita buat mock repositories
-	fmt.Println("[4] Creating repositories...")
-	userRepo := &mockUserRepository{
-		BaseRepository: nanopony.NewBaseRepository(nil),
-	}
-	orderRepo := &mockOrderRepository{
-		BaseRepository: nanopony.NewBaseRepository(nil),
-	}
+	// Untuk demo, kita gunakan mock implementasi agar bisa berjalan tanpa DB
+	userRepo = &mockUserRepository{}
+	orderRepo = &mockOrderRepository{}
+	
 	fmt.Println("    ✓ UserRepository created")
 	fmt.Println("    ✓ OrderRepository created")
 	fmt.Println()
 
-	// 5. Create services dengan dependency injection
-	fmt.Println("[5] Creating services with dependency injection...")
+	// 5. Membuat services dengan dependency injection
+	fmt.Println("[5] Membuat services dengan dependency injection...")
 	userService := NewUserService(userRepo, orderRepo, producer)
 	orderService := NewOrderService(orderRepo, userRepo, producer)
-	fmt.Printf("    ✓ %s created\n", userService.(*userServiceImpl).ServiceName())
-	fmt.Printf("    ✓ %s created\n", orderService.(*orderServiceImpl).ServiceName())
+	fmt.Printf("    ✓ %s created\n", userService.ServiceName())
+	fmt.Printf("    ✓ %s created\n", orderService.ServiceName())
 	fmt.Println()
 
-	// 6. Create framework dengan builder pattern
-	fmt.Println("[6] Building framework...")
+	// 6. Membuat framework dengan builder pattern
+	fmt.Println("[6] Membangun framework...")
 	framework := nanopony.NewFramework().
 		WithConfig(config).
 		WithKafkaWriterFromInstance(kafkaWriter).
 		WithProducerFromInstance(producer).
 		WithWorkerPool(5, 100).
-		WithPoller(nanopony.DefaultPollerConfig(), &pendingOrderFetcher{orderRepo: orderRepo}).
-		AddService(userService).
-		AddService(orderService)
+		WithPoller(nanopony.DefaultPollerConfig(), &pendingOrderFetcher{orderRepo: orderRepo})
 
 	components := framework.Build()
 	fmt.Println("    ✓ Framework built successfully")
@@ -652,26 +608,26 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// 8. Start framework
-	fmt.Println("[7] Starting framework...")
+	// 8. Menjalankan framework
+	fmt.Println("[7] Menjalankan framework...")
 	components.Start(ctx, func(ctx context.Context, job nanopony.Job) error {
 		order, ok := job.Data.(Order)
 		if !ok {
 			return fmt.Errorf("invalid job data type")
 		}
 
-		log.Printf("Processing order #%d: %s (Rp %.2f)", 
+		log.Printf("Memproses order #%d: %s (Rp %.2f)", 
 			order.ID, order.Product, order.Amount)
 		
-		// Simulate processing
+		// Simulasi pemrosesan
 		time.Sleep(100 * time.Millisecond)
 		return nil
 	})
 	fmt.Println("    ✓ Framework started")
 	fmt.Println()
 
-	// 9. Demonstrate service layer usage
-	fmt.Println("[8] Demonstrating service layer operations...")
+	// 9. Demonstrasi penggunaan service layer
+	fmt.Println("[8] Demonstrasi operasi service layer...")
 	fmt.Println("═══════════════════════════════════════════════════════════")
 
 	// Contoh: Get user with orders
@@ -687,11 +643,11 @@ func main() {
 	fmt.Println(">>> Example 2: Activate User")
 	err = userService.ActivateUser(ctx, 2)
 	if err != nil {
-		log.Printf("    Error (expected - no real DB): %v", err)
+		log.Printf("    Error: %v", err)
 	}
 
-	// Contoh: Create order with pipeline
-	fmt.Println("\n>>> Example 3: Create Order with Pipeline Validation")
+	// Contoh: Create order
+	fmt.Println("\n>>> Example 3: Create Order")
 	newOrder := &Order{
 		ID:      100,
 		UserID:  1,
@@ -700,10 +656,10 @@ func main() {
 	}
 	err = orderService.CreateOrderAndNotify(ctx, newOrder)
 	if err != nil {
-		log.Printf("    Error (expected - no real DB): %v", err)
+		log.Printf("    Error: %v", err)
 	}
 
-	// Contoh: Invalid order (should fail validation)
+	// Contoh: Invalid order (harus gagal validasi)
 	fmt.Println("\n>>> Example 4: Create Invalid Order (Validation Should Fail)")
 	invalidOrder := &Order{
 		ID:      101,
@@ -713,40 +669,40 @@ func main() {
 	}
 	err = orderService.CreateOrderAndNotify(ctx, invalidOrder)
 	if err != nil {
-		fmt.Printf("    ✓ Validation caught error: %v\n", err)
+		fmt.Printf("    ✓ Validasi menangkap error: %v\n", err)
 	}
 
 	// Contoh: Process pending orders
 	fmt.Println("\n>>> Example 5: Process Pending Orders")
 	err = orderService.ProcessPendingOrders(ctx)
 	if err != nil {
-		log.Printf("    Error (expected - no real DB): %v", err)
+		log.Printf("    Error: %v", err)
 	}
 
 	// Contoh: Send event to Kafka
 	fmt.Println("\n>>> Example 6: Send Event to Kafka")
 	err = userService.SendUserEventToKafka(ctx, 1, "USER_LOGIN")
 	if err != nil {
-		log.Printf("    Error (expected - no real Kafka): %v", err)
+		log.Printf("    Error: %v", err)
 	}
 
 	fmt.Println("\n═══════════════════════════════════════════════════════════")
 	fmt.Println()
 
-	// 10. Wait for interrupt
-	fmt.Println("[9] Framework running. Press Ctrl+C to shutdown...")
+	// 10. Tunggu interrupt
+	fmt.Println("[9] Framework berjalan. Tekan Ctrl+C untuk shutdown...")
 	fmt.Println()
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	<-sigChan
 
-	fmt.Println("\n[10] Shutting down...")
+	fmt.Println("\n[10] Melakukan shutdown...")
 	if err := components.Shutdown(ctx); err != nil {
 		log.Printf("Shutdown error: %v", err)
 	}
 
-	fmt.Println("[11] Framework stopped. Goodbye!")
+	fmt.Println("[11] Framework dihentikan. Sampai jumpa!")
 }
 
 // ============================================================================
@@ -755,7 +711,7 @@ func main() {
 // ============================================================================
 
 type mockUserRepository struct {
-	*nanopony.BaseRepository
+	DB *sql.DB
 }
 
 func (r *mockUserRepository) GetByID(id int) (*User, error) {
@@ -798,36 +754,32 @@ func (r *mockUserRepository) UpdateStatus(id int, status string) error {
 	return nil
 }
 
-func (r *mockUserRepository) Close() error {
-	return nil
-}
-
 type mockOrderRepository struct {
-	*nanopony.BaseRepository
+	DB *sql.DB
 }
 
 func (r *mockOrderRepository) GetByID(id int) (*Order, error) {
 	return &Order{
 		ID:        id,
 		UserID:    1,
-		Product:   "Sample Product",
-		Amount:    100000,
-		Status:    "PENDING",
+		Product:   "Mock Product",
+		Amount:    1000,
+		Status:    "COMPLETED",
 		CreatedAt: time.Now(),
 	}, nil
 }
 
 func (r *mockOrderRepository) GetPendingOrders() ([]Order, error) {
 	return []Order{
-		{ID: 1, UserID: 1, Product: "Laptop", Amount: 12000000, Status: "PENDING"},
-		{ID: 2, UserID: 2, Product: "Mouse", Amount: 250000, Status: "PENDING"},
+		{ID: 1, UserID: 1, Product: "Laptop", Amount: 12000000, Status: "PENDING", CreatedAt: time.Now()},
+		{ID: 2, UserID: 1, Product: "Mouse", Amount: 250000, Status: "PENDING", CreatedAt: time.Now()},
 	}, nil
 }
 
 func (r *mockOrderRepository) GetOrdersByUserID(userID int) ([]Order, error) {
 	return []Order{
-		{ID: 1, UserID: userID, Product: "Laptop", Amount: 12000000, Status: "PENDING"},
-		{ID: 2, UserID: userID, Product: "Mouse", Amount: 250000, Status: "COMPLETED"},
+		{ID: 1, UserID: userID, Product: "Laptop", Amount: 12000000, Status: "PENDING", CreatedAt: time.Now()},
+		{ID: 2, UserID: userID, Product: "Mouse", Amount: 250000, Status: "COMPLETED", CreatedAt: time.Now()},
 	}, nil
 }
 
@@ -838,9 +790,5 @@ func (r *mockOrderRepository) Create(order *Order) error {
 
 func (r *mockOrderRepository) UpdateStatus(id int, status string) error {
 	log.Printf("[MockOrderRepository] Update order %d status to: %s", id, status)
-	return nil
-}
-
-func (r *mockOrderRepository) Close() error {
 	return nil
 }

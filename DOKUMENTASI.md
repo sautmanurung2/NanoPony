@@ -29,7 +29,7 @@ NanoPony menggunakan pola **Builder** untuk menyusun komponen-komponen aplikasi 
                      ↓
 ┌───────────────────────────────────────────────┐
 │            FrameworkComponents                │
-│ (DB, Producer, WorkerPool, Poller, Services)  │
+│ (DB, Producer, WorkerPool, Poller, Cleanup)   │
 └───────────────────────────────────────────────┘
           /          |          \
 ┌──────────┐   ┌────────────┐   ┌────────────┐
@@ -40,7 +40,7 @@ NanoPony menggunakan pola **Builder** untuk menyusun komponen-komponen aplikasi 
   (Fetch)            |                |
      |               v                v
 ┌──────────┐   ┌────────────┐   ┌────────────┐
-│  Oracle  │   │ Kafka/ES   │   │ Repository │
+│  Oracle  │   │ Kafka/ES   │   │ Business   │
 └──────────┘   └────────────┘   └────────────┘
 ```
 
@@ -187,7 +187,7 @@ components := nanopony.NewFramework().
     WithProducer().
     WithWorkerPool(5, 100).
     WithPoller(pollerConfig, fetcher).
-    AddService(myService).
+    AddCleanup(myCleanupFunc).
     Build()
 ```
 

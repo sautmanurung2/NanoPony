@@ -1,37 +1,37 @@
-# Dynamic Configuration Guide
+# Panduan Konfigurasi Dinamis
 
-This guide explains how to use the dynamic configuration feature in NanoPony.
+Panduan ini menjelaskan cara menggunakan fitur konfigurasi dinamis di NanoPony.
 
-## Overview
+## Ringkasan
 
-The dynamic configuration feature allows you to load environment variables without modifying the NanoPony framework code. This is useful when:
+Fitur konfigurasi dinamis memungkinkan Anda untuk memuat variabel environment tanpa harus mengubah kode framework NanoPony. Ini sangat berguna ketika:
 
-- Adding new environment variables without updating the framework
-- Supporting custom configurations per application
-- Loading feature flags or custom settings
+- Menambahkan variabel environment baru tanpa memperbarui framework.
+- Mendukung konfigurasi kustom per aplikasi.
+- Memuat feature flags atau pengaturan kustom.
 
-## Usage
+## Penggunaan
 
-### 1. Basic Usage
+### 1. Penggunaan Dasar
 
 ```go
 config := nanopony.NewConfig()
 
-// Load all environment variables with a specific prefix
+// Memuat semua variabel environment dengan prefix tertentu
 config.LoadDynamic("CUSTOM_")
 
-// Access the loaded values
+// Mengakses nilai yang telah dimuat
 if apiKey, exists := config.Dynamic["CUSTOM_API_KEY"]; exists {
     fmt.Printf("API Key: %s\n", apiKey)
 }
 ```
 
-### 2. Loading Specific Prefix
+### 2. Memuat Prefix Spesifik
 
-When you have multiple related environment variables, use a prefix to load them all:
+Ketika Anda memiliki beberapa variabel environment yang terkait, gunakan prefix untuk memuat semuanya:
 
 ```go
-// Environment variables:
+// Variabel Environment:
 // CUSTOM_API_URL=https://api.example.com
 // CUSTOM_TIMEOUT=30s
 // CUSTOM_RETRY_COUNT=3
@@ -39,77 +39,78 @@ When you have multiple related environment variables, use a prefix to load them 
 config := nanopony.BuildConfig()
 config.LoadDynamic("CUSTOM_")
 
-// All three variables are now accessible:
+// Ketiga variabel tersebut sekarang dapat diakses:
 fmt.Println(config.Dynamic["CUSTOM_API_URL"])    // https://api.example.com
 fmt.Println(config.Dynamic["CUSTOM_TIMEOUT"])    // 30s
 fmt.Println(config.Dynamic["CUSTOM_RETRY_COUNT"]) // 3
 ```
 
-### 3. Loading All Environment Variables
+### 3. Memuat Semua Variabel Environment
 
-You can load all environment variables (use with caution):
+Anda dapat memuat semua variabel environment (gunakan dengan hati-hati):
 
 ```go
 config := nanopony.BuildConfig()
-config.LoadDynamic("") // Empty prefix loads everything
+config.LoadDynamic("") // Prefix kosong memuat segalanya
 
-// Access any environment variable
+// Mengakses variabel environment apa pun
 fmt.Println(config.Dynamic["HOME"])
 fmt.Println(config.Dynamic["PATH"])
 ```
 
-**Warning**: Loading all environment variables may include sensitive data. Use specific prefixes instead.
+> [!WARNING]
+> Memuat semua variabel environment mungkin menyertakan data sensitif. Gunakan prefix yang spesifik untuk keamanan yang lebih baik.
 
-### 4. Adding New Environment Variables
+### 4. Menambahkan Variabel Environment Baru
 
-When you need to add new environment variables, you don't need to modify NanoPony:
+Saat Anda perlu menambahkan variabel environment baru, Anda tidak perlu mengubah kode NanoPony:
 
 ```go
-// Just add them to your .env file or environment:
+// Cukup tambahkan ke file .env atau environment Anda:
 // MY_FEATURE_ENABLED=true
 // MY_FEATURE_URL=https://my-feature.example.com
 // MY_FEATURE_API_KEY=secret-key
 
-// Then load them:
+// Kemudian muat variabel tersebut:
 config := nanopony.NewConfig()
 config.LoadDynamic("MY_FEATURE_")
 
-// Use them:
+// Gunakan:
 if config.Dynamic["MY_FEATURE_ENABLED"] == "true" {
-    // Enable feature
+    // Aktifkan fitur
 }
 ```
 
-## Best Practices
+## Praktik Terbaik
 
-### 1. Use Prefixes
+### 1. Gunakan Prefix
 
-Group related environment variables with a common prefix:
+Kelompokkan variabel environment yang terkait dengan prefix yang sama:
 
 ```go
-// Good
-config.LoadDynamic("AUTH_")      // Loads AUTH_API_URL, AUTH_SECRET, etc.
-config.LoadDynamic("DATABASE_")  // Loads DATABASE_URL, DATABASE_POOL, etc.
+// Baik
+config.LoadDynamic("AUTH_")      // Memuat AUTH_API_URL, AUTH_SECRET, dll.
+config.LoadDynamic("DATABASE_")  // Memuat DATABASE_URL, DATABASE_POOL, dll.
 
-// Avoid
-config.LoadDynamic("")  // Loads everything (may include sensitive data)
+// Hindari
+config.LoadDynamic("")  // Memuat segalanya (mungkin menyertakan data sensitif)
 ```
 
-### 2. Check for Existence
+### 2. Periksa Keberadaan Key
 
-Always check if a key exists before using it:
+Selalu periksa apakah sebuah key ada sebelum menggunakannya:
 
 ```go
 if value, exists := config.Dynamic["MY_KEY"]; exists {
-    // Use value
+    // Gunakan nilai
 } else {
-    // Handle missing configuration
+    // Menangani konfigurasi yang hilang
 }
 ```
 
-### 3. Use BuildConfig for Multiple Configurations
+### 3. Gunakan BuildConfig untuk Multiple Konfigurasi
 
-If you need multiple configurations with different dynamic loads:
+Jika Anda membutuhkan beberapa konfigurasi dengan pemuatan dinamis yang berbeda:
 
 ```go
 config1 := nanopony.BuildConfig()
@@ -119,7 +120,7 @@ config2 := nanopony.BuildConfig()
 config2.LoadDynamic("SERVICE_B_")
 ```
 
-## Example: Complete Setup
+## Contoh: Setup Lengkap
 
 ```go
 package main
@@ -130,17 +131,17 @@ import (
 )
 
 func main() {
-    // Initialize config
+    // Inisialisasi config
     config := nanopony.NewConfig()
     
-    // Load custom environment variables
+    // Memuat variabel environment kustom
     config.LoadDynamic("MY_APP_")
     
-    // Use standard config fields
+    // Menggunakan field config standar
     fmt.Printf("Environment: %s\n", config.App.Env)
     fmt.Printf("Kafka Model: %s\n", config.App.KafkaModels)
     
-    // Use dynamic config fields
+    // Menggunakan field config dinamis
     if apiUrl, exists := config.Dynamic["MY_APP_API_URL"]; exists {
         fmt.Printf("API URL: %s\n", apiUrl)
     }
@@ -151,48 +152,48 @@ func main() {
 }
 ```
 
-## Migration Guide
+## Panduan Migrasi
 
-If you currently have hardcoded environment variables and want to make them dynamic:
+Jika saat ini Anda memiliki variabel environment yang di-hardcode dan ingin menjadikannya dinamis:
 
-### Before (Hardcoded)
+### Sebelum (Hardcoded)
 ```go
-// You had to modify nanopony code to add new env vars
+// Anda harus mengubah kode nanopony untuk menambahkan variabel env baru
 type MyConfig struct {
     ExistingField string
 }
 ```
 
-### After (Dynamic)
+### Sesudah (Dinamis)
 ```go
-// Just use the Dynamic map
+// Cukup gunakan map Dynamic
 config := nanopony.NewConfig()
 config.LoadDynamic("MY_CUSTOM_")
 
-// Access any variable without modifying framework code
+// Akses variabel apa pun tanpa mengubah kode framework
 config.Dynamic["MY_CUSTOM_NEW_FIELD"]
 ```
 
-## API Reference
+## Referensi API
 
 ### `LoadDynamic(prefix string)`
 
-Loads environment variables with the given prefix into the `Dynamic` map.
+Memuat variabel environment dengan prefix yang diberikan ke dalam map `Dynamic`.
 
-**Parameters:**
-- `prefix` (string): The prefix to filter environment variables. If empty, loads all environment variables.
+**Parameter:**
+- `prefix` (string): Prefix untuk memfilter variabel environment. Jika kosong, semua variabel environment akan dimuat.
 
-**Example:**
+**Contoh:**
 ```go
-config.LoadDynamic("APP_")  // Loads APP_*, e.g., APP_NAME, APP_VERSION
-config.LoadDynamic("")      // Loads all environment variables
+config.LoadDynamic("APP_")  // Memuat APP_*, misal: APP_NAME, APP_VERSION
+config.LoadDynamic("")      // Memuat semua variabel environment
 ```
 
 ### `Dynamic map[string]string`
 
-A map containing the dynamically loaded environment variables.
+Map yang berisi variabel environment yang dimuat secara dinamis.
 
-**Example:**
+**Contoh:**
 ```go
 for key, value := range config.Dynamic {
     fmt.Printf("%s = %s\n", key, value)

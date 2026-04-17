@@ -211,10 +211,10 @@ import (
 )
 
 func main() {
-    // Initialize configuration
+    // Inisialisasi konfigurasi
     config := nanopony.NewConfig()
 
-    // Create framework
+    // Buat framework
     framework := nanopony.NewFramework().
         WithConfig(config).
         WithDatabase().
@@ -229,25 +229,25 @@ func main() {
     defer cancel()
 
     components.Start(ctx, func(ctx context.Context, job nanopony.Job) error {
-        log.Printf("Processing job: %+v", job)
+        log.Printf("Memproses job: %+v", job)
         return nil
     })
 
-    // Wait for interrupt
+    // Tunggu interrupt
     sigChan := make(chan os.Signal, 1)
     signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
     <-sigChan
 
-    // Graceful Shutdown
+    // Shutdown yang aman
     if err := components.Shutdown(ctx); err != nil {
-        log.Printf("Error during shutdown: %v", err)
+        log.Printf("Error saat shutdown: %v", err)
     }
 }
 
 type myDataFetcher struct{}
 
 func (f *myDataFetcher) Fetch() ([]interface{}, error) {
-    // Fetch data from database
+    // Ambil data dari database
     return []interface{}{"data1", "data2"}, nil
 }
 
@@ -314,10 +314,10 @@ config.LoadDynamic("CUSTOM_")
 ### Database (Oracle)
 
 ```go
-// From config
+// Dari konfigurasi
 db, err := nanopony.NewOracleFromConfig(config)
 
-// Or with custom config
+// Atau dengan konfigurasi kustom
 dbConfig := nanopony.DefaultDatabaseConfig()
 dbConfig.Host = "localhost"
 dbConfig.Port = "1521"
@@ -330,7 +330,7 @@ db, err := nanopony.NewOracleConnection(dbConfig)
 writer := nanopony.NewKafkaWriterFromConfig(config)
 producer := nanopony.NewKafkaProducer(writer)
 
-// Produce message
+// Kirim pesan
 success, err := producer.Produce("topic-name", map[string]interface{}{
     "id":   1,
     "data": "hello",
@@ -342,8 +342,8 @@ success, err := producer.Produce("topic-name", map[string]interface{}{
 ```go
 pool := nanopony.NewWorkerPool(5, 100)
 pool.Start(ctx, func(ctx context.Context, job nanopony.Job) error {
-    // process job
-    fmt.Printf("Processing: %+v\n", job.Data)
+    // proses job
+    fmt.Printf("Memproses: %+v\n", job.Data)
     return nil
 })
 
@@ -353,7 +353,7 @@ pool.Submit(ctx, nanopony.Job{
     Data: map[string]interface{}{"key": "value"},
 })
 
-// Stop pool
+// Hentikan pool
 pool.Stop()
 ```
 
@@ -363,7 +363,7 @@ pool.Stop()
 
 ```go
 dataFetcher := nanopony.DataFetcherFunc(func() ([]interface{}, error) {
-    // fetch data from database
+    // ambil data dari database
     return []interface{}{data1, data2}, nil
 })
 
@@ -419,7 +419,7 @@ go tool cover -html=coverage.out
 
 > 📖 **Panduan:** Baca [TESTING_GUIDE.md](TESTING_GUIDE.md) untuk cara menjalankan test, coverage goals, dan debugging tips.
 
-## Running Examples
+## Menjalankan Contoh
 
 ```bash
 cd examples
@@ -433,8 +433,8 @@ go run main.go
 3. **Gunakan pola arsitektur layer** untuk code yang terstruktur
 4. **Gunakan Context** untuk cancellation dan timeout
 5. **Handle errors** dengan proper error handling
-6. **Reuse WorkerPool** - jangan create/destroy频繁, buat sekali di startup
-7. **Monitor error channel** - range over `pool.Errors()` untuk tracking job failures
+6. **Reuse WorkerPool** - jangan buat/hapus secara terus-menerus, buat sekali di startup
+7. **Monitor error channel** - gunakan `range` pada `pool.Errors()` untuk melacak kegagalan job
 
 > 📖 **Arsitektur:** Baca [ARCHITECTURE.md](ARCHITECTURE.md) untuk diagram arsitektur lengkap dan pola desain.
 >
@@ -476,18 +476,18 @@ NanoPony/
     └── layered_separation/
 ```
 
-## Requirements
+## Persyaratan
 
 - Go 1.25.1 atau lebih baru
 - Oracle Database (opsional, untuk fitur database)
 - Kafka Broker (opsional, untuk fitur messaging)
 
-## Dependencies
+## Dependensi
 
 - [kafka-go](https://github.com/segmentio/kafka-go) - Kafka client
 - [go-ora](https://github.com/sijms/go-ora) - Oracle driver
 - [godotenv](https://github.com/joho/godotenv) - Environment variables loader
 
-## License
+## Lisensi
 
 MIT License

@@ -27,7 +27,6 @@ Framework NanoPony memiliki **comprehensive test suite** yang mencakup semua kom
 | `benchmark_framework_test.go` | Benchmark framework | ✅ Pass |
 | `benchmark_worker_test.go` | Benchmark worker pool | ✅ Pass |
 | `benchmark_poller_test.go` | Benchmark poller | ✅ Pass |
-| `benchmark_pipeline_test.go` | Benchmark pipeline | ✅ Pass |
 | `memory_leak_test.go` | Memory leak detection | ✅ Pass |
 
 ## 🚀 Menjalankan Test
@@ -97,15 +96,13 @@ func TestConfigInitialization(t *testing.T) {
 
 ```go
 func TestDatabaseConnection(t *testing.T) {
-    defer func() {
-        if r := recover(); r != nil {
-            t.Logf("Expected panic with nil DB: %v", r)
-        }
-    }()
-
-    executor := NewTransactionExecutor(nil)
-    _, err := executor.BeginTx()
-    // Will panic because DB is nil
+    // Pengujian koneksi database
+    config := NewConfig()
+    db, err := NewOracleFromConfig(config)
+    if err != nil {
+        t.Skip("Skipping test - requires Oracle instance")
+    }
+    defer db.Close()
 }
 ```
 
