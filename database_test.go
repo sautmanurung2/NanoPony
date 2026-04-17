@@ -9,11 +9,11 @@ import (
 func TestDefaultDatabaseConfig(t *testing.T) {
 	config := DefaultDatabaseConfig()
 
-	if config.MaxIdleConns != 10 {
-		t.Errorf("Expected MaxIdleConns 10, got %d", config.MaxIdleConns)
+	if config.MaxIdleConns != 2 {
+		t.Errorf("Expected MaxIdleConns 2, got %d", config.MaxIdleConns)
 	}
-	if config.MaxOpenConns != 100 {
-		t.Errorf("Expected MaxOpenConns 100, got %d", config.MaxOpenConns)
+	if config.MaxOpenConns != 20 {
+		t.Errorf("Expected MaxOpenConns 20, got %d", config.MaxOpenConns)
 	}
 	if config.ConnIdleTime != 5*time.Minute {
 		t.Errorf("Expected ConnIdleTime 5m, got %v", config.ConnIdleTime)
