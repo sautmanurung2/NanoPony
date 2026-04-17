@@ -20,7 +20,7 @@ type KafkaWriterConfig struct {
 func DefaultKafkaWriterConfig() KafkaWriterConfig {
 	return KafkaWriterConfig{
 		Balancer:     &kafka.RoundRobin{},
-		BatchTimeout: 1 * time.Microsecond,
+		BatchTimeout: 10 * time.Millisecond,
 		Transport:    nil,
 	}
 }

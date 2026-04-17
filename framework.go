@@ -249,6 +249,11 @@ func (f *Framework) Build() *FrameworkComponents {
 
 	f.built = true
 
+	// Dynamically adjust Kafka BatchSize based on worker pool size
+	if f.kafkaWriter != nil && f.workerPool != nil {
+		f.kafkaWriter.BatchSize = f.workerPool.numWorkers
+	}
+
 	return &FrameworkComponents{
 		Config:       f.config,
 		DB:           f.db,

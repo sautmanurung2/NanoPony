@@ -40,12 +40,12 @@ type DatabaseConfig struct {
 }
 
 // DefaultDatabaseConfig returns default database configuration with sensible pool settings.
-// Default pool settings: MaxIdleConns=10, MaxOpenConns=100,
+// Default pool settings: MaxIdleConns=2, MaxOpenConns=20,
 // ConnIdleTime=5min, ConnMaxLifetime=60min
 func DefaultDatabaseConfig() DatabaseConfig {
 	return DatabaseConfig{
-		MaxIdleConns:    10,
-		MaxOpenConns:    100,
+		MaxIdleConns:    2,
+		MaxOpenConns:    20,
 		ConnIdleTime:    5 * time.Minute,
 		ConnMaxLifetime: 60 * time.Minute,
 	}
