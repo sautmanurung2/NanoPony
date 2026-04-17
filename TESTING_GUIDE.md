@@ -20,11 +20,9 @@ Framework NanoPony memiliki **comprehensive test suite** yang mencakup semua kom
 | `framework_test.go` | Framework builder dan components | ✅ Pass |
 | `worker_test.go` | Worker pool functionality | ✅ Pass |
 | `poller_test.go` | Poller functionality | ✅ Pass |
-| `service_test.go` | Service, Pipeline, Processor | ✅ Pass |
 | `producer_test.go` | Kafka producer/consumer | ✅ Pass |
 | `database_test.go` | Oracle database connection | ✅ Pass |
 | `kafka_test.go` | Kafka writer dan SASL | ✅ Pass |
-| `repository_test.go` | Repository dan transaction | ✅ Pass |
 | `logger_test.go` | Logging functionality | ✅ Pass |
 | `benchmark_framework_test.go` | Benchmark framework | ✅ Pass |
 | `benchmark_worker_test.go` | Benchmark worker pool | ✅ Pass |
@@ -257,11 +255,9 @@ go test -run TestElastic -v
 | Framework Builder | 100% | ✅ ~98% |
 | Worker Pool | 100% | ✅ 100% |
 | Poller | 100% | ✅ ~95% |
-| Service/Pipeline | 100% | ✅ 100% |
 | Kafka Producer | 80%* | ✅ ~85% |
 | Database | 80%* | ✅ ~90% |
 | Logger | 100% | ✅ ~95% |
-| Repository | 100% | ✅ ~98% |
 
 *Limited by external service availability
 

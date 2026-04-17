@@ -106,29 +106,7 @@ func BenchmarkFrameworkWithWorkerPoolFromInstance(b *testing.B) {
 	}
 }
 
-// BenchmarkFrameworkAddRepository tests adding repositories
-func BenchmarkFrameworkAddRepository(b *testing.B) {
-	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
-		framework := NewFramework()
-		for j := 0; j < 10; j++ {
-			framework.AddRepository(&BaseRepository{})
-		}
-	}
-}
-
-// BenchmarkFrameworkAddService tests adding services
-func BenchmarkFrameworkAddService(b *testing.B) {
-	b.ReportAllocs()
-
-	for i := 0; i < b.N; i++ {
-		framework := NewFramework()
-		for j := 0; j < 10; j++ {
-			framework.AddService(&BaseService{name: fmt.Sprintf("service-%d", j)})
-		}
-	}
-}
 
 // BenchmarkFrameworkAddCleanup tests adding cleanup functions
 func BenchmarkFrameworkAddCleanup(b *testing.B) {
@@ -152,9 +130,7 @@ func BenchmarkFrameworkCompleteSetup(b *testing.B) {
 
 		framework := NewFramework().
 			WithConfig(config).
-			WithWorkerPool(5, 100).
-			AddRepository(&BaseRepository{}).
-			AddService(&BaseService{name: "test"})
+			WithWorkerPool(5, 100)
 
 		components := framework.Build()
 		if components == nil {
@@ -285,8 +261,7 @@ func TestFrameworkMemoryLeak(t *testing.T) {
 
 		framework := NewFramework().
 			WithConfig(config).
-			WithWorkerPool(5, 100).
-			AddService(&BaseService{name: "test-service"})
+			WithWorkerPool(5, 100)
 
 		components := framework.Build()
 
@@ -325,8 +300,7 @@ func TestFrameworkMemoryLeakDetailed(t *testing.T) {
 
 		framework := NewFramework().
 			WithConfig(config).
-			WithWorkerPool(5, 200).
-			AddService(&BaseService{name: fmt.Sprintf("service-%d", cycle)})
+			WithWorkerPool(5, 200)
 
 		for i := 0; i < 3; i++ {
 			framework.AddCleanup(func() error { return nil })
@@ -427,59 +401,7 @@ func TestFrameworkWorkerPoolMemoryLeak(t *testing.T) {
 	}
 }
 
-// TestFrameworkMultipleServicesMemoryLeak tests memory with multiple services
-func TestFrameworkMultipleServicesMemoryLeak(t *testing.T) {
-	ctx := context.Background()
 
-	runtime.GC()
-	time.Sleep(100 * time.Millisecond)
-
-	var m1 runtime.MemStats
-	runtime.ReadMemStats(&m1)
-	initialMem := m1.Alloc
-
-	// Run multiple cycles with increasing number of services
-	for cycle := 0; cycle < 10; cycle++ {
-		ResetConfig()
-		config := NewConfig()
-
-		framework := NewFramework().
-			WithConfig(config).
-			WithWorkerPool(5, 200)
-
-		// Add increasing number of services
-		for i := 0; i <= cycle; i++ {
-			framework.AddService(&BaseService{name: fmt.Sprintf("service-%d", i)})
-		}
-
-		components := framework.Build()
-
-		components.Start(ctx, func(ctx context.Context, job Job) error {
-			time.Sleep(1 * time.Millisecond)
-			return nil
-		})
-
-		time.Sleep(50 * time.Millisecond)
-
-		if err := components.Shutdown(ctx); err != nil {
-			t.Errorf("Shutdown error: %v", err)
-		}
-	}
-
-	runtime.GC()
-	time.Sleep(500 * time.Millisecond)
-
-	var m2 runtime.MemStats
-	runtime.ReadMemStats(&m2)
-	finalMem := m2.Alloc
-
-	memGrowth := int64(finalMem) - int64(initialMem)
-	t.Logf("Memory growth with multiple services: %d KB", memGrowth/1024)
-
-	if memGrowth > 500*1024 {
-		t.Errorf("Potential memory leak: %d KB growth", memGrowth/1024)
-	}
-}
 
 // TestFrameworkConcurrentMemoryLeak tests concurrent framework usage
 func TestFrameworkConcurrentMemoryLeak(t *testing.T) {
@@ -504,8 +426,7 @@ func TestFrameworkConcurrentMemoryLeak(t *testing.T) {
 
 			framework := NewFramework().
 				WithConfig(config).
-				WithWorkerPool(2, 100).
-				AddService(&BaseService{name: fmt.Sprintf("service-%d", idx)})
+				WithWorkerPool(2, 100)
 
 			components := framework.Build()
 

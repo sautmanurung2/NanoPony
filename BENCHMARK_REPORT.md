@@ -32,7 +32,6 @@
 | **Framework Basic** | 5 full lifecycle cycles | N/A | N/A | Minimal | ✅ PASS |
 | **Framework Detailed** | 50 full lifecycle cycles | 939 KB | 882 KB | **-56 KB** | ✅ PASS |
 | **Framework WorkerPool** | 1,000 jobs processed | N/A | N/A | **-27 KB** | ✅ PASS |
-| **Framework Multiple Services** | 10 cycles (1-10 services) | N/A | N/A | **-28 KB** | ✅ PASS |
 | **Framework Concurrent** | 20 simultaneous instances | N/A | N/A | +23 KB | ✅ PASS |
 | **WorkerPool** | 10 cycles, 50 jobs each | 879 KB | 866 KB | **-12 KB** | ✅ PASS |
 | **Poller** | 10 cycles with data fetching | 934 KB | 897 KB | **-37 KB** | ✅ PASS |
@@ -56,33 +55,26 @@
 - **Result**: ✅ **PASS** - No memory leak detected
 - **Details**: Jobs processed through framework worker pool
 
-#### 3. TestFrameworkMultipleServicesMemoryLeak
-- **Purpose**: Test service initialization/shutdown memory
-- **Cycles**: 10 cycles with 1-10 services each
-- **Memory Growth**: -28 KB (proper cleanup)
-- **Result**: ✅ **PASS** - No memory leak detected
-- **Details**: Tests service lifecycle at scale
-
-#### 4. TestFrameworkConcurrentMemoryLeak
+#### 3. TestFrameworkConcurrentMemoryLeak
 - **Purpose**: Test concurrent framework instances
 - **Concurrent Instances**: 20 simultaneous frameworks
 - **Memory Growth**: +23 KB (minimal, safe)
 - **Result**: ✅ **PASS** - No memory leak detected
 - **Details**: Each instance has worker pool, services, and cleanup
 
-#### 5. TestWorkerPoolMemoryLeak
+#### 4. TestWorkerPoolMemoryLeak
 - **Purpose**: Test worker pool memory efficiency
 - **Cycles**: 10 cycles with 50 jobs each
 - **Memory Growth**: -12 KB (efficient)
 - **Result**: ✅ **PASS** - No memory leak detected
 
-#### 6. TestPollerMemoryLeak
+#### 5. TestPollerMemoryLeak
 - **Purpose**: Test poller memory efficiency
 - **Cycles**: 10 poll cycles
 - **Memory Growth**: -37 KB (excellent)
 - **Result**: ✅ **PASS** - No memory leak detected
 
-#### 7. TestPipelineMemoryLeak
+#### 6. TestPipelineMemoryLeak
 - **Purpose**: Test pipeline processing memory
 - **Cycles**: 10 process cycles
 - **Memory Growth**: -38 KB (excellent)
@@ -103,8 +95,6 @@
 | **BenchmarkFrameworkWithKafkaWriterFromInstance** | N/A | **2.06 ns/op** | 0 B/op | 0 | ⚡ Ultra Fast |
 | **BenchmarkFrameworkWithProducerFromInstance** | N/A | **2.07 ns/op** | 0 B/op | 0 | ⚡ Ultra Fast |
 | **BenchmarkFrameworkWithWorkerPoolFromInstance** | N/A | **0.45 ns/op** | 0 B/op | 0 | ⚡ Ultra Fast |
-| **BenchmarkFrameworkAddRepository** | N/A | 384.2 ns/op | 576 B/op | 15 | 🟢 Good |
-| **BenchmarkFrameworkAddService** | N/A | 1,199 ns/op | 816 B/op | 25 | 🟡 Moderate |
 | **BenchmarkFrameworkAddCleanup** | N/A | **196.5 ns/op** | 248 B/op | 5 | 🟢 Good |
 | **BenchmarkFrameworkCompleteSetup** | 3,954 | 512,935 ns/op | 6,877 B/op | 15 | 🟢 Good |
 
@@ -181,7 +171,6 @@ These are **one-time initialization** costs:
 - **Safe for production use** with:
   - ✅ Long-running applications (50+ cycles tested)
   - ✅ High-throughput scenarios (1,000+ jobs tested)
-  - ✅ Multiple services (1-10 services tested)
   - ✅ Concurrent usage (20 simultaneous instances tested)
 
 ### ✅ Excellent Memory Efficiency
@@ -220,10 +209,6 @@ These are **one-time initialization** costs:
    - Use `runtime.MemStats` for long-running applications
    - Check memory growth periodically
 
-5. **✅ Batch Service Additions**
-   - Add all services before Build()
-   - Reduces allocations (25 allocs per AddService)
-
 ### Best Practices Confirmed:
 
 1. ✅ Graceful shutdown works correctly
@@ -245,7 +230,6 @@ These are **one-time initialization** costs:
 - ✅ TestFrameworkMemoryLeak (basic)
 - ✅ TestFrameworkMemoryLeakDetailed (50 cycles)
 - ✅ TestFrameworkWorkerPoolMemoryLeak (1,000 jobs)
-- ✅ TestFrameworkMultipleServicesMemoryLeak
 - ✅ TestFrameworkConcurrentMemoryLeak (20 instances)
 - ✅ TestPipelineMemoryLeak
 
@@ -278,7 +262,6 @@ These are **one-time initialization** costs:
 
 ### Best Scalability
 1. **Concurrent Frameworks**: 20 instances with only +23 KB
-2. **Multiple Services**: 1-10 services with -28 KB growth
 3. **High Throughput**: 1,000 jobs with -27 KB growth
 
 ---
@@ -291,7 +274,6 @@ These are **one-time initialization** costs:
 |------|-------------|---------------|---------------|------------|
 | Framework Detailed | 50 cycles | -56 KB | -1.12 KB/cycle | ✅ Excellent |
 | WorkerPool Jobs | 1,000 jobs | -27 KB | -27.7 B/job | ✅ Excellent |
-| Multiple Services | 10 cycles | -28 KB | -2.8 KB/cycle | ✅ Excellent |
 | Concurrent | 20 instances | +23 KB | +1.15 KB/instance | ✅ Safe |
 | WorkerPool | 10 cycles | -12 KB | -1.2 KB/cycle | ✅ Excellent |
 | Poller | 10 cycles | -37 KB | -3.7 KB/cycle | ✅ Excellent |
@@ -314,7 +296,6 @@ These are **one-time initialization** costs:
 ### Verified for:
 - ✅ Long-running applications (50+ lifecycle cycles)
 - ✅ High-throughput scenarios (1,000+ jobs)
-- ✅ Multiple services (1-10 services)
 - ✅ Concurrent deployments (20 simultaneous frameworks)
 - ✅ Production workloads (all memory growth negative or minimal)
 

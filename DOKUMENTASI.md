@@ -12,7 +12,6 @@
 4. [Layer Kafka](#3-layer-kafka)
 5. [Worker Pool](#4-worker-pool)
 6. [Poller](#5-poller)
-7. [Repository & Service](#6-repository--service)
 8. [Framework Builder & Lifecycle](#7-framework-builder--lifecycle)
 9. [Best Practices](#best-practices)
 
@@ -175,28 +174,7 @@ Ini menjamin tidak ada duplikasi ID antar proses.
 
 ---
 
-## 6. Repository & Service
-
-**File**: `repository.go`, `service.go`
-
-### Base Components
-Gunakan komponen dasar ini untuk mempercepat pengembangan aplikasi berlapis.
-- **`BaseRepository`**: Memberikan akses ke `*sql.DB`.
-- **`BaseService`**: Memberikan pengelolaan lifecycle standar.
-
-### Query Executor & Transaction
-NanoPony menyediakan interface `QueryExecutor` untuk abstraksi operasi DB dan `TransactionExecutor` untuk operasi atomik.
-```go
-executor := nanopony.NewTransactionExecutor(db)
-err := executor.WithTransaction(func(tx *sql.Tx) error {
-    // Jalankan perintah DB dalam transaksi
-    return nil
-})
-```
-
----
-
-## 7. Framework Builder & Lifecycle
+## 6. Framework Builder & Lifecycle
 
 **File**: `framework.go`
 
@@ -217,11 +195,9 @@ components := nanopony.NewFramework().
 1. **`Start(ctx, handler)`**:
    - Menjalankan Worker Pool.
    - Menjalankan Poller.
-   - Menginisialisasi semua Service (`Initialize`).
 2. **`Shutdown(ctx)`**:
    - Menghentikan Poller terlebih dahulu.
    - Menghentikan Worker Pool (menunggu tugas selesai).
-   - Mematikan Service.
    - Menutup koneksi DB dan Kafka.
    - Menjalankan fungsi `cleanup` kustom secara konkuren.
 

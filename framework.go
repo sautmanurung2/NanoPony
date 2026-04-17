@@ -51,8 +51,6 @@ type Framework struct {
 	producer     *KafkaProducer
 	workerPool   *WorkerPool
 	poller       *Poller
-	repositories []Repository
-	services     []Service
 	cleanupFuncs []func() error
 	built        bool
 }
@@ -61,8 +59,6 @@ type Framework struct {
 // Use the With* methods to configure components before calling Build().
 func NewFramework() *Framework {
 	return &Framework{
-		repositories: make([]Repository, 0),
-		services:     make([]Service, 0),
 		cleanupFuncs: make([]func() error, 0),
 	}
 }
@@ -205,20 +201,6 @@ func (f *Framework) WithPollerFromInstance(poller *Poller) *Framework {
 	return f
 }
 
-// AddRepository adds a repository to the framework.
-// Repositories will be closed automatically during shutdown.
-func (f *Framework) AddRepository(repo Repository) *Framework {
-	f.repositories = append(f.repositories, repo)
-	return f
-}
-
-// AddService adds a service to the framework.
-// Services will be initialized on Start() and shutdown on Shutdown().
-func (f *Framework) AddService(service Service) *Framework {
-	f.services = append(f.services, service)
-	return f
-}
-
 // AddCleanup adds a cleanup function to be called during shutdown.
 // Cleanup functions are executed concurrently.
 func (f *Framework) AddCleanup(fn func() error) *Framework {
@@ -261,8 +243,6 @@ func (f *Framework) Build() *FrameworkComponents {
 		Producer:     f.producer,
 		WorkerPool:   f.workerPool,
 		Poller:       f.poller,
-		repositories: f.repositories,
-		services:     f.services,
 		cleanupFuncs: f.cleanupFuncs,
 	}
 }
@@ -283,8 +263,6 @@ type FrameworkComponents struct {
 	// Poller periodically fetches data and submits jobs
 	Poller *Poller
 
-	repositories []Repository
-	services     []Service
 	cleanupFuncs []func() error
 }
 
@@ -303,14 +281,6 @@ func (fc *FrameworkComponents) Start(ctx context.Context, handler JobHandler) {
 	// Start poller
 	if fc.Poller != nil {
 		fc.Poller.Start()
-	}
-
-	// Initialize all services
-	for _, service := range fc.services {
-		if err := service.Initialize(); err != nil {
-			// Log error but continue - this is intentional to allow partial failures
-			LogFramework("WARNING", "ServiceInit", fmt.Sprintf("Failed to initialize service: %v", err))
-		}
 	}
 }
 
@@ -345,20 +315,6 @@ func (fc *FrameworkComponents) Shutdown(ctx context.Context) error {
 	// Stop worker pool
 	if fc.WorkerPool != nil {
 		fc.WorkerPool.Stop()
-	}
-
-	// Shutdown all services
-	for _, service := range fc.services {
-		if err := service.Shutdown(); err != nil {
-			collectErr(fmt.Errorf("service shutdown failed: %w", err))
-		}
-	}
-
-	// Close all repositories
-	for _, repo := range fc.repositories {
-		if err := repo.Close(); err != nil {
-			collectErr(fmt.Errorf("repository close failed: %w", err))
-		}
 	}
 
 	// Run cleanup functions concurrently

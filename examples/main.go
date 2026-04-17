@@ -35,8 +35,7 @@ func main() {
 		// WithKafkaWriter().     // Uncomment if Kafka is available
 		// WithProducer().
 		WithWorkerPool(5, 100).
-		WithPoller(nanopony.DefaultPollerConfig(), &exampleDataFetcher{}).
-		AddService(&exampleService{name: "MyService"})
+		WithPoller(nanopony.DefaultPollerConfig(), &exampleDataFetcher{})
 
 	// Build components
 	components := framework.Build()
@@ -82,17 +81,3 @@ func exampleJobHandler(ctx context.Context, job nanopony.Job) error {
 	return nil
 }
 
-// exampleService implements nanopony.Service interface
-type exampleService struct {
-	name string
-}
-
-func (s *exampleService) Initialize() error {
-	log.Printf("Initializing %s", s.name)
-	return nil
-}
-
-func (s *exampleService) Shutdown() error {
-	log.Printf("Shutting down %s", s.name)
-	return nil
-}

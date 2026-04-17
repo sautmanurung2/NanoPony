@@ -77,25 +77,6 @@ func TestFrameworkWithPollerFromInstance(t *testing.T) {
 	}
 }
 
-func TestFrameworkAddRepository(t *testing.T) {
-	repo := &BaseRepository{}
-	framework := NewFramework().
-		AddRepository(repo)
-
-	if len(framework.repositories) != 1 {
-		t.Errorf("Expected 1 repository, got %d", len(framework.repositories))
-	}
-}
-
-func TestFrameworkAddService(t *testing.T) {
-	service := &BaseService{name: "test"}
-	framework := NewFramework().
-		AddService(service)
-
-	if len(framework.services) != 1 {
-		t.Errorf("Expected 1 service, got %d", len(framework.services))
-	}
-}
 
 func TestFrameworkAddCleanup(t *testing.T) {
 	cleanupCalled := false

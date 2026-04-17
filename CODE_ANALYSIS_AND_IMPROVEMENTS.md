@@ -25,14 +25,13 @@
    │   DB      │   │ Writer   │   │   Logger     │
    └──────────┘   └──────────┘   └──────────────┘
                          │
-         ┌───────────────┼───────────────┐
-         ▼                               ▼
-   ┌──────────────────┐         ┌──────────────────┐
-   │  Producer/       │         │   Repository &   │
-   │  Consumer        │         │   Transaction    │
-   └──────────────────┘         └──────────────────┘
-                         │
-         ┌───────────────┼───────────────┐
+         │
+         ▼
+   ┌──────────────────┐
+   │  Producer/       │
+   │  Consumer        │
+   └──────────────────┘
+         │
          ▼                               ▼
    ┌──────────────────┐         ┌──────────────────┐
    │   WorkerPool     │◄────────│     Poller       │
@@ -43,9 +42,9 @@
 ### 1.2 Data Flow
 1. **Config Loading**: Environment variables loaded once into singleton `Config`
 2. **Framework Building**: Builder pattern wires components together
-3. **Start**: WorkerPool spawns goroutines → Poller starts ticker → Services initialize
+3. **Start**: WorkerPool spawns goroutines → Poller starts ticker
 4. **Poll-Process Cycle**: Poller fetches data → submits to WorkerPool → workers process via `JobHandler`
-5. **Shutdown**: Poller stops → WorkerPool stops → Services shutdown → Repositories close → Cleanup functions run
+5. **Shutdown**: Poller stops → WorkerPool stops → Cleanup functions run
 
 ---
 
@@ -254,7 +253,7 @@ According to `BENCHMARK_REPORT.md`:
 ## 6. Code Style & Best Practices
 
 ### What's Done Well ✅
-1. **Extensive use of interfaces**: `MessageProducer`, `DataFetcher`, `Service`, `Repository` - all enable easy mocking
+1. **Extensive use of interfaces**: `MessageProducer`, `DataFetcher` - all enable easy mocking
 2. **Builder pattern**: Framework builder is clean and fluent
 3. **Comprehensive tests**: Test files with race-safe atomic operations
 4. **Benchmarks included**: Performance tracking is built-in

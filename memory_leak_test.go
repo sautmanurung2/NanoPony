@@ -134,8 +134,7 @@ func TestFrameworkNoMemoryLeak(t *testing.T) {
 		
 		framework := NewFramework().
 			WithConfig(config).
-			WithWorkerPool(5, 200).
-			AddService(&BaseService{name: "test-service"})
+			WithWorkerPool(5, 200)
 		
 		components := framework.Build()
 		

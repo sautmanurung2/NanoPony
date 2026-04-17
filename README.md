@@ -22,7 +22,7 @@
 - ✅ **Fluent Builder Pattern** - Setup yang clean dan readable dengan method chaining
 - ✅ **Lifecycle Management** - Start/Shutdown terkoordinasi untuk semua komponen
 - ✅ **Dependency Injection** - Support untuk custom instances atau auto-create dari config
-- ✅ **Graceful Shutdown** - Shutdown berurutan: Poller → Worker Pool → Services → Repositories → Cleanup
+- ✅ **Graceful Shutdown** - Shutdown berurutan: Poller → Worker Pool → Cleanup
 - ✅ **Concurrent Cleanup** - Cleanup functions dijalankan secara concurrent saat shutdown
 - ✅ **Accessor Methods** - `GetDB()`, `GetProducer()`, `GetConfig()`, `GetWorkerPool()`, `GetPoller()`
 - ✅ **Error Types** - Built-in errors: `ErrQueueFull`, `ErrConfigNotSet`, `ErrDatabaseNotSet`, dll
@@ -56,13 +56,6 @@
 - ✅ **Safe Close** - Nil-safe database connection close
 - ✅ **Sensible Defaults** - MaxIdleConns=10, MaxOpenConns=100, IdleTime=5min, Lifetime=60min
 
-### 📦 Repository Pattern
-
-- ✅ **BaseRepository** - Embeddable struct dengan DB connection
-- ✅ **QueryExecutor Interface** - Abstraksi untuk Query, QueryRow, Exec, Prepare
-- ✅ **TransactionExecutor** - WithTransaction helper dengan auto commit/rollback
-- ✅ **Repository Lifecycle** - Close() dipanggil otomatis saat framework shutdown
-- ✅ **Interface-based Design** - Mudah untuk mocking dan testing
 
 ### 🚀 Worker Pool
 
@@ -127,14 +120,6 @@
 - ✅ **Service Name Prefixing** - Auto prefix dengan "GO\_" dan "GO-Producer-"
 - ✅ **Log Directory** - Defaults ke `./logs/orion-to-core-YYYY-MM-DD.log` (Auto-created)
 
-### 🔧 Service Lifecycle Management
-
-- ✅ **Service Interface** - Initialize() dan Shutdown() methods
-- ✅ **BaseService** - Embeddable struct dengan default no-op implementations
-- ✅ **ServiceName Accessor** - Get service name untuk debugging
-- ✅ **Auto Initialization** - Services di-init saat framework Start()
-- ✅ **Auto Shutdown** - Services di-shutdown sebelum repositories
-- ✅ **Partial Failure Tolerance** - Service init errors di-log sebagai warning, tidak prevent startup
 
 ### 🛡️ Concurrency & Safety
 
@@ -236,8 +221,7 @@ func main() {
         WithKafkaWriter().
         WithProducer().
         WithWorkerPool(5, 100).
-        WithPoller(nanopony.DefaultPollerConfig(), &myDataFetcher{}).
-        AddService(&myService{name: "MyService"})
+        WithPoller(nanopony.DefaultPollerConfig(), &myDataFetcher{})
 
     components := framework.Build()
 
@@ -267,19 +251,7 @@ func (f *myDataFetcher) Fetch() ([]interface{}, error) {
     return []interface{}{"data1", "data2"}, nil
 }
 
-type myService struct {
-    name string
-}
 
-func (s *myService) Initialize() error {
-    log.Printf("Initializing %s", s.name)
-    return nil
-}
-
-func (s *myService) Shutdown() error {
-    log.Printf("Shutting down %s", s.name)
-    return nil
-}
 ```
 
 ## Konfigurasi Environment
@@ -413,17 +385,6 @@ stop := nanopony.MonitorMemory(5 * time.Second)
 defer stop()
 ```
 
-### Transaction Support
-
-```go
-executor := nanopony.NewTransactionExecutor(db)
-
-err := executor.WithTransaction(func(tx *sql.Tx) error {
-    // perform database operations within transaction
-    _, err := tx.Exec("INSERT INTO table VALUES (?)", value)
-    return err
-})
-```
 
 ## 📊 Performa & Benchmark
 
@@ -469,7 +430,7 @@ go run main.go
 
 1. **Selalu gunakan Graceful Shutdown** untuk memastikan semua resources dilepaskan dengan benar
 2. **Gunakan Builder Pattern** untuk setup yang clean dan readable
-3. **Implementasikan interface** `Repository` dan `Service` untuk code yang terstruktur
+3. **Gunakan pola arsitektur layer** untuk code yang terstruktur
 4. **Gunakan Context** untuk cancellation dan timeout
 5. **Handle errors** dengan proper error handling
 6. **Reuse WorkerPool** - jangan create/destroy频繁, buat sekali di startup
@@ -495,8 +456,7 @@ NanoPony/
 ├── kafka.go               # Wrapper kafka-go reader/writer
 ├── producer.go            # Logic Kafka producer & consumer
 ├── worker.go              # Worker pool & poller logic
-├── service.go             # Base service interfaces
-├── repository.go          # Base repository & transaction helper
+
 ├── framework.go           # Main builder & lifecycle management
 ├── logger.go              # Structured logging (Console/File/ES)
 ├── memory.go              # Memory monitoring utilities

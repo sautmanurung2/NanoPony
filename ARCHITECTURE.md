@@ -11,8 +11,6 @@
    - [Producer & Consumer](#4-producer--consumer)
    - [Worker Pool](#5-worker-pool)
    - [Poller](#6-poller)
-   - [Service & Pipeline](#7-service--pipeline)
-   - [Layer Repository](#8-layer-repository)
    - [Framework Builder](#9-framework-builder)
    - [Logger](#10-logger)
 4. [Diagram Alur Data](#diagram-alur-data)
@@ -35,8 +33,6 @@
 - ✅ **Builder Pattern** - API yang clean dan fluent
 - ✅ **Graceful Shutdown** - Teardown yang aman untuk semua komponen
 - ✅ **Konfigurasi Berbasis Environment** - Konfigurasi melalui environment variables
-- ✅ **Pipeline Processing** - Pipeline Validator, Transformer, dan Processor
-- ✅ **Dukungan Transaction** - Helper transaction database
 - ✅ **Logging Terstruktur** - Rotasi file dan integrasi Elasticsearch
 
 **Dependensi Inti:**
@@ -76,7 +72,6 @@
     ▼           ▼              ▼
 ┌──────────────────────────────────────────────────────────┐
 │                  Layer Akses Data                         │
-│  repository.go - BaseRepository, TransactionExecutor      │
 │  producer.go  - KafkaProducer, KafkaConsumer              │
 └──────────────────────────────────────────────────────────┘
     │
@@ -84,8 +79,6 @@
 ┌──────────────────────────────────────────────────────────┐
 │                 Layer Pemrosesan                          │
 │  worker.go  - WorkerPool, Poller, DataFetcher             │
-│  service.go - Service, Pipeline (Validator/Transformer/   │
-│             Processor), BatchProcessor                    │
 └──────────────────────────────────────────────────────────┘
 ```
 
@@ -272,57 +265,7 @@ type KafkaWriterConfig struct {
 
 ---
 
-### 7. Service & Pipeline
-
-**File:** `service.go`
-
-**Tujuan:** Manajemen lifecycle untuk service dan pipeline pemrosesan data yang komposabel.
-
-**Interface Utama:**
-- `Service` - `Initialize() error`, `Shutdown() error`
-- `Processor` - `Process(data) error`, `ProcessWithContext(ctx, data) error`
-- `BatchProcessor` - `ProcessBatch(data) error`, `ProcessBatchWithContext(ctx, data) error`
-- `Validator` - `Validate(data) error`
-- `Transformer` - `Transform(data) (any, error)`
-
-**Struct Utama:**
-- `BaseService` - Menampung nama service; Initialize/Shutdown no-op
-- `Pipeline` - Menampung slice `Validator`, `Transformer`, dan `Processor`
-
-**Function Adapters:**
-- `ProcessorFunc`, `BatchProcessorFunc`, `ValidatorFunc`, `TransformerFunc` - Semua mengimplementasikan interface masing-masing, memungkinkan penggunaan fungsi inline tanpa definisi struct.
-
-**Urutan Eksekusi Pipeline:**
-```
-Input Data → [Validator 1] → [Validator 2] → ... → (fail fast on error)
-         → [Transformer 1] → [Transformer 2] → ... → (chain transforms)
-         → [Processor] → (pemrosesan akhir)
-```
-
-**Pola Desain:** Chain of Responsibility (Pipeline), Adapter (function adapters), Template Method (BaseService).
-
----
-
-### 8. Layer Repository
-
-**File:** `repository.go`
-
-**Tujuan:** Abstraksi akses data dengan dukungan transaction.
-
-**Interface Utama:**
-- `Repository` - `Close() error`
-- `QueryExecutor` - `Query`, `QueryRow`, `Exec`, `Prepare`
-- `TransactionExecutor` - `BeginTx()`, `WithTransaction(fn)`
-
-**Struct Utama:**
-- `BaseRepository` - Membungkus `*sql.DB`
-- `BaseTransactionExecutor` - Membungkus `*sql.DB`
-
-**Pola Transaction:** `WithTransaction(fn)` memulai transaction, defer rollback, memanggil `fn(tx)`, commit jika sukses. Ini adalah pola "transaction template" klasik.
-
----
-
-### 9. Framework Builder
+### 7. Framework Builder
 
 **File:** `framework.go`
 
@@ -345,8 +288,6 @@ Input Data → [Validator 1] → [Validator 2] → ... → (fail fast on error)
 | `WithWorkerPoolFromInstance(pool)` | Tidak ada | Menerima pool yang ada |
 | `WithPoller(config, fetcher)` | WorkerPool diperlukan | Membuat poller |
 | `WithPollerFromInstance(poller)` | Tidak ada | Menerima poller yang ada |
-| `AddRepository(repo)` | Tidak ada | Menambahkan ke list |
-| `AddService(service)` | Tidak ada | Menambahkan ke list |
 | `AddCleanup(fn)` | Tidak ada | Mendaftarkan fungsi cleanup |
 
 **`Build()`** mengembalikan `FrameworkComponents` - struct yang mengekspos semua komponen yang telah di-wire ditambah slice privat untuk repository, service, dan fungsi cleanup. Panic pada double-build.
@@ -354,21 +295,18 @@ Input Data → [Validator 1] → [Validator 2] → ... → (fail fast on error)
 **`FrameworkComponents.Start(ctx, handler)`:**
 1. Memulai WorkerPool dengan handler
 2. Memulai Poller
-3. Inisialisasi semua service (error di-log, non-fatal)
 
 **`FrameworkComponents.Shutdown(ctx)` (teardown berurutan):**
 1. Hentikan Poller
 2. Hentikan WorkerPool
-3. Shutdown semua service (kumpulkan error pertama)
-4. Tutup semua repository (kumpulkan error pertama)
-5. Jalankan semua fungsi cleanup secara konkuren (goroutine + WaitGroup)
-6. Kembalikan error pertama yang ditemui
+3. Jalankan semua fungsi cleanup secara konkuren (goroutine + WaitGroup)
+4. Kembalikan error pertama yang ditemui
 
 **Pola Desain:** Builder + Dependency Injection. Setiap method `With*` memvalidasi prasyarat dan panic pada dependency yang hilang (misalnya `WithProducer()` panic jika `kafkaWriter` nil).
 
 ---
 
-### 10. Logger
+### 8. Logger
 
 **File:** `logger.go`
 
@@ -416,31 +354,9 @@ Input Data → [Validator 1] → [Validator 2] → ... → (fail fast on error)
                                       ▼
                               JobHandler(ctx, job)
                                       │
-                              ┌───────┼───────┐
-                              ▼       ▼       ▼
-                          Kafka   Database   Pipeline
-                         Produce    Query    Process
-```
-
-### Alur Pemrosesan Pipeline
-
-```
-   Data Mentah
-       │
-       ▼
-   [Validator 1] ──gagal──► kembalikan error
-       │ lolos
-       ▼
-   [Validator N] ──gagal──► kembalikan error
-       │ lolos
-       ▼
-   [Transformer 1] ──► data tertransformasi
-       │
-       ▼
-   [Transformer M] ──► data tertransformasi
-       │
-       ▼
-   [Processor] ──► hasil akhir
+                                      │
+                                      ▼
+                          Kafka Produce / Database Query
 ```
 
 ### Alur Lifecycle Framework
@@ -452,7 +368,7 @@ Input Data → [Validator 1] → [Validator 2] → ... → (fail fast on error)
    WithConfig ──► WithDatabase ──► WithKafkaWriter ──► WithProducer
         │              │                  │                 │
         ▼              ▼                  ▼                 ▼
-   WithWorkerPool ──► WithPoller ──► AddService ──► AddRepository
+   WithWorkerPool ──► WithPoller
         │
         ▼
    Build() ──► FrameworkComponents
@@ -471,8 +387,6 @@ Input Data → [Validator 1] → [Validator 2] → ... → (fail fast on error)
         │
         ├── Poller.Stop()
         ├── WorkerPool.Stop()
-        ├── Service.Shutdown() untuk masing-masing
-        ├── Repository.Close() untuk masing-masing
         └── Fungsi cleanup (konkuren)
 ```
 
@@ -487,12 +401,9 @@ Input Data → [Validator 1] → [Validator 2] → ... → (fail fast on error)
 | **Factory** | `NewOracleConnection`, `NewKafkaWriter`, `NewWorkerPool`, `NewPoller` | Pembuatan objek tanpa mengekspos logika instansiasi |
 | **Strategy** | Routing mode output di Logger, routing model Kafka di config | Algoritma yang dapat dipertukarkan saat runtime |
 | **Adapter** | Function adapters: `DataFetcherFunc`, `ProcessorFunc`, `ValidatorFunc`, `TransformerFunc`, `BatchProcessorFunc` | Konversi interface ke interface yang diharapkan |
-| **Chain of Responsibility** | `Pipeline` - chain validator, chain transformer | Melewatkan request sepanjang chain handler |
 | **Worker Pool** | `WorkerPool` - goroutine pool bounded dengan channel | Gunakan ulang goroutine untuk memproses banyak tugas |
 | **Semaphore** | Channel `jobSlots` Poller untuk rate limiting poll konkuren | Kontrol akses ke resource |
-| **Template Method** | `BaseService` (Initialize/Shutdown no-op), `BaseRepository` | Definisikan skeleton, defer langkah ke subclass |
 | **Dependency Injection** | Semua method `With*FromInstance()` memungkinkan injeksi komponen yang telah dibuat sebelumnya | Injeksi dependency daripada membuatnya |
-| **Transaction Template** | `WithTransaction(fn)` - begin, defer rollback, eksekusi, commit | Sederhanakan manajemen transaksi |
 
 ---
 
@@ -563,15 +474,7 @@ Config
 |-----------|---------|---------|
 | `DataFetcher` | `Fetch() ([]any, error)` | Sumber data abstrak untuk poller |
 | `JobHandler` | `func(ctx, Job) error` | Callback pemrosesan job |
-| `Service` | `Initialize() error`, `Shutdown() error` | Manajemen lifecycle |
-| `Repository` | `Close() error` | Kontrak pembersihan resource |
-| `QueryExecutor` | `Query`, `QueryRow`, `Exec`, `Prepare` | Abstraksi query database |
-| `TransactionExecutor` | `BeginTx()`, `WithTransaction(fn)` | Manajemen transaksi |
 | `MessageProducer` | `Produce`, `ProduceWithContext`, `Close` | Abstraksi Kafka producer |
-| `Processor` | `Process`, `ProcessWithContext` | Pemrosesan item tunggal |
-| `BatchProcessor` | `ProcessBatch`, `ProcessBatchWithContext` | Pemrosesan batch |
-| `Validator` | `Validate(data) error` | Validasi data |
-| `Transformer` | `Transform(data) (any, error)` | Transformasi data |
 
 ---
 
@@ -592,8 +495,7 @@ framework := nanopony.NewFramework().
     WithKafkaWriter().
     WithProducer().
     WithWorkerPool(5, 100).
-    WithPoller(nanopony.DefaultPollerConfig(), dataFetcher).
-    AddService(&myService{name: "MyService"})
+    WithPoller(nanopony.DefaultPollerConfig(), dataFetcher)
 
 components := framework.Build()
 ```
@@ -646,7 +548,6 @@ func main() {
         WithProducer().
         WithWorkerPool(5, 100).
         WithPoller(nanopony.DefaultPollerConfig(), dataFetcher).
-        AddService(&myService{name: "MyService"}).
         Build()
 
     ctx, cancel := context.WithCancel(context.Background())
@@ -674,7 +575,12 @@ func main() {
     log.Println("Shutdown selesai")
 }
 
-type myService struct {
+```
+
+---
+
+## Peta File
+
     name string
 }
 
@@ -701,8 +607,6 @@ func (s *myService) Shutdown() error {
 | `kafka.go` | Pembuatan Kafka writer, SASL/TLS untuk Confluent |
 | `producer.go` | KafkaProducer, KafkaConsumer, interface MessageProducer |
 | `worker.go` | WorkerPool, Poller, DataFetcher |
-| `service.go` | Interface Service, Pipeline, function adapters |
-| `repository.go` | BaseRepository, TransactionExecutor, QueryExecutor |
 | `framework.go` | Framework builder, FrameworkComponents, Start/Shutdown |
 | `logger.go` | Logging terstruktur, rotasi file, Elasticsearch |
 
@@ -712,12 +616,11 @@ func (s *myService) Shutdown() error {
 
 1. **Selalu gunakan Graceful Shutdown** - Memastikan semua resource dilepaskan dengan benar
 2. **Gunakan Builder Pattern untuk setup yang clean** - Method chaining meningkatkan keterbacaan
-3. **Implementasikan interface Repository dan Service** - Meningkatkan loose coupling
+3. **Gunakan pola arsitektur layer** - Meningkatkan pemisahan logic
 4. **Gunakan Context untuk cancellation dan timeout** - Memungkinkan manajemen lifecycle yang benar
 5. **Handle error dengan benar** - Monitor channel error dari worker pool
-6. **Gunakan Pipeline untuk pemrosesan data kompleks** - Rantai validator dan transformer
-7. **Konfigurasi connection pool sesuai kebutuhan** - Tune berdasarkan workload
-8. **Gunakan dependency injection untuk testing** - Injeksi mock via method `With*FromInstance()`
+6. **Konfigurasi connection pool sesuai kebutuhan** - Tune berdasarkan workload
+7. **Gunakan dependency injection untuk testing** - Injeksi mock via method `With*FromInstance()`
 
 ---
 
@@ -732,9 +635,6 @@ NanoPony menyediakan:
 ✅ **Builder Pattern** - API yang clean dan fluent  
 ✅ **Graceful Shutdown** - Teardown yang aman untuk semua komponen  
 ✅ **Konfigurasi Berbasis Environment** - Konfigurasi via environment variables  
-✅ **Pipeline Processing** - Pipeline Validator, Transformer, dan Processor  
-✅ **Dukungan Transaction** - Helper transaction database  
 ✅ **Logging Terstruktur** - Rotasi file dan integrasi Elasticsearch  
-✅ **Layer Repository & Service** - Desain berbasis interface untuk arsitektur yang clean  
 
 Framework ini dirancang untuk membangun sistem data pipeline yang robust, scalable, dan mudah di-maintain.
