@@ -200,11 +200,7 @@ func main() {
 		WithKafkaWriterFromInstance(kafkaWriter).
 		WithProducerFromInstance(producer).
 		WithWorkerPool(cfg.WorkerPool.NumWorkers, cfg.WorkerPool.QueueSize).
-		WithPoller(nanopony.DefaultPollerConfig(), &pendingOrderFetcher{orderRepo: orderRepo}).
-		AddService(userService).
-		AddService(orderService).
-		AddService(productService).
-		AddService(eventSvc)
+		WithPoller(nanopony.DefaultPollerConfig(), &pendingOrderFetcher{orderRepo: orderRepo})
 
 	components := framework.Build()
 	fmt.Println("✓ Framework built successfully")

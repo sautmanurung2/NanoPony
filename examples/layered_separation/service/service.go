@@ -19,7 +19,6 @@ import (
 // ============================================================================
 
 type userService struct {
-	*nanopony.BaseService
 	userRepo   interfaces.UserRepository
 	orderRepo  interfaces.OrderRepository
 	eventSvc   interfaces.EventService
@@ -34,7 +33,6 @@ func NewUserService(
 	db *sql.DB,
 ) interfaces.UserService {
 	return &userService{
-		BaseService: nanopony.NewBaseService("UserService"),
 		userRepo:    userRepo,
 		orderRepo:   orderRepo,
 		eventSvc:    eventSvc,
@@ -42,14 +40,8 @@ func NewUserService(
 	}
 }
 
-func (s *userService) Initialize() error {
-	log.Printf("[%s] Service initialized", s.ServiceName())
-	return nil
-}
-
-func (s *userService) Shutdown() error {
-	log.Printf("[%s] Service shutdown", s.ServiceName())
-	return nil
+func (s *userService) ServiceName() string {
+	return "UserService"
 }
 
 // GetUserWithOrders mendapatkan user beserta orders dan total
@@ -81,31 +73,25 @@ func (s *userService) GetUserWithOrders(ctx context.Context, userID int) (*model
 
 // ActivateUser mengaktifkan user dan mengirim event
 func (s *userService) ActivateUser(ctx context.Context, userID int) error {
-	executor := nanopony.NewTransactionExecutor(s.db)
+	// Update status
+	if err := s.userRepo.UpdateStatus(ctx, userID, "ACTIVE"); err != nil {
+		return fmt.Errorf("failed to update status: %w", err)
+	}
 
-	err := executor.WithTransaction(func(tx *sql.Tx) error {
-		// Update status
-		if err := s.userRepo.UpdateStatus(ctx, userID, "ACTIVE"); err != nil {
-			return fmt.Errorf("failed to update status: %w", err)
-		}
-
-		// Get user data
-		user, err := s.userRepo.GetByID(ctx, userID)
-		if err != nil {
-			return fmt.Errorf("failed to get user: %w", err)
-		}
-
-		// Send event
-		data := map[string]interface{}{
-			"user_name": user.Name,
-			"user_email": user.Email,
-		}
-
-		return s.eventSvc.PublishUserEvent(ctx, userID, "USER_ACTIVATED", data)
-	})
-
+	// Get user data
+	user, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {
-		return fmt.Errorf("activate user transaction failed: %w", err)
+		return fmt.Errorf("failed to get user: %w", err)
+	}
+
+	// Send event
+	data := map[string]interface{}{
+		"user_name": user.Name,
+		"user_email": user.Email,
+	}
+
+	if err := s.eventSvc.PublishUserEvent(ctx, userID, "USER_ACTIVATED", data); err != nil {
+		return fmt.Errorf("activate user event failed: %w", err)
 	}
 
 	log.Printf("[%s] User %d activated successfully", s.ServiceName(), userID)
@@ -114,27 +100,21 @@ func (s *userService) ActivateUser(ctx context.Context, userID int) error {
 
 // DeactivateUser menonaktifkan user
 func (s *userService) DeactivateUser(ctx context.Context, userID int) error {
-	executor := nanopony.NewTransactionExecutor(s.db)
+	if err := s.userRepo.UpdateStatus(ctx, userID, "INACTIVE"); err != nil {
+		return fmt.Errorf("deactivate user update failed: %w", err)
+	}
 
-	err := executor.WithTransaction(func(tx *sql.Tx) error {
-		if err := s.userRepo.UpdateStatus(ctx, userID, "INACTIVE"); err != nil {
-			return err
-		}
-
-		user, err := s.userRepo.GetByID(ctx, userID)
-		if err != nil {
-			return err
-		}
-
-		data := map[string]interface{}{
-			"user_name": user.Name,
-		}
-
-		return s.eventSvc.PublishUserEvent(ctx, userID, "USER_DEACTIVATED", data)
-	})
-
+	user, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {
-		return fmt.Errorf("deactivate user transaction failed: %w", err)
+		return fmt.Errorf("deactivate user fetch failed: %w", err)
+	}
+
+	data := map[string]interface{}{
+		"user_name": user.Name,
+	}
+
+	if err := s.eventSvc.PublishUserEvent(ctx, userID, "USER_DEACTIVATED", data); err != nil {
+		return fmt.Errorf("deactivate user event failed: %w", err)
 	}
 
 	log.Printf("[%s] User %d deactivated successfully", s.ServiceName(), userID)
@@ -180,7 +160,6 @@ func (s *userService) GetUserStats(ctx context.Context) (map[string]interface{},
 // ============================================================================
 
 type orderService struct {
-	*nanopony.BaseService
 	orderRepo  interfaces.OrderRepository
 	userRepo   interfaces.UserRepository
 	productRepo interfaces.ProductRepository
@@ -199,7 +178,6 @@ func NewOrderService(
 	cfg *config.AppConfig,
 ) interfaces.OrderService {
 	return &orderService{
-		BaseService:   nanopony.NewBaseService("OrderService"),
 		orderRepo:     orderRepo,
 		userRepo:      userRepo,
 		productRepo:   productRepo,
@@ -209,14 +187,8 @@ func NewOrderService(
 	}
 }
 
-func (s *orderService) Initialize() error {
-	log.Printf("[%s] Service initialized", s.ServiceName())
-	return nil
-}
-
-func (s *orderService) Shutdown() error {
-	log.Printf("[%s] Service shutdown", s.ServiceName())
-	return nil
+func (s *orderService) ServiceName() string {
+	return "OrderService"
 }
 
 // ProcessPendingOrders memproses semua pending orders
@@ -248,82 +220,64 @@ func (s *orderService) processSingleOrder(ctx context.Context, order *models.Ord
 	log.Printf("[%s] Processing order %d for user %s (%s)",
 		s.ServiceName(), order.ID, user.Name, user.Email)
 
-	executor := nanopony.NewTransactionExecutor(s.db)
+	// Update to processing
+	if err := s.orderRepo.UpdateStatus(ctx, order.ID, "PROCESSING"); err != nil {
+		return err
+	}
 
-	return executor.WithTransaction(func(tx *sql.Tx) error {
-		// Update to processing
-		if err := s.orderRepo.UpdateStatus(ctx, order.ID, "PROCESSING"); err != nil {
-			return err
-		}
+	// Send event
+	data := map[string]interface{}{
+		"user_name": user.Name,
+		"user_email": user.Email,
+		"product":    order.Product,
+		"amount":     order.Amount,
+	}
 
-		// Send event
-		data := map[string]interface{}{
-			"user_name": user.Name,
-			"user_email": user.Email,
-			"product":    order.Product,
-			"amount":     order.Amount,
-		}
+	if err := s.eventSvc.PublishOrderEvent(ctx, order.ID, "ORDER_PROCESSED", data); err != nil {
+		return err
+	}
 
-		if err := s.eventSvc.PublishOrderEvent(ctx, order.ID, "ORDER_PROCESSED", data); err != nil {
-			return err
-		}
-
-		// Update to completed
-		return s.orderRepo.UpdateStatus(ctx, order.ID, "COMPLETED")
-	})
+	// Update to completed
+	return s.orderRepo.UpdateStatus(ctx, order.ID, "COMPLETED")
 }
 
 // CreateOrderAndNotify membuat order baru dan mengirim notifikasi
 func (s *orderService) CreateOrderAndNotify(ctx context.Context, order *models.Order) error {
-	// Gunakan pipeline untuk validation
-	validator := nanopony.ValidatorFunc(func(data interface{}) error {
-		o, ok := data.(*models.Order)
-		if !ok {
-			return fmt.Errorf("invalid order type")
-		}
-		if o.UserID == 0 {
-			return fmt.Errorf("user ID is required")
-		}
-		if o.Product == "" {
-			return fmt.Errorf("product name is required")
-		}
-		if o.Amount <= 0 {
-			return fmt.Errorf("order amount must be positive")
-		}
-		return nil
-	})
+	// Validation
+	if order.UserID == 0 {
+		return fmt.Errorf("order pipeline failed: user ID is required")
+	}
+	if order.Product == "" {
+		return fmt.Errorf("order pipeline failed: product name is required")
+	}
+	if order.Amount <= 0 {
+		return fmt.Errorf("order pipeline failed: order amount must be positive")
+	}
 
-	processor := nanopony.ProcessorFunc(func(input interface{}) error {
-		order := input.(*models.Order)
-		order.Status = "PENDING"
-		order.CreatedAt = time.Now()
-		order.UpdatedAt = time.Now()
+	order.Status = "PENDING"
+	order.CreatedAt = time.Now()
+	order.UpdatedAt = time.Now()
 
-		// Create order
-		if err := s.orderRepo.Create(ctx, order); err != nil {
-			return fmt.Errorf("failed to create order: %w", err)
-		}
+	// Create order
+	if err := s.orderRepo.Create(ctx, order); err != nil {
+		return fmt.Errorf("order pipeline failed: failed to create order: %w", err)
+	}
 
-		// Get user
-		user, err := s.userRepo.GetByID(ctx, order.UserID)
-		if err != nil {
-			return fmt.Errorf("failed to get user: %w", err)
-		}
+	// Get user
+	user, err := s.userRepo.GetByID(ctx, order.UserID)
+	if err != nil {
+		return fmt.Errorf("order pipeline failed: failed to get user: %w", err)
+	}
 
-		// Send event
-		eventData := map[string]interface{}{
-			"user_name": user.Name,
-			"user_email": user.Email,
-			"product":    order.Product,
-			"amount":     order.Amount,
-		}
+	// Send event
+	eventData := map[string]interface{}{
+		"user_name": user.Name,
+		"user_email": user.Email,
+		"product":    order.Product,
+		"amount":     order.Amount,
+	}
 
-		return s.eventSvc.PublishOrderEvent(ctx, order.ID, "ORDER_CREATED", eventData)
-	})
-
-	pipeline := nanopony.NewPipeline(processor).AddValidator(validator)
-
-	if err := pipeline.Process(order); err != nil {
+	if err := s.eventSvc.PublishOrderEvent(ctx, order.ID, "ORDER_CREATED", eventData); err != nil {
 		return fmt.Errorf("order pipeline failed: %w", err)
 	}
 
@@ -347,19 +301,15 @@ func (s *orderService) CancelOrder(ctx context.Context, orderID int, reason stri
 		return fmt.Errorf("cannot cancel order with status: %s", order.Status)
 	}
 
-	executor := nanopony.NewTransactionExecutor(s.db)
+	if err := s.orderRepo.UpdateStatus(ctx, orderID, "CANCELLED"); err != nil {
+		return err
+	}
 
-	return executor.WithTransaction(func(tx *sql.Tx) error {
-		if err := s.orderRepo.UpdateStatus(ctx, orderID, "CANCELLED"); err != nil {
-			return err
-		}
+	data := map[string]interface{}{
+		"reason": reason,
+	}
 
-		data := map[string]interface{}{
-			"reason": reason,
-		}
-
-		return s.eventSvc.PublishOrderEvent(ctx, orderID, "ORDER_CANCELLED", data)
-	})
+	return s.eventSvc.PublishOrderEvent(ctx, orderID, "ORDER_CANCELLED", data)
 }
 
 // ============================================================================
@@ -367,7 +317,6 @@ func (s *orderService) CancelOrder(ctx context.Context, orderID int, reason stri
 // ============================================================================
 
 type productService struct {
-	*nanopony.BaseService
 	productRepo interfaces.ProductRepository
 	eventSvc    interfaces.EventService
 	db          *sql.DB
@@ -380,21 +329,14 @@ func NewProductService(
 	db *sql.DB,
 ) interfaces.ProductService {
 	return &productService{
-		BaseService: nanopony.NewBaseService("ProductService"),
 		productRepo: productRepo,
 		eventSvc:    eventSvc,
 		db:          db,
 	}
 }
 
-func (s *productService) Initialize() error {
-	log.Printf("[%s] Service initialized", s.ServiceName())
-	return nil
-}
-
-func (s *productService) Shutdown() error {
-	log.Printf("[%s] Service shutdown", s.ServiceName())
-	return nil
+func (s *productService) ServiceName() string {
+	return "ProductService"
 }
 
 // CreateProduct membuat product baru
@@ -465,7 +407,6 @@ func (s *productService) GetLowStockProducts(ctx context.Context) ([]models.Prod
 // ============================================================================
 
 type eventService struct {
-	*nanopony.BaseService
 	producer *nanopony.KafkaProducer
 	cfg      *config.AppConfig
 }
@@ -476,20 +417,13 @@ func NewEventService(
 	cfg *config.AppConfig,
 ) interfaces.EventService {
 	return &eventService{
-		BaseService: nanopony.NewBaseService("EventService"),
 		producer:    producer,
 		cfg:         cfg,
 	}
 }
 
-func (s *eventService) Initialize() error {
-	log.Printf("[%s] Service initialized", s.ServiceName())
-	return nil
-}
-
-func (s *eventService) Shutdown() error {
-	log.Printf("[%s] Service shutdown", s.ServiceName())
-	return nil
+func (s *eventService) ServiceName() string {
+	return "EventService"
 }
 
 // PublishUserEvent mengirim user event ke Kafka

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/sautmanurung2/nanopony"
 	"github.com/sautmanurung2/nanopony/examples/layered_separation/interfaces"
 	"github.com/sautmanurung2/nanopony/examples/layered_separation/models"
 )
@@ -17,13 +16,13 @@ import (
 // ============================================================================
 
 type userRepository struct {
-	*nanopony.BaseRepository
+	DB *sql.DB
 }
 
 // NewUserRepository membuat instance UserRepository
 func NewUserRepository(db *sql.DB) interfaces.UserRepository {
 	return &userRepository{
-		BaseRepository: nanopony.NewBaseRepository(db),
+		DB: db,
 	}
 }
 
@@ -78,7 +77,7 @@ func (r *userRepository) GetByEmail(ctx context.Context, email string) (*models.
 func (r *userRepository) Create(ctx context.Context, user *models.User) error {
 	query := `INSERT INTO users (id, name, email, status, created_at, updated_at) 
 			  VALUES (:1, :2, :3, :4, :5, :6)`
-	_, err := r.DB.ExecContext(ctx, query, 
+	_, err := r.DB.ExecContext(ctx, query,
 		user.ID, user.Name, user.Email, user.Status, user.CreatedAt, user.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("failed to create user: %w", err)
@@ -90,7 +89,7 @@ func (r *userRepository) Create(ctx context.Context, user *models.User) error {
 func (r *userRepository) Update(ctx context.Context, user *models.User) error {
 	query := `UPDATE users SET name = :1, email = :2, status = :3, updated_at = :4 
 			  WHERE id = :5`
-	_, err := r.DB.ExecContext(ctx, query, 
+	_, err := r.DB.ExecContext(ctx, query,
 		user.Name, user.Email, user.Status, time.Now(), user.ID)
 	if err != nil {
 		return fmt.Errorf("failed to update user: %w", err)
@@ -137,13 +136,13 @@ func (r *userRepository) scanUsers(rows *sql.Rows) ([]models.User, error) {
 // ============================================================================
 
 type orderRepository struct {
-	*nanopony.BaseRepository
+	DB *sql.DB
 }
 
 // NewOrderRepository membuat instance OrderRepository
 func NewOrderRepository(db *sql.DB) interfaces.OrderRepository {
 	return &orderRepository{
-		BaseRepository: nanopony.NewBaseRepository(db),
+		DB: db,
 	}
 }
 
@@ -218,7 +217,7 @@ func (r *orderRepository) GetOrdersWithPagination(ctx context.Context, page, pag
 func (r *orderRepository) Create(ctx context.Context, order *models.Order) error {
 	query := `INSERT INTO orders (id, user_id, product, amount, status, created_at, updated_at) 
 			  VALUES (:1, :2, :3, :4, :5, :6, :7)`
-	_, err := r.DB.ExecContext(ctx, query, 
+	_, err := r.DB.ExecContext(ctx, query,
 		order.ID, order.UserID, order.Product, order.Amount, order.Status, order.CreatedAt, order.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("failed to create order: %w", err)
@@ -230,7 +229,7 @@ func (r *orderRepository) Create(ctx context.Context, order *models.Order) error
 func (r *orderRepository) Update(ctx context.Context, order *models.Order) error {
 	query := `UPDATE orders SET product = :1, amount = :2, status = :3, updated_at = :4 
 			  WHERE id = :5`
-	_, err := r.DB.ExecContext(ctx, query, 
+	_, err := r.DB.ExecContext(ctx, query,
 		order.Product, order.Amount, order.Status, time.Now(), order.ID)
 	if err != nil {
 		return fmt.Errorf("failed to update order: %w", err)
@@ -267,7 +266,7 @@ func (r *orderRepository) GetOrderSummary(ctx context.Context, orderID int) (*mo
 	row := r.DB.QueryRowContext(ctx, query, orderID)
 
 	var summary models.OrderSummary
-	err := row.Scan(&summary.OrderID, &summary.UserName, &summary.UserEmail, 
+	err := row.Scan(&summary.OrderID, &summary.UserName, &summary.UserEmail,
 		&summary.Product, &summary.Amount, &summary.Status, &summary.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get order summary: %w", err)
@@ -294,13 +293,13 @@ func (r *orderRepository) scanOrders(rows *sql.Rows) ([]models.Order, error) {
 // ============================================================================
 
 type productRepository struct {
-	*nanopony.BaseRepository
+	DB *sql.DB
 }
 
 // NewProductRepository membuat instance ProductRepository
 func NewProductRepository(db *sql.DB) interfaces.ProductRepository {
 	return &productRepository{
-		BaseRepository: nanopony.NewBaseRepository(db),
+		DB: db,
 	}
 }
 
@@ -342,7 +341,7 @@ func (r *productRepository) GetByCategory(ctx context.Context, category string) 
 func (r *productRepository) Create(ctx context.Context, product *models.Product) error {
 	query := `INSERT INTO products (id, name, category, price, stock, created_at) 
 			  VALUES (:1, :2, :3, :4, :5, :6)`
-	_, err := r.DB.ExecContext(ctx, query, 
+	_, err := r.DB.ExecContext(ctx, query,
 		product.ID, product.Name, product.Category, product.Price, product.Stock, product.CreatedAt)
 	if err != nil {
 		return fmt.Errorf("failed to create product: %w", err)
@@ -354,7 +353,7 @@ func (r *productRepository) Create(ctx context.Context, product *models.Product)
 func (r *productRepository) Update(ctx context.Context, product *models.Product) error {
 	query := `UPDATE products SET name = :1, category = :2, price = :3, stock = :4 
 			  WHERE id = :5`
-	_, err := r.DB.ExecContext(ctx, query, 
+	_, err := r.DB.ExecContext(ctx, query,
 		product.Name, product.Category, product.Price, product.Stock, product.ID)
 	if err != nil {
 		return fmt.Errorf("failed to update product: %w", err)
