@@ -53,6 +53,8 @@ type AppConfig struct {
 	KafkaModels string
 	// Operation is the operation mode (custom, can be defined per application)
 	Operation string
+	// LogFilePrefix is the prefix for log file naming
+	LogFilePrefix string
 }
 
 // OracleConfig holds Oracle database configuration
@@ -93,8 +95,10 @@ type KafkaConfluentConfig struct {
 var appConfig *Config
 var configMutex sync.RWMutex
 
+var loadEnvOnce sync.Once
+
 // NewConfig initializes and returns a new Config instance.
-// It loads environment variables from .env file if present.
+// It loads environment variables from .env file if present (only once).
 // Configuration is loaded once and cached (singleton pattern).
 //
 // Environment Variables Required:
@@ -105,7 +109,9 @@ var configMutex sync.RWMutex
 //
 //	config := nanopony.NewConfig()
 func NewConfig() *Config {
-	_ = godotenv.Load()
+	loadEnvOnce.Do(func() {
+		_ = godotenv.Load()
+	})
 
 	configMutex.RLock()
 	if appConfig != nil {
@@ -125,12 +131,10 @@ func NewConfig() *Config {
 	appConfig = &Config{
 		Dynamic: make(map[string]string),
 	}
+	
+	// Only initialize core app config, others will be initialized lazily or when needed
 	initApp(appConfig)
 	initKafkaModels(appConfig)
-	initKafka(appConfig)
-	initOracle(appConfig)
-	initOperation(appConfig)
-	initElasticSearch(appConfig)
 
 	return appConfig
 }
@@ -145,26 +149,39 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("KAFKA_MODELS is not set")
 	}
 
-	// Validate Kafka based on chosen model
-	switch c.App.KafkaModels {
-	case "kafka-confluent":
-		if len(c.KafkaConfluent.BootstrapServers) == 0 {
-			return fmt.Errorf("KAFKA_CONFLUENT bootstrap servers are not set")
-		}
-		if c.KafkaConfluent.ApiKey == "" || c.KafkaConfluent.ApiSecret == "" {
-			return fmt.Errorf("KAFKA_CONFLUENT credentials (API Key/Secret) are not set")
-		}
-	case "kafka-staging", "kafka-production":
-		// For staging/production, brokers must be set
-		if len(c.Kafka.Brokers) == 0 {
-			return fmt.Errorf("KAFKA brokers are not set for model %s", c.App.KafkaModels)
-		}
-	}
-
-	// Oracle validation is handled by NewOracleFromConfig when WithDatabase() is called.
-	// We only check if the model is set for now.
-
 	return nil
+}
+
+// EnsureOracle ensures that Oracle configuration is initialized.
+func (c *Config) EnsureOracle() *OracleConfig {
+	if c.Oracle.Host == "" {
+		initOracle(c)
+	}
+	return &c.Oracle
+}
+
+// EnsureKafka ensures that Kafka configuration is initialized.
+func (c *Config) EnsureKafka() *KafkaConfig {
+	if len(c.Kafka.Brokers) == 0 && c.App.KafkaModels != "kafka-confluent" {
+		initKafka(c)
+	}
+	return &c.Kafka
+}
+
+// EnsureKafkaConfluent ensures that Kafka Confluent configuration is initialized.
+func (c *Config) EnsureKafkaConfluent() *KafkaConfluentConfig {
+	if c.KafkaConfluent.ApiKey == "" && c.App.KafkaModels == "kafka-confluent" {
+		initKafkaConfluent(c)
+	}
+	return &c.KafkaConfluent
+}
+
+// EnsureElasticSearch ensures that Elasticsearch configuration is initialized.
+func (c *Config) EnsureElasticSearch() *ElasticSearchConfig {
+	if c.ElasticSearch.ElasticHost == "" {
+		initElasticSearch(c)
+	}
+	return &c.ElasticSearch
 }
 
 // ResetConfig resets the configuration singleton.

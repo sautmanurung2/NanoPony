@@ -154,12 +154,13 @@ func parsePort(portStr string) (int, error) {
 //	config := nanopony.NewConfig()
 //	db, err := nanopony.NewOracleFromConfig(config)
 func NewOracleFromConfig(conf *Config) (*sql.DB, error) {
+	oracle := conf.EnsureOracle()
 	dbConfig := DatabaseConfig{
-		Host:     conf.Oracle.Host,
-		Port:     conf.Oracle.Port,
-		Database: conf.Oracle.DatabaseName,
-		Username: conf.Oracle.Username,
-		Password: conf.Oracle.Password,
+		Host:     oracle.Host,
+		Port:     oracle.Port,
+		Database: oracle.DatabaseName,
+		Username: oracle.Username,
+		Password: oracle.Password,
 	}
 	return NewOracleConnection(dbConfig)
 }

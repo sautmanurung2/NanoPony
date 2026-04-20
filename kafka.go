@@ -40,16 +40,18 @@ func NewKafkaWriterFromConfig(conf *Config) *kafka.Writer {
 	config := DefaultKafkaWriterConfig()
 
 	if conf.App.KafkaModels == "kafka-confluent" {
-		config.Brokers = conf.KafkaConfluent.BootstrapServers
+		kconf := conf.EnsureKafkaConfluent()
+		config.Brokers = kconf.BootstrapServers
 		writer := &kafka.Writer{
 			Addr:         kafka.TCP(config.Brokers...),
 			Balancer:     config.Balancer,
 			BatchTimeout: config.BatchTimeout,
-			Transport:    createSASLTransport(conf.KafkaConfluent.ApiKey, conf.KafkaConfluent.ApiSecret),
+			Transport:    createSASLTransport(kconf.ApiKey, kconf.ApiSecret),
 		}
 		return writer
 	} else {
-		config.Brokers = conf.Kafka.Brokers
+		kconf := conf.EnsureKafka()
+		config.Brokers = kconf.Brokers
 		writer := &kafka.Writer{
 			Addr:         kafka.TCP(config.Brokers...),
 			Balancer:     config.Balancer,

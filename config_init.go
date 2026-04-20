@@ -44,6 +44,13 @@ var (
 		validValues: []string{},
 		defaultVal:  "default",
 	}
+
+	// logFilePrefixEnvConfig defines the prefix for log files
+	logFilePrefixEnvConfig = envConfig{
+		name:        "LOG_FILE_PREFIX",
+		validValues: []string{},
+		defaultVal:  "orion-to-core",
+	}
 )
 
 // getEnvValue retrieves an environment variable value with validation.
@@ -143,9 +150,10 @@ func initKafkaModels(conf *Config) string {
 	return conf.App.KafkaModels
 }
 
-// initApp initializes application-level configuration (GO_ENV)
+// initApp initializes application-level configuration (GO_ENV, LOG_FILE_PREFIX)
 func initApp(conf *Config) {
 	conf.App.Env = getEnvValue(appEnvConfig)
+	conf.App.LogFilePrefix = getEnvValue(logFilePrefixEnvConfig)
 }
 
 // initKafka initializes Kafka configuration.

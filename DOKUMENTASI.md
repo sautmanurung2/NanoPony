@@ -1,4 +1,4 @@
-# Dokumentasi Framework NanoPony (Update April 2026)
+# Dokumentasi Framework NanoPony (v0.0.30 - Sync April 2026)
 
 **NanoPony** adalah framework Go untuk integrasi Kafka-Oracle dengan arsitektur yang clean, reusable, dan production-ready. Framework ini menyediakan komponen-komponen siap pakai untuk membangun sistem data pipeline yang scalable dengan minimal boilerplate.
 
@@ -60,6 +60,7 @@ Manajemen konfigurasi terpusat berbasis environment variables dengan dukungan si
 | `GO_ENV` | Mode Environment | `local`, `staging`, `production` |
 | `KAFKA_MODELS` | Konfigurasi Kafka | `kafka-localhost`, `kafka-staging`, `kafka-production`, `kafka-confluent` |
 | `OPERATION` | Mode Operasi | Bebas (kustom per aplikasi) |
+| `LOG_FILE_PREFIX` | Prefix Nama File Log | Bebas (Default: `orion-to-core`) |
 
 ### Fitur Lanjutan
 
@@ -136,10 +137,10 @@ Jika `KAFKA_MODELS=kafka-confluent`, NanoPony otomatis mengaktifkan autentikasi 
 
 ## 4. Worker Pool
 
-**File**: `worker.go`
+**File**: `job.go`, `worker.go`
 
 ### Konsep Utama
-Worker Pool mengelola kumpulan goroutine yang memproses `Job` secara konkuren.
+Worker Pool mengelola kumpulan goroutine yang memproses `Job` secara konkuren. `job.go` menangani definisi data, sementara `worker.go` menangani orkestrasi pemrosesan.
 
 ### Job Metadata
 Field `Meta` pada struct `Job` memungkinkan Anda menyisipkan data tambahan seperti *source*, *retry count*, atau *trace ID*.
@@ -161,7 +162,7 @@ err := pool.SubmitBlocking(ctx, job)
 
 ## 5. Poller
 
-**File**: `worker.go`
+**File**: `poller.go`
 
 ### Mekanisme Slot (Semaphore)
 Poller menggunakan `JobSlotSize` untuk membatasi berapa banyak operasi polling yang boleh berjalan secara bersamaan. Jika slot penuh (misalnya karena polling sebelumnya masih berlangsung), polling berikutnya akan dilewati (*skipped*).
@@ -240,3 +241,4 @@ Gunakan `DynamicConfig` untuk pengaturan yang bersifat opsional atau modul kusto
 ✅ **Safe-Fail Validation** - Validasi konfigurasi di awal aplikasi berjalan.  
 ✅ **Aggregated Shutdown Errors** - Melaporkan semua masalah saat proses shutdown berakhir.  
 ✅ **SQL Debugger** - Utilitas interpolasi query untuk logging yang mudah dibaca.  
+✅ **Multi-Framework Speed** - ~39x lebih cepat dari Fiber untuk internal jobs.

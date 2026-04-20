@@ -142,10 +142,11 @@
 
 ### 📊 Performance Highlights
 
-- ⚡ **Framework Creation**: 0.25 ns/op, 0 B/op (ultra fast)
-- ⚡ **WorkerPool Submit Parallel**: 924.8 ns/op, 7 B/op (efficient)
-- ⚡ **Memory Leak Test**: 8 test cycles - NO LEAK DETECTED
-- ⚡ **Concurrent Safe**: 20 instances dengan memory growth hanya +23 KB
+- ⚡ **Framework Creation**: 2.1 µs/op (Comparable to Fiber)
+- ⚡ **Throughput**: ~39x faster than Fiber for internal processing
+- ⚡ **Memory Efficiency**: 16 B/op with only 1 allocation per job
+- ⚡ **Memory Leak Test**: NO LEAK DETECTED (Verified over 40+ cycles)
+- ⚡ **Concurrent Safe**: 20 instances with memory growth only +50 KB
 
 ## Instalasi
 
@@ -280,6 +281,7 @@ NanoPony menggunakan environment variables untuk konfigurasi:
 | `API_SECRET_KAFKA_CONFLUENT`       | API Secret Confluent Cloud | `xxx`                                                                     |
 | `BOOTSTRAP_SERVER_KAFKA_CONFLUENT` | Bootstrap server Confluent | `pkc-xxx.us-east-1.aws.confluent.cloud:9092`                              |
 | `LOG_OUTPUT_MODE`                  | Mode output log            | `console`, `file`, `elasticsearch`, `hybrid`                              |
+| `LOG_FILE_PREFIX`                  | Prefix nama file log       | `any-prefix` (Default: `orion-to-core`)                                   |
 
 ### Contoh `.env` File
 
@@ -390,11 +392,11 @@ defer stop()
 
 Framework NanoPony telah melalui pengujian performa menyeluruh:
 
-- ✅ **Memory Leak Test**: 8 test cycles - **NO LEAK DETECTED**
-- ✅ **Framework Creation**: 0.25 ns/op, 0 B/op (ultra fast)
-- ✅ **WorkerPool Submit Parallel**: 924.8 ns/op, 7 B/op (efficient)
-- ✅ **Memory Leak Test**: 8 test cycles - NO LEAK DETECTED
-- ✅ **Concurrent Safe**: 20 instances dengan memory growth hanya +23 KB
+- ✅ **High Throughput**: ~39x lebih cepat daripada Fiber untuk pemrosesan internal.
+- ✅ **Ultra Efficient**: Hanya mengonsumsi **16 byte** dengan **1 alokasi** per job.
+- ✅ **Micro-second Setup**: Inisialisasi framework hanya membutuhkan waktu **2.1 µs**.
+- ✅ **Memory Leak Test**: Lolos uji 40+ siklus setup-shutdown tanpa kebocoran.
+- ✅ **Multi-Framework**: Terbukti lebih efisien dibandingkan Fiber, Echo, dan Iris untuk job processing.
 
 > 📖 **Detail:** Baca [BENCHMARK_REPORT.md](BENCHMARK_REPORT.md) untuk hasil lengkap.
 
@@ -449,23 +451,24 @@ go run main.go
 ## Project Structure
 
 ```
-NanoPony/
-├── config.go              # Konfigurasi sistem
-├── config_init.go         # Inisialisasi environment vars
+├── job.go                 # Definisi unit kerja (Job) & Handler
+├── worker.go              # Logic Worker Pool & Concurrency
+├── poller.go              # Logic Data Poller & Rate Limiting
 ├── database.go            # Koneksi Oracle DB & pooling
 ├── kafka.go               # Wrapper kafka-go reader/writer
 ├── producer.go            # Logic Kafka producer & consumer
-├── worker.go              # Worker pool & poller logic
-
 ├── framework.go           # Main builder & lifecycle management
-├── logger.go              # Structured logging (Console/File/ES)
+├── config.go              # Konfigurasi sistem (Structs)
+├── config_init.go         # Inisialisasi environment vars (Logic)
+├── logger.go              # Structured logging (Public API)
+├── logger_internal.go     # Internal logging machinery & state
 ├── memory.go              # Memory monitoring utilities
 ├── *_test.go              # Unit tests & benchmarks
-├── README.md              # File ini
 ├── go.mod                 # Go module definition
 ├── ARCHITECTURE.md        # 📐 Arsitektur & pola desain
 ├── BENCHMARK_REPORT.md    # 📊 Hasil benchmark & memory test
 ├── TESTING_GUIDE.md       # 🧪 Panduan testing
+├── CONTRIBUTING.md        # 🤝 Panduan kontribusi project
 ├── DOKUMENTASI.md         # 📖 Dokumentasi lengkap komponen
 ├── WORKER_POOL_EXPLAINED.md # ⚙️ Deep dive worker pool
 ├── src/                   # Source tambahan (logs, etc)
@@ -478,7 +481,7 @@ NanoPony/
 
 ## Persyaratan
 
-- Go 1.25.1 atau lebih baru
+- Go 1.25.1 atau lebih baru (v0.0.30)
 - Oracle Database (opsional, untuk fitur database)
 - Kafka Broker (opsional, untuk fitur messaging)
 

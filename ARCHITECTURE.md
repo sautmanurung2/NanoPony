@@ -66,19 +66,22 @@
 │ Oracle │ │ Standard │ │ Confluent    │ │ Elastic      │
 │  DB    │ │ Kafka    │ │ Cloud Kafka  │ │ Search       │
 │database│ │ kafka.go │ │ (SASL/TLS)   │ │ logger.go    │
-│  .go   │ │          │ │              │ │              │
-└───┬────┘ └────┬─────┘ └──────┬───────┘ └──────────────┘
-    │           │              │
-    ▼           ▼              ▼
-┌──────────────────────────────────────────────────────────┐
-│                  Layer Akses Data                         │
-│  producer.go  - KafkaProducer, KafkaConsumer              │
-└──────────────────────────────────────────────────────────┘
-    │
-    ▼
+│  .go   │ │          │ │              │ │ (Public)     │
+└───┬────┘ └────┬─────┘ └──────┬───────┘ └──────┬───────┘
+    │           │              │                │
+    ▼           ▼              ▼                ▼
+┌──────────────────────────────────────┐  ┌──────────────┐
+│           Layer Akses Data           │  │ logger_inter │
+│  producer.go  - KafkaProducer        │  │ nal.go       │
+│               - KafkaConsumer        │  │ (Machinery)  │
+└───────────────────┬──────────────────┘  └──────────────┘
+                    │
+                    ▼
 ┌──────────────────────────────────────────────────────────┐
 │                 Layer Pemrosesan                          │
-│  worker.go  - WorkerPool, Poller, DataFetcher             │
+│  job.go    - Unit Kerja (Job Struct)                       │
+│  poller.go - Data Fetching & Rate Limiting                 │
+│  worker.go - Worker Pool Execution Logic                   │
 └──────────────────────────────────────────────────────────┘
 ```
 
@@ -204,9 +207,9 @@ type KafkaWriterConfig struct {
 
 ### 5. Worker Pool
 
-**File:** `worker.go` (bagian WorkerPool)
+**File:** `job.go`, `worker.go`
 
-**Tujuan:** Pemrosesan job konkuren dengan goroutine pool ukuran tetap dan queue bounded.
+**Tujuan:** Pemrosesan job konkuren dengan goroutine pool ukuran tetap dan queue bounded. Pemisahan tanggung jawab antara definisi job (`job.go`) dan eksekusi pool (`worker.go`).
 
 **Struct Utama:**
 - `Job`
@@ -234,7 +237,7 @@ type KafkaWriterConfig struct {
 
 ### 6. Poller
 
-**File:** `worker.go` (bagian Poller)
+**File:** `poller.go`
 
 **Tujuan:** Pengambilan data periodik dengan submit job yang di-rate-limit ke worker pool.
 
@@ -308,9 +311,9 @@ type KafkaWriterConfig struct {
 
 ### 8. Logger
 
-**File:** `logger.go`
+**File:** `logger.go`, `logger_internal.go`
 
-**Tujuan:** Logging terstruktur dengan rotasi file, output console, dan integrasi Elasticsearch.
+**Tujuan:** Logging terstruktur dengan rotasi file, output console, dan integrasi Elasticsearch. `logger.go` berisi API publik, sementara `logger_internal.go` menangani log processing machinery.
 
 **Struct Utama:** `LoggerEntry` - Log terstruktur kaya dengan timestamp, ID referensi, nama proses, payload request, dan detail response.
 
@@ -433,6 +436,7 @@ type KafkaWriterConfig struct {
 | `ELASTIC_PASSWORD` | Password Elasticsearch | `secret` |
 | `ELASTIC_INDEX_DATA` | Nama index Elasticsearch | `nanopony-logs` |
 | `LOG_OUTPUT_MODE` | Mode output logger | `console`, `file`, `elasticsearch`, `hybrid` |
+| `LOG_FILE_PREFIX` | Prefix nama file log | `any-prefix` (Default: `orion-to-core`) |
 
 ### Struktur Konfigurasi
 
@@ -478,11 +482,8 @@ Config
 
 ## Panduan Cepat
 
-### 1. Inisialisasi Konfigurasi
-
-```go
-config := nanopony.NewConfig()
-```
+### 1. Analisis dibuat pada: 20 April 2026
+*Codebase: NanoPony v0.0.30 (Go 1.25.1)*
 
 ### 2. Build Framework
 
@@ -586,9 +587,12 @@ func main() {
 | `database.go` | Koneksi Oracle, pooling, interpolasi query |
 | `kafka.go` | Pembuatan Kafka writer, SASL/TLS untuk Confluent |
 | `producer.go` | KafkaProducer, KafkaConsumer, interface MessageProducer |
-| `worker.go` | WorkerPool, Poller, DataFetcher |
+| `job.go` | Definisi unit kerja (Job Struct) & Handler |
+| `worker.go` | Eksekusi Worker Pool & pengolahan channel |
+| `poller.go` | Logic pengambilan data periodik & rate limiting |
 | `framework.go` | Framework builder, FrameworkComponents, Start/Shutdown |
-| `logger.go` | Logging terstruktur, rotasi file, Elasticsearch |
+| `logger.go` | Logging terstruktur (Public API) |
+| `logger_internal.go` | Internal logging machinery & async state |
 
 ---
 

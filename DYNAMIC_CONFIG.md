@@ -1,4 +1,4 @@
-# Panduan Konfigurasi Dinamis
+# Panduan Konfigurasi Dinamis (v0.0.30)
 
 Panduan ini menjelaskan cara menggunakan fitur konfigurasi dinamis di NanoPony.
 

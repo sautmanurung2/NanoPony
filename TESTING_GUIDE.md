@@ -18,12 +18,14 @@ Framework NanoPony memiliki **comprehensive test suite** yang mencakup semua kom
 | `config_test.go` | Konfigurasi dasar | ✅ Pass |
 | `config_init_test.go` | Inisialisasi konfigurasi dari env | ✅ Pass |
 | `framework_test.go` | Framework builder dan components | ✅ Pass |
+| `job_test.go` | Job struct validation (Future) | ✅ Pass |
 | `worker_test.go` | Worker pool functionality | ✅ Pass |
 | `poller_test.go` | Poller functionality | ✅ Pass |
 | `producer_test.go` | Kafka producer/consumer | ✅ Pass |
 | `database_test.go` | Oracle database connection | ✅ Pass |
 | `kafka_test.go` | Kafka writer dan SASL | ✅ Pass |
 | `logger_test.go` | Logging functionality | ✅ Pass |
+| `benchmark_multi_framework_test.go` | Benchmark perbandingan (Fiber, Echo, Iris) | ✅ Pass |
 | `benchmark_framework_test.go` | Benchmark framework | ✅ Pass |
 | `benchmark_worker_test.go` | Benchmark worker pool | ✅ Pass |
 | `benchmark_poller_test.go` | Benchmark poller | ✅ Pass |
@@ -334,7 +336,7 @@ jobs:
 
 ---
 
-**Last Updated:** 2025-04-09  
-**Total Test Files:** 16  
-**Total Test Functions:** 100+  
-**Test Status:** ✅ All Passing
+**Last Updated:** 2026-04-20  
+**Total Test Files:** 18  
+**Total Test Functions:** 120+  
+**Test Status:** ✅ All Passing (v0.0.30)

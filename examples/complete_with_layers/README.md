@@ -1,4 +1,4 @@
-# Contoh Lengkap: Arsitektur Layer (Interface, Repository & Service)
+# Contoh Lengkap: Arsitektur Layer (v0.0.30)
 
 Contoh ini menampilkan arsitektur 3-tier yang proper menggunakan framework NanoPony. Arsitektur ini dirancang untuk skalabilitas, kemudahan maintenance, dan kemudahan testing.
 

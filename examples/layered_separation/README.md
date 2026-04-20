@@ -1,4 +1,4 @@
-# Contoh NanoPony: Arsitektur Berlapis dengan Pemisahan Tanggung Jawab
+# Contoh NanoPony: Arsitektur Berlapis (v0.0.30)
 
 Contoh ini menampilkan arsitektur berlapis (layered architecture) dengan pemisahan file yang jelas untuk setiap tanggung jawab. Arsitektur ini dirancang untuk aplikasi skala menengah hingga besar yang membutuhkan struktur kode yang rapi dan mudah di-maintain.
 

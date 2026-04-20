@@ -2,7 +2,7 @@
 
 ## Ringkasan
 
-Dokumen ini menjelaskan arsitektur worker pool di framework NanoPony, mencakup cara worker memproses job, manajemen queue, dan karakteristik performa.
+Dokumen ini menjelaskan arsitektur worker pool di framework NanoPony, mencakup cara worker memproses job, manajemen queue, dan karakteristik performa. Sejak v0.0.30, logika orkestrasi berada di `worker.go` sementara definisi data berada di `job.go`.
 
 ---
 
