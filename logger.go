@@ -140,11 +140,12 @@ func LogFramework(level, process, message string) {
 
 // InitElasticsearch initializes and tests the Elasticsearch client connection.
 func InitElasticsearch() (*elasticsearch.Client, error) {
-	if appConfig == nil {
+	conf := getAppConfig()
+	if conf == nil {
 		return nil, fmt.Errorf("application config not initialized")
 	}
 
-	es := appConfig.EnsureElasticSearch()
+	es := conf.EnsureElasticSearch()
 	cfg := elasticsearch.Config{
 		Addresses: []string{es.ElasticHost},
 		Username:  es.ElasticUsername,

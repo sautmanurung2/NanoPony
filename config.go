@@ -42,6 +42,9 @@ type Config struct {
 	// This allows adding new env vars without modifying the framework.
 	// Use prefixes like "CUSTOM_" to group related variables.
 	Dynamic map[string]string
+
+	// mu protects the configuration fields during lazy initialization
+	mu sync.RWMutex
 }
 
 // AppConfig holds application-level configuration
@@ -139,6 +142,13 @@ func NewConfig() *Config {
 	return appConfig
 }
 
+// getAppConfig returns the global configuration singleton safely.
+func getAppConfig() *Config {
+	configMutex.RLock()
+	defer configMutex.RUnlock()
+	return appConfig
+}
+
 // Validate checks if the configuration is valid and all required fields are set.
 // This is used for fail-fast behavior during framework initialization.
 func (c *Config) Validate() error {
@@ -154,6 +164,15 @@ func (c *Config) Validate() error {
 
 // EnsureOracle ensures that Oracle configuration is initialized.
 func (c *Config) EnsureOracle() *OracleConfig {
+	c.mu.RLock()
+	if c.Oracle.Host != "" {
+		c.mu.RUnlock()
+		return &c.Oracle
+	}
+	c.mu.RUnlock()
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if c.Oracle.Host == "" {
 		initOracle(c)
 	}
@@ -162,6 +181,15 @@ func (c *Config) EnsureOracle() *OracleConfig {
 
 // EnsureKafka ensures that Kafka configuration is initialized.
 func (c *Config) EnsureKafka() *KafkaConfig {
+	c.mu.RLock()
+	if len(c.Kafka.Brokers) > 0 || c.App.KafkaModels == "kafka-confluent" {
+		c.mu.RUnlock()
+		return &c.Kafka
+	}
+	c.mu.RUnlock()
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if len(c.Kafka.Brokers) == 0 && c.App.KafkaModels != "kafka-confluent" {
 		initKafka(c)
 	}
@@ -170,6 +198,15 @@ func (c *Config) EnsureKafka() *KafkaConfig {
 
 // EnsureKafkaConfluent ensures that Kafka Confluent configuration is initialized.
 func (c *Config) EnsureKafkaConfluent() *KafkaConfluentConfig {
+	c.mu.RLock()
+	if c.KafkaConfluent.ApiKey != "" || c.App.KafkaModels != "kafka-confluent" {
+		c.mu.RUnlock()
+		return &c.KafkaConfluent
+	}
+	c.mu.RUnlock()
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if c.KafkaConfluent.ApiKey == "" && c.App.KafkaModels == "kafka-confluent" {
 		initKafkaConfluent(c)
 	}
@@ -178,6 +215,15 @@ func (c *Config) EnsureKafkaConfluent() *KafkaConfluentConfig {
 
 // EnsureElasticSearch ensures that Elasticsearch configuration is initialized.
 func (c *Config) EnsureElasticSearch() *ElasticSearchConfig {
+	c.mu.RLock()
+	if c.ElasticSearch.ElasticHost != "" {
+		c.mu.RUnlock()
+		return &c.ElasticSearch
+	}
+	c.mu.RUnlock()
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if c.ElasticSearch.ElasticHost == "" {
 		initElasticSearch(c)
 	}

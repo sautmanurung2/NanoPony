@@ -105,11 +105,16 @@ func (le *LoggerEntry) sendToElasticSearchNow(payload any) {
 		return
 	}
 
+	conf := getAppConfig()
+	if conf == nil {
+		return
+	}
+
 	payloadMap, _ := processPayload(payload)
 	le.Request.Payload = payloadMap
 	data, _ := json.Marshal(le)
 
-	esIndexWithDate := appConfig.ElasticSearch.ElasticPrefixIndex + time.Now().Format("20060102")
+	esIndexWithDate := conf.ElasticSearch.ElasticPrefixIndex + time.Now().Format("20060102")
 	res, err := EsClient.Index(esIndexWithDate, bytes.NewReader(data))
 	if err == nil {
 		_ = res.Body.Close()
@@ -168,8 +173,9 @@ func processPayload(payload any) (map[string]any, error) {
 func generateLogFileName() string {
 	now := time.Now()
 	prefix := "orion-to-core"
-	if appConfig != nil && appConfig.App.LogFilePrefix != "" {
-		prefix = appConfig.App.LogFilePrefix
+	conf := getAppConfig()
+	if conf != nil && conf.App.LogFilePrefix != "" {
+		prefix = conf.App.LogFilePrefix
 	}
 	return fmt.Sprintf("%s-%d-%02d-%02d.log", prefix, now.Year(), int(now.Month()), now.Day())
 }
