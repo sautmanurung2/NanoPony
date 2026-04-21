@@ -29,8 +29,83 @@ jobs:
           go-version-file: 'go.mod'
           cache: true
 
-      - name: Run tests
-        run: go test -v -race ./...
+      - name: Run Unit Tests
+        id: unit_tests
+        run: |
+          go test -v -race ./... > unit-tests.log 2>&1
+          cat unit-tests.log
+
+      - name: Run Fuzz Tests (Sanity Check)
+        id: fuzz_tests
+        if: always() && steps.unit_tests.outcome != 'skipped'
+        run: |
+          echo "Running Fuzz Tests Sanity Check..."
+          FUZZ_TESTS=(
+            "FuzzGetEnvValue"
+            "FuzzProcessPayload"
+            "FuzzLoadDynamic"
+            "FuzzJobSubmission"
+            "FuzzKafkaProduce"
+            "FuzzFormatBytes"
+            "FuzzDatabaseUtils"
+            "FuzzStressFrameworkLifecycle"
+            "FuzzStressWorkerPoolParams"
+            "FuzzStressPollerParams"
+          )
+          
+          touch fuzz-tests.log
+          for test in "${FUZZ_TESTS[@]}"; do
+            echo "--- Fuzzing $test ---" | tee -a fuzz-tests.log
+            go test -v -fuzz=$test -fuzztime 3s >> fuzz-tests.log 2>&1
+          done
+          cat fuzz-tests.log
+
+      - name: Upload Test Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ github.run_id }}
+          path: |
+            unit-tests.log
+            fuzz-tests.log
+
+      - name: Generate Step Summary
+        if: always()
+        run: |
+          echo "### 🧪 Test Results Summary" >> $GITHUB_STEP_SUMMARY
+          
+          # Unit Test Summary
+          if grep -q "FAIL" unit-tests.log; then
+            echo "❌ **Unit Tests**: FAILED" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ **Unit Tests**: PASSED" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Fuzz Test Summary
+          if [ -f fuzz-tests.log ]; then
+            if grep -q "FAIL" fuzz-tests.log; then
+              echo "❌ **Fuzz Tests**: FAILED" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "✅ **Fuzz Tests**: PASSED" >> $GITHUB_STEP_SUMMARY
+            fi
+          fi
+          
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "<details><summary>🔍 View Unit Test Logs</summary>" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`text" >> $GITHUB_STEP_SUMMARY
+          cat unit-tests.log >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "</details>" >> $GITHUB_STEP_SUMMARY
+          
+          if [ -f fuzz-tests.log ]; then
+            echo "<details><summary>🔍 View Fuzz Test Logs</summary>" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`text" >> $GITHUB_STEP_SUMMARY
+            cat fuzz-tests.log >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            echo "</details>" >> $GITHUB_STEP_SUMMARY
+          fi
 
       - name: Get latest tag
         id: get_tag
