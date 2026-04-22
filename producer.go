@@ -49,13 +49,13 @@ func NewKafkaProducer(writer *kafka.Writer) *KafkaProducer {
 
 // Produce sends a message to the specified topic using background context.
 // Returns true if successful, or an error if the message could not be sent.
-func (p *KafkaProducer) Produce(topic string, message any) (bool, error) {
-	return p.ProduceWithContext(context.Background(), topic, message)
+func (p *KafkaProducer) Produce(topic string, message any, loggerEntry *LoggerEntry) (bool, error) {
+	return p.ProduceWithContext(context.Background(), topic, message, loggerEntry)
 }
 
 // ProduceWithContext sends a message with context support for cancellation and timeout.
 // The message is marshaled to JSON before sending.
-func (p *KafkaProducer) ProduceWithContext(ctx context.Context, topic string, message any) (bool, error) {
+func (p *KafkaProducer) ProduceWithContext(ctx context.Context, topic string, message any, loggerEntry *LoggerEntry) (bool, error) {
 	messageBytes, err := json.Marshal(message)
 	if err != nil {
 		return false, fmt.Errorf("failed to marshal message: %w", err)
@@ -67,8 +67,19 @@ func (p *KafkaProducer) ProduceWithContext(ctx context.Context, topic string, me
 	}
 
 	if err := p.writer.WriteMessages(ctx, kafkaMsg); err != nil {
+		info := fmt.Sprintf("Error writing message to Kafka : %s", err)
+		loggerEntry.LoggingData("error", message, ResponseLog{
+			Status:  "error",
+			Message: info,
+		})
 		return false, fmt.Errorf("failed to write message to kafka: %w", err)
 	}
+
+	info := fmt.Sprintf("message sent to topic : %s and data : %s", topic, messageBytes)
+	loggerEntry.LoggingData("info", message, ResponseLog{
+		Status:  "success",
+		Message: info,
+	})
 
 	return true, nil
 }
