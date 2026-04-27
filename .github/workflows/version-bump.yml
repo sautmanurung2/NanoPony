@@ -29,6 +29,9 @@ jobs:
           go-version-file: 'go.mod'
           cache: true
 
+      - name: Format Go code
+        run: gofmt -s -w .
+
       - name: Run Unit Tests
         id: unit_tests
         run: |
