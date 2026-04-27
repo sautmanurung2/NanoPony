@@ -35,30 +35,20 @@ func NewKafkaWriter(config KafkaWriterConfig) *kafka.Writer {
 	}
 }
 
-// NewKafkaWriterFromConfig creates Kafka writer from Config
+// NewKafkaWriterFromConfig creates Kafka writer from Config.
+// Reuses NewKafkaWriter to avoid duplicating the writer construction.
 func NewKafkaWriterFromConfig(conf *Config) *kafka.Writer {
 	config := DefaultKafkaWriterConfig()
 
 	if conf.App.KafkaModels == "kafka-confluent" {
 		kconf := conf.EnsureKafkaConfluent()
 		config.Brokers = kconf.BootstrapServers
-		writer := &kafka.Writer{
-			Addr:         kafka.TCP(config.Brokers...),
-			Balancer:     config.Balancer,
-			BatchTimeout: config.BatchTimeout,
-			Transport:    createSASLTransport(kconf.ApiKey, kconf.ApiSecret),
-		}
-		return writer
+		config.Transport = createSASLTransport(kconf.ApiKey, kconf.ApiSecret)
 	} else {
-		kconf := conf.EnsureKafka()
-		config.Brokers = kconf.Brokers
-		writer := &kafka.Writer{
-			Addr:         kafka.TCP(config.Brokers...),
-			Balancer:     config.Balancer,
-			BatchTimeout: config.BatchTimeout,
-		}
-		return writer
+		config.Brokers = conf.EnsureKafka().Brokers
 	}
+
+	return NewKafkaWriter(config)
 }
 
 // createSASLTransport creates a SASL/TLS transport for Confluent Cloud

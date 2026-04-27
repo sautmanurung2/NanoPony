@@ -50,19 +50,19 @@ func initLogWorker() {
 	})
 }
 
-// processLogRequest dispatches a log request to the appropriate destination.
+// processLogRequest dispatches a log request to the appropriate output destination.
 func processLogRequest(req logRequest) {
 	switch req.mode {
 	case "console":
-		req.entry.printToConsole()
+		req.entry.writeToConsole()
 	case "file":
-		req.entry.sendToFileNow()
+		req.entry.writeToLogFile()
 	case "elasticsearch":
-		req.entry.sendToElasticSearchNow(req.payload)
+		req.entry.writeToElasticsearch(req.payload)
 	case "hybrid":
-		req.entry.printToConsole()
-		req.entry.sendToFileNow()
-		req.entry.sendToElasticSearchNow(req.payload)
+		req.entry.writeToConsole()
+		req.entry.writeToLogFile()
+		req.entry.writeToElasticsearch(req.payload)
 	}
 }
 
@@ -86,21 +86,25 @@ func initLoggerFile() {
 	})
 }
 
-// Helper methods for internal logging machinery
+// --- Output methods (called by processLogRequest) ---
 
-func (le *LoggerEntry) sendToFileNow() {
+// writeToLogFile serializes the entry to JSON and appends it to the rolling log file.
+func (le *LoggerEntry) writeToLogFile() {
 	logMessage, _ := json.Marshal(le)
 	if logFileWriter != nil {
 		_, _ = fmt.Fprintf(logFileWriter, "%s\n", string(logMessage))
 	}
 }
 
-func (le *LoggerEntry) printToConsole() {
+// writeToConsole prints the entry as JSON to stdout.
+func (le *LoggerEntry) writeToConsole() {
 	data, _ := json.Marshal(le)
 	fmt.Println(string(data))
 }
 
-func (le *LoggerEntry) sendToElasticSearchNow(payload any) {
+// writeToElasticsearch sends the entry + payload to an Elasticsearch index.
+// The index name is: <ELASTIC_PREFIX_INDEX><YYYYMMDD>
+func (le *LoggerEntry) writeToElasticsearch(payload any) {
 	if err := ensureElasticsearchClient(); err != nil {
 		return
 	}

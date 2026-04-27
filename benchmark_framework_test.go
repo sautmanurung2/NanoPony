@@ -225,7 +225,7 @@ func BenchmarkFrameworkWithMultipleCleanup(b *testing.B) {
 	}
 }
 
-// BenchmarkFrameworkGetters tests getter methods performance
+// BenchmarkFrameworkGetters tests direct field access performance
 func BenchmarkFrameworkGetters(b *testing.B) {
 	b.ReportAllocs()
 	ResetConfig()
@@ -241,11 +241,11 @@ func BenchmarkFrameworkGetters(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		_ = components.GetConfig()
-		_ = components.GetDB()
-		_ = components.GetWorkerPool()
-		_ = components.GetPoller()
-		_ = components.GetProducer()
+		_ = components.Config
+		_ = components.DB
+		_ = components.WorkerPool
+		_ = components.Poller
+		_ = components.Producer
 	}
 }
 

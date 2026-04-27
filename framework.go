@@ -1,3 +1,18 @@
+// framework.go — Builder pattern for wiring NanoPony components together.
+//
+// Builder flow:
+//
+//	NewFramework()
+//	   .WithConfig(config)          ← required
+//	   .WithDatabase()              ← optional (needs config)
+//	   .WithKafkaWriter()           ← optional (needs config)
+//	   .WithProducer()              ← optional (needs kafka writer)
+//	   .WithWorkerPool(n, queueSz)  ← optional
+//	   .WithPoller(cfg, fetcher)    ← optional (needs worker pool)
+//	   .Build()                     ← returns FrameworkComponents
+//
+// Use Build() for quick prototyping (panics on error).
+// Use BuildSafe() for production code (returns error).
 package nanopony
 
 import (
@@ -5,7 +20,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"strings"
 	"sync"
 
 	"github.com/segmentio/kafka-go"
@@ -76,21 +90,11 @@ func (f *Framework) WithConfig(config *Config) *Framework {
 // Panics if config is not set or connection fails.
 // For error-handling version, see WithDatabaseSafe.
 func (f *Framework) WithDatabase() *Framework {
-	if f.config == nil {
-		panic(ErrConfigNotSet.Error())
-	}
-
-	db, err := NewOracleFromConfig(f.config)
+	fw, err := f.WithDatabaseSafe()
 	if err != nil {
-		panic(fmt.Errorf("failed to create database connection: %w", err))
+		panic(err.Error())
 	}
-
-	f.db = db
-	f.AddCleanup(func() error {
-		return CloseDB(f.db)
-	})
-
-	return f
+	return fw
 }
 
 // WithDatabaseSafe sets up the Oracle database connection with error handling.
@@ -215,18 +219,40 @@ func (f *Framework) AddCleanup(fn func() error) *Framework {
 //   - if Build() is called more than once
 //   - if Config is missing (WithConfig was not called)
 //   - if Config validation fails (e.g., missing environment variables)
+//
+// For a non-panicking version, see BuildSafe.
 func (f *Framework) Build() *FrameworkComponents {
+	components, err := f.BuildSafe()
+	if err != nil {
+		panic(err.Error())
+	}
+	return components
+}
+
+// BuildSafe finalizes the configuration and returns FrameworkComponents.
+// Unlike Build(), this method returns an error instead of panicking.
+// This is recommended for production code.
+//
+// Example:
+//
+//	components, err := nanopony.NewFramework().
+//	    WithConfig(config).
+//	    WithWorkerPool(5, 100).
+//	    BuildSafe()
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+func (f *Framework) BuildSafe() (*FrameworkComponents, error) {
 	if f.built {
-		panic(ErrAlreadyBuilt.Error())
+		return nil, ErrAlreadyBuilt
 	}
 
 	if f.config == nil {
-		panic("Config is required. Call WithConfig() before Build().")
+		return nil, fmt.Errorf("Config is required. Call WithConfig() before Build()")
 	}
 
-	// Perform fail-fast validation of environment configuration
 	if err := f.config.Validate(); err != nil {
-		panic(fmt.Sprintf("Configuration validation failed: %v", err))
+		return nil, fmt.Errorf("configuration validation failed: %w", err)
 	}
 
 	f.built = true
@@ -244,7 +270,7 @@ func (f *Framework) Build() *FrameworkComponents {
 		WorkerPool:   f.workerPool,
 		Poller:       f.poller,
 		cleanupFuncs: f.cleanupFuncs,
-	}
+	}, nil
 }
 
 // FrameworkComponents holds all initialized framework components.
@@ -331,75 +357,7 @@ func (fc *FrameworkComponents) Shutdown(ctx context.Context) error {
 	wg.Wait()
 
 	// Return aggregated errors or nil
-	if len(allErrors) == 0 {
-		return nil
-	}
-	if len(allErrors) == 1 {
-		return allErrors[0]
-	}
-
-	// Join all errors for comprehensive error reporting
-	var errMsgs []string
-	for _, err := range allErrors {
-		errMsgs = append(errMsgs, err.Error())
-	}
-	return errors.New("multiple shutdown errors: " + strings.Join(errMsgs, "; "))
+	return errors.Join(allErrors...)
 }
 
-// GetDB returns the database connection.
-// Returns nil if database was not configured.
-// Use HasDB() to check before use.
-func (fc *FrameworkComponents) GetDB() *sql.DB {
-	return fc.DB
-}
 
-// HasDB returns true if a database connection was configured.
-func (fc *FrameworkComponents) HasDB() bool {
-	return fc.DB != nil
-}
-
-// GetProducer returns the Kafka producer.
-// Returns nil if producer was not configured.
-// Use HasProducer() to check before use.
-func (fc *FrameworkComponents) GetProducer() *KafkaProducer {
-	return fc.Producer
-}
-
-// HasProducer returns true if a Kafka producer was configured.
-func (fc *FrameworkComponents) HasProducer() bool {
-	return fc.Producer != nil
-}
-
-// GetConfig returns the configuration.
-func (fc *FrameworkComponents) GetConfig() *Config {
-	return fc.Config
-}
-
-// HasConfig returns true if configuration was set.
-func (fc *FrameworkComponents) HasConfig() bool {
-	return fc.Config != nil
-}
-
-// GetWorkerPool returns the worker pool.
-// Returns nil if worker pool was not configured.
-// Use HasWorkerPool() to check before use.
-func (fc *FrameworkComponents) GetWorkerPool() *WorkerPool {
-	return fc.WorkerPool
-}
-
-// HasWorkerPool returns true if a worker pool was configured.
-func (fc *FrameworkComponents) HasWorkerPool() bool {
-	return fc.WorkerPool != nil
-}
-
-// GetPoller returns the poller.
-// Returns nil if poller was not configured.
-// Use HasPoller() to check before use.
-func (fc *FrameworkComponents) GetPoller() *Poller {
-	return fc.Poller
-}
-
-// HasPoller returns true if a poller was configured.
-func (fc *FrameworkComponents) HasPoller() bool {
-	return fc.Poller != nil
-}

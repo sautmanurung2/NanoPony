@@ -28,8 +28,13 @@ import (
 // The Dynamic field allows loading arbitrary environment variables without
 // modifying the framework code.
 type Config struct {
+	// --- Core Config ---
+
 	// App holds application-level configuration (environment, Kafka model, operation mode)
 	App AppConfig
+
+	// --- Infrastructure Configs (lazy-initialized via Ensure* methods) ---
+
 	// Oracle holds Oracle database connection details
 	Oracle OracleConfig
 	// Kafka holds standard Kafka broker configuration
@@ -38,13 +43,22 @@ type Config struct {
 	KafkaConfluent KafkaConfluentConfig
 	// ElasticSearch holds Elasticsearch connection details
 	ElasticSearch ElasticSearchConfig
+
+	// --- Dynamic Config ---
+
 	// Dynamic is a map for arbitrary environment variables.
 	// This allows adding new env vars without modifying the framework.
 	// Use prefixes like "CUSTOM_" to group related variables.
 	Dynamic map[string]string
 
-	// mu protects the configuration fields during lazy initialization
-	mu sync.RWMutex
+	// --- Internal: sync.Once for lazy initialization ---
+	// Each Ensure* method uses its own sync.Once to guarantee
+	// the subsystem config is loaded exactly once, safely.
+
+	oracleOnce    sync.Once
+	kafkaOnce     sync.Once
+	confluentOnce sync.Once
+	elasticOnce   sync.Once
 }
 
 // AppConfig holds application-level configuration
@@ -94,15 +108,16 @@ type KafkaConfluentConfig struct {
 
 // appConfig is the global configuration singleton.
 // Use NewConfig() or BuildConfig() to initialize it.
-// Protected by configMutex for thread safety.
+// Protected by configOnce for thread-safe initialization.
 var appConfig *Config
 var configMutex sync.RWMutex
+var configOnce sync.Once
 
 var loadEnvOnce sync.Once
 
 // NewConfig initializes and returns a new Config instance.
 // It loads environment variables from .env file if present (only once).
-// Configuration is loaded once and cached (singleton pattern).
+// Configuration is loaded once and cached (singleton pattern using sync.Once).
 //
 // Environment Variables Required:
 //   - GO_ENV: local, staging, or production
@@ -116,28 +131,15 @@ func NewConfig() *Config {
 		_ = godotenv.Load()
 	})
 
-	configMutex.RLock()
-	if appConfig != nil {
-		configMutex.RUnlock()
-		return appConfig
-	}
-	configMutex.RUnlock()
+	configOnce.Do(func() {
+		appConfig = &Config{
+			Dynamic: make(map[string]string),
+		}
 
-	configMutex.Lock()
-	defer configMutex.Unlock()
-
-	// Double-check after acquiring write lock
-	if appConfig != nil {
-		return appConfig
-	}
-
-	appConfig = &Config{
-		Dynamic: make(map[string]string),
-	}
-	
-	// Only initialize core app config, others will be initialized lazily or when needed
-	initApp(appConfig)
-	initKafkaModels(appConfig)
+		// Only initialize core app config, others will be initialized lazily or when needed
+		initApp(appConfig)
+		initKafkaModels(appConfig)
+	})
 
 	return appConfig
 }
@@ -162,73 +164,35 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-// EnsureOracle ensures that Oracle configuration is initialized.
+// EnsureOracle loads Oracle config from env vars exactly once.
+// Safe to call from multiple goroutines.
 func (c *Config) EnsureOracle() *OracleConfig {
-	c.mu.RLock()
-	if c.Oracle.Host != "" {
-		c.mu.RUnlock()
-		return &c.Oracle
-	}
-	c.mu.RUnlock()
-
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.Oracle.Host == "" {
-		initOracle(c)
-	}
+	c.oracleOnce.Do(func() { initOracle(c) })
 	return &c.Oracle
 }
 
-// EnsureKafka ensures that Kafka configuration is initialized.
+// EnsureKafka loads Kafka broker config from env vars exactly once.
+// If KafkaModels is "kafka-confluent", this delegates to initKafkaConfluent.
+// Safe to call from multiple goroutines.
 func (c *Config) EnsureKafka() *KafkaConfig {
-	c.mu.RLock()
-	if len(c.Kafka.Brokers) > 0 || c.App.KafkaModels == "kafka-confluent" {
-		c.mu.RUnlock()
-		return &c.Kafka
-	}
-	c.mu.RUnlock()
-
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if len(c.Kafka.Brokers) == 0 && c.App.KafkaModels != "kafka-confluent" {
-		initKafka(c)
-	}
+	c.kafkaOnce.Do(func() { initKafka(c) })
 	return &c.Kafka
 }
 
-// EnsureKafkaConfluent ensures that Kafka Confluent configuration is initialized.
+// EnsureKafkaConfluent loads Confluent Cloud config from env vars exactly once.
+// Safe to call from multiple goroutines.
 func (c *Config) EnsureKafkaConfluent() *KafkaConfluentConfig {
-	c.mu.RLock()
-	if c.KafkaConfluent.ApiKey != "" || c.App.KafkaModels != "kafka-confluent" {
-		c.mu.RUnlock()
-		return &c.KafkaConfluent
-	}
-	c.mu.RUnlock()
-
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.KafkaConfluent.ApiKey == "" && c.App.KafkaModels == "kafka-confluent" {
-		initKafkaConfluent(c)
-	}
+	c.confluentOnce.Do(func() { initKafkaConfluent(c) })
 	return &c.KafkaConfluent
 }
 
-// EnsureElasticSearch ensures that Elasticsearch configuration is initialized.
+// EnsureElasticSearch loads Elasticsearch config from env vars exactly once.
+// Safe to call from multiple goroutines.
 func (c *Config) EnsureElasticSearch() *ElasticSearchConfig {
-	c.mu.RLock()
-	if c.ElasticSearch.ElasticHost != "" {
-		c.mu.RUnlock()
-		return &c.ElasticSearch
-	}
-	c.mu.RUnlock()
-
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.ElasticSearch.ElasticHost == "" {
-		initElasticSearch(c)
-	}
+	c.elasticOnce.Do(func() { initElasticSearch(c) })
 	return &c.ElasticSearch
 }
+
 
 // ResetConfig resets the configuration singleton.
 // This is primarily useful for testing purposes.
@@ -240,6 +204,7 @@ func ResetConfig() {
 	configMutex.Lock()
 	defer configMutex.Unlock()
 	appConfig = nil
+	configOnce = sync.Once{} // Reset so NewConfig() can reinitialize
 }
 
 // BuildConfig builds configuration with custom initializers.

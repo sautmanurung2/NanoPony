@@ -1,3 +1,19 @@
+// poller.go — Periodic data fetching with rate-limited job submission.
+//
+// Architecture:
+//
+//	ticker (every Interval)
+//	   ↓
+//	pollOnce()
+//	   ├── acquire jobSlot (semaphore — limits concurrent polls)
+//	   ├── dataFetcher.Fetch()  → []any
+//	   ├── for each item → workerPool.SubmitBlocking(job)
+//	   └── release jobSlot
+//
+// The jobSlots channel acts as a counting semaphore:
+//   - Capacity = JobSlotSize (default 1)
+//   - If no slot available, the tick is skipped (prevents pile-up)
+//   - This is NOT the same as WorkerPool queue size
 package nanopony
 
 import (
@@ -142,13 +158,8 @@ func (p *Poller) pollOnce() {
 		return
 	}
 
-	// Always release slot unless we are in the middle of submission
-	shouldRelease := true
-	defer func() {
-		if shouldRelease {
-			p.releaseSlot()
-		}
-	}()
+	// Always release slot when done
+	defer p.releaseSlot()
 
 	data, err := p.dataFetcher.Fetch()
 	if err != nil {

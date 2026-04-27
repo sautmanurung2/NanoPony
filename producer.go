@@ -12,18 +12,21 @@ import (
 // MessageProducer defines the interface for producing messages to Kafka.
 // This abstraction allows for easy testing and swapping implementations.
 //
+// Each Produce call requires a *LoggerEntry for structured logging of the
+// send result (success or failure). Create one via NewLogger() or NewLoggerFromOptions().
+//
 // Example:
 //
 //	producer := NewKafkaProducer(writer)
-//	success, err := producer.Produce("my-topic", map[string]interface{}{
-//	    "id":   1,
-//	    "data": "hello",
-//	})
+//	logger := NewLoggerFromOptions(LoggerOptions{ServiceName: "my-svc"})
+//	success, err := producer.Produce("my-topic", myPayload, logger)
 type MessageProducer interface {
-	// Produce sends a message to the specified topic with background context
-	Produce(topic string, message any) (bool, error)
-	// ProduceWithContext sends a message with context support for cancellation and timeout
-	ProduceWithContext(ctx context.Context, topic string, message any) (bool, error)
+	// Produce sends a message to the specified topic with background context.
+	// The loggerEntry is used to log the outcome of the send operation.
+	Produce(topic string, message any, loggerEntry *LoggerEntry) (bool, error)
+	// ProduceWithContext sends a message with context support for cancellation and timeout.
+	// The loggerEntry is used to log the outcome of the send operation.
+	ProduceWithContext(ctx context.Context, topic string, message any, loggerEntry *LoggerEntry) (bool, error)
 	// Close closes the producer and releases resources
 	Close() error
 }

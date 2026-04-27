@@ -1,3 +1,22 @@
+// logger.go — Structured async logging for NanoPony.
+//
+// Architecture overview:
+//
+//	NewLogger()
+//	   ↓
+//	LoggerEntry.LoggingData(level, payload, response)
+//	   ↓
+//	logChan (buffered channel, cap=1000)
+//	   ↓
+//	background worker goroutine
+//	   ↓ dispatches by mode:
+//	   ├── "console"       → stdout JSON
+//	   ├── "file"          → rolling log file (lumberjack)
+//	   ├── "elasticsearch" → ES index
+//	   └── "hybrid" (default) → console + file + ES
+//
+// All logging is non-blocking. If the channel is full, the log is dropped
+// with a warning printed to stdout.
 package nanopony
 
 import (
@@ -46,6 +65,8 @@ type ResponseLog struct {
 
 // NewLogger creates and returns a new structured logger entry.
 // It automatically handles working directory caching and internal worker initialization.
+//
+// For a more readable alternative with named parameters, see NewLoggerFromOptions.
 func NewLogger(
 	serviceName, userLogin, referenceId, referenceNumber,
 	systemName, processName, entity, additionals string,
@@ -71,18 +92,50 @@ func NewLogger(
 	}
 }
 
-// LoggingData schedules a log message to be processed asynchronously.
-// The output destination is determined by the LOG_OUTPUT_MODE environment variable.
-func (le *LoggerEntry) LoggingData(level string, payload any, response ResponseLog) {
+// LoggerOptions provides named parameters for creating a LoggerEntry.
+// This is easier to read than NewLogger's 8 positional string parameters.
+//
+// Example:
+//
+//	logger := nanopony.NewLoggerFromOptions(nanopony.LoggerOptions{
+//	    ServiceName: "OrderService",
+//	    UserLogin:   "admin",
+//	    SystemName:  "Core",
+//	    ProcessName: "ProcessOrder",
+//	    Entity:      "Order",
+//	})
+type LoggerOptions struct {
+	ServiceName     string
+	UserLogin       string
+	ReferenceId     string
+	ReferenceNumber string
+	SystemName      string
+	ProcessName     string
+	Entity          string
+	Additionals     string
+}
+
+// NewLoggerFromOptions creates a LoggerEntry from named options.
+// This is the recommended way to create loggers in new code.
+func NewLoggerFromOptions(opts LoggerOptions) *LoggerEntry {
+	return NewLogger(
+		opts.ServiceName, opts.UserLogin, opts.ReferenceId, opts.ReferenceNumber,
+		opts.SystemName, opts.ProcessName, opts.Entity, opts.Additionals,
+	)
+}
+
+// finalize sets the end timestamp, duration, level, and response on a log entry.
+func (le *LoggerEntry) finalize(level string, response ResponseLog) {
 	le.EndTimestamp = time.Now()
 	le.Duration = le.EndTimestamp.Sub(le.StartTimestamp).Milliseconds()
 	le.Level = level
 	le.Response = response
+}
 
-	mode := os.Getenv("LOG_OUTPUT_MODE")
-	if mode == "" {
-		mode = "hybrid"
-	}
+// sendLog is the shared entry point for all log dispatching.
+// It finalizes the entry and sends it to the async processing channel.
+func (le *LoggerEntry) sendLog(level, mode string, payload any, response ResponseLog) {
+	le.finalize(level, response)
 
 	if logChan != nil {
 		select {
@@ -93,34 +146,29 @@ func (le *LoggerEntry) LoggingData(level string, payload any, response ResponseL
 	}
 }
 
+// LoggingData schedules a log message to be processed asynchronously.
+// The output destination is determined by the LOG_OUTPUT_MODE environment variable:
+//
+//	"console"       — print JSON to stdout
+//	"file"          — write to rolling log file
+//	"elasticsearch" — send to Elasticsearch index
+//	"hybrid"        — all three (default if LOG_OUTPUT_MODE is not set)
+func (le *LoggerEntry) LoggingData(level string, payload any, response ResponseLog) {
+	mode := os.Getenv("LOG_OUTPUT_MODE")
+	if mode == "" {
+		mode = "hybrid"
+	}
+	le.sendLog(level, mode, payload, response)
+}
+
 // SendToFile specifically queues the log to be written to a file.
 func (le *LoggerEntry) SendToFile(level string, response ResponseLog) {
-	le.Level = level
-	le.Response = response
-	le.EndTimestamp = time.Now()
-	le.Duration = le.EndTimestamp.Sub(le.StartTimestamp).Milliseconds()
-
-	if logChan != nil {
-		select {
-		case logChan <- logRequest{entry: le, mode: "file"}:
-		default:
-		}
-	}
+	le.sendLog(level, "file", nil, response)
 }
 
 // SendToElasticSearch specifically queues the log to be sent to Elasticsearch.
 func (le *LoggerEntry) SendToElasticSearch(level string, payload any, response ResponseLog) {
-	le.Level = level
-	le.Response = response
-	le.EndTimestamp = time.Now()
-	le.Duration = le.EndTimestamp.Sub(le.StartTimestamp).Milliseconds()
-
-	if logChan != nil {
-		select {
-		case logChan <- logRequest{entry: le, payload: payload, mode: "elasticsearch"}:
-		default:
-		}
-	}
+	le.sendLog(level, "elasticsearch", payload, response)
 }
 
 // LogInternal is a helper for logging internal messages using an existing LoggerEntry.

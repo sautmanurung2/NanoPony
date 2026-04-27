@@ -173,16 +173,16 @@ func TestFrameworkComponentsGetters(t *testing.T) {
 		Poller:     poller,
 	}
 
-	if components.GetConfig() != config {
-		t.Error("Expected GetConfig to return config")
+	if components.Config != config {
+		t.Error("Expected Config to return config")
 	}
-	if components.GetDB() != nil {
-		t.Error("Expected GetDB to return nil")
+	if components.DB != nil {
+		t.Error("Expected DB to be nil")
 	}
-	if components.GetWorkerPool() != pool {
-		t.Error("Expected GetWorkerPool to return pool")
+	if components.WorkerPool != pool {
+		t.Error("Expected WorkerPool to return pool")
 	}
-	if components.GetPoller() != poller {
-		t.Error("Expected GetPoller to return poller")
+	if components.Poller != poller {
+		t.Error("Expected Poller to return poller")
 	}
 }

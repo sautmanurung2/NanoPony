@@ -88,7 +88,7 @@ func getEnvValue(cfg envConfig) string {
 //	// Returns: {host: "HOST_STAGING", port: "PORT_STAGING", ...}
 func getOracleEnv(env string) oracleEnv {
 	switch env {
-	case "staging":
+	case "staging", "localhost", "local":
 		return oracleEnv{
 			host:     "HOST_STAGING",
 			port:     "PORT_STAGING",
@@ -96,21 +96,14 @@ func getOracleEnv(env string) oracleEnv {
 			username: "USERNAME_STAGING",
 			password: "PASSWORD_STAGING",
 		}
-	case "localhost", "local":
+	default:
 		return oracleEnv{
-			host:     "HOST_STAGING",
-			port:     "PORT_STAGING",
-			database: "DATABASE_STAGING",
-			username: "USERNAME_STAGING",
-			password: "PASSWORD_STAGING",
+			host:     "HOST_PRODUCTION",
+			port:     "PORT_PRODUCTION",
+			database: "DATABASE_PRODUCTION",
+			username: "USERNAME_PRODUCTION",
+			password: "PASSWORD_PRODUCTION",
 		}
-	}
-	return oracleEnv{
-		host:     "HOST_PRODUCTION",
-		port:     "PORT_PRODUCTION",
-		database: "DATABASE_PRODUCTION",
-		username: "USERNAME_PRODUCTION",
-		password: "PASSWORD_PRODUCTION",
 	}
 }
 
@@ -129,9 +122,7 @@ func getKafkaBrokers(conf *Config) []string {
 	switch {
 	case kafkaModel == "kafka-production" && env == "production":
 		brokerEnv = "KAFKA_BROKERS_PRODUCTION"
-	case kafkaModel == "kafka-staging" && env == "staging":
-		brokerEnv = "KAFKA_BROKERS_STAGING"
-	case kafkaModel == "kafka-staging" && env == "localhost":
+	case kafkaModel == "kafka-staging" && (env == "staging" || env == "localhost"):
 		brokerEnv = "KAFKA_BROKERS_STAGING"
 	default:
 		return []string{}

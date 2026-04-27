@@ -1,3 +1,14 @@
+// worker.go — Concurrent job processing using a fan-out worker pool.
+//
+// Architecture (fan-out pattern):
+//
+//	                   ┌─── worker 0 ──→ handler(job)
+//	Submit(job) ──→ jobChan ──┼─── worker 1 ──→ handler(job)
+//	                   └─── worker N ──→ handler(job)
+//
+// Submit() is non-blocking (returns ErrQueueFull if buffer full).
+// SubmitBlocking() waits for space in the channel (backpressure).
+// Workers run as goroutines, each pulling from the shared jobChan.
 package nanopony
 
 import (

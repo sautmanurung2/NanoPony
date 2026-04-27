@@ -120,7 +120,7 @@ func TestEnsureLogDirectoryExists(t *testing.T) {
 	}
 }
 
-func TestLoggerEntryPrintToConsole(t *testing.T) {
+func TestLoggerEntryWriteToConsole(t *testing.T) {
 	logger := NewLogger("TestService", "user", "ref", "", "System", "Process", "Entity", "")
 
 	// Should not panic
@@ -130,7 +130,7 @@ func TestLoggerEntryPrintToConsole(t *testing.T) {
 		}
 	}()
 
-	logger.printToConsole()
+	logger.writeToConsole()
 }
 
 func TestLoggerEntryLoggingData(t *testing.T) {
