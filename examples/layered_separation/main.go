@@ -2,17 +2,18 @@
 // Menampilkan arsitektur yang proper dengan pemisahan file yang jelas
 //
 // Structure:
-//   main.go                      - Application entry point
-//   config/
-//     config.go                  - Configuration management
-//   models/
-//     models.go                  - Entity and DTO definitions
-//   interfaces/
-//     interfaces.go              - Repository and Service interfaces
-//   repository/
-//     repository.go              - Repository implementations
-//   service/
-//     service.go                 - Service implementations
+//
+//	main.go                      - Application entry point
+//	config/
+//	  config.go                  - Configuration management
+//	models/
+//	  models.go                  - Entity and DTO definitions
+//	interfaces/
+//	  interfaces.go              - Repository and Service interfaces
+//	repository/
+//	  repository.go              - Repository implementations
+//	service/
+//	  service.go                 - Service implementations
 //
 // Run: go run .
 package main
