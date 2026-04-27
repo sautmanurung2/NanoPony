@@ -122,6 +122,7 @@ var loadEnvOnce sync.Once
 // Environment Variables Required:
 //   - GO_ENV: local, staging, or production
 //   - KAFKA_MODELS: kafka-localhost, kafka-staging, kafka-production, or kafka-confluent
+//   - OPERATION: the operation mode (custom, can be defined per application)
 //
 // Example:
 //
@@ -139,6 +140,7 @@ func NewConfig() *Config {
 		// Only initialize core app config, others will be initialized lazily or when needed
 		initApp(appConfig)
 		initKafkaModels(appConfig)
+		initOperation(appConfig)
 	})
 
 	return appConfig
@@ -159,6 +161,9 @@ func (c *Config) Validate() error {
 	}
 	if c.App.KafkaModels == "" {
 		return fmt.Errorf("KAFKA_MODELS is not set")
+	}
+	if c.App.Operation == "" {
+		return fmt.Errorf("OPERATION is not set")
 	}
 
 	return nil
@@ -192,7 +197,6 @@ func (c *Config) EnsureElasticSearch() *ElasticSearchConfig {
 	c.elasticOnce.Do(func() { initElasticSearch(c) })
 	return &c.ElasticSearch
 }
-
 
 // ResetConfig resets the configuration singleton.
 // This is primarily useful for testing purposes.

@@ -43,13 +43,13 @@ type UserWithOrders struct {
 
 // OrderSummary DTO untuk ringkasan order
 type OrderSummary struct {
-	OrderID     int       `json:"order_id"`
-	UserName    string    `json:"user_name"`
-	UserEmail   string    `json:"user_email"`
-	Product     string    `json:"product"`
-	Amount      float64   `json:"amount"`
-	Status      string    `json:"status"`
-	CreatedAt   time.Time `json:"created_at"`
+	OrderID   int       `json:"order_id"`
+	UserName  string    `json:"user_name"`
+	UserEmail string    `json:"user_email"`
+	Product   string    `json:"product"`
+	Amount    float64   `json:"amount"`
+	Status    string    `json:"status"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // Event DTO untuk Kafka messages

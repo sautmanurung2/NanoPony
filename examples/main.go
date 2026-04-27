@@ -80,4 +80,3 @@ func exampleJobHandler(ctx context.Context, job nanopony.Job) error {
 	time.Sleep(100 * time.Millisecond) // Simulate work
 	return nil
 }
-

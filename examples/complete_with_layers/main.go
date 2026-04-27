@@ -2,9 +2,10 @@
 // Menampilkan arsitektur 3-tier yang proper untuk aplikasi production
 //
 // Arsitektur:
-//   Controller/Handler → Service Layer → Repository Layer → Database
-//                         ↓
-//                   Kafka Producer
+//
+//	Controller/Handler → Service Layer → Repository Layer → Database
+//	                      ↓
+//	                Kafka Producer
 //
 // Jalankan: go run main.go
 package main
@@ -425,7 +426,7 @@ func (s *orderServiceImpl) ProcessPendingOrders(ctx context.Context) error {
 		}
 
 		// Process order (business logic)
-		log.Printf("[%s] Processing order %d for user %s (%s)", 
+		log.Printf("[%s] Processing order %d for user %s (%s)",
 			s.ServiceName(), order.ID, user.Name, user.Email)
 
 		// Update order status
@@ -445,7 +446,7 @@ func (s *orderServiceImpl) ProcessPendingOrders(ctx context.Context) error {
 		}
 
 		if _, err := s.producer.ProduceWithContext(ctx, "order-events", notification); err != nil {
-			log.Printf("[%s] Failed to send notification for order %d: %v", 
+			log.Printf("[%s] Failed to send notification for order %d: %v",
 				s.ServiceName(), order.ID, err)
 		}
 
@@ -524,11 +525,11 @@ func printUserWithOrders(user *User, orders []Order) {
 	fmt.Printf("\nUser: %s (%s)\n", user.Name, user.Email)
 	fmt.Printf("Status: %s\n", user.Status)
 	fmt.Printf("Total Orders: %d\n", len(orders))
-	
+
 	if len(orders) > 0 {
 		fmt.Println("\nOrders:")
 		for _, order := range orders {
-			fmt.Printf("  - Order #%d: %s (Rp %.2f) [%s]\n", 
+			fmt.Printf("  - Order #%d: %s (Rp %.2f) [%s]\n",
 				order.ID, order.Product, order.Amount, order.Status)
 		}
 	}
@@ -574,11 +575,11 @@ func main() {
 	fmt.Println("[4] Membuat repositories...")
 	userRepo := NewUserRepository(nil)
 	orderRepo := NewOrderRepository(nil)
-	
+
 	// Untuk demo, kita gunakan mock implementasi agar bisa berjalan tanpa DB
 	userRepo = &mockUserRepository{}
 	orderRepo = &mockOrderRepository{}
-	
+
 	fmt.Println("    ✓ UserRepository created")
 	fmt.Println("    ✓ OrderRepository created")
 	fmt.Println()
@@ -616,9 +617,9 @@ func main() {
 			return fmt.Errorf("invalid job data type")
 		}
 
-		log.Printf("Memproses order #%d: %s (Rp %.2f)", 
+		log.Printf("Memproses order #%d: %s (Rp %.2f)",
 			order.ID, order.Product, order.Amount)
-		
+
 		// Simulasi pemrosesan
 		time.Sleep(100 * time.Millisecond)
 		return nil

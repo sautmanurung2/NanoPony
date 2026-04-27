@@ -153,7 +153,7 @@ func BenchmarkFrameworks_Throughput(b *testing.B) {
 		app.Get("/test", func(ctx iris.Context) {
 			ctx.StatusCode(iris.StatusOK)
 		})
-		
+
 		if err := app.Build(); err != nil {
 			b.Fatal(err)
 		}

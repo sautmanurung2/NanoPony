@@ -22,18 +22,18 @@ func BenchmarkWorkerPoolCreation(b *testing.B) {
 func BenchmarkWorkerPoolStartStop(b *testing.B) {
 	b.ReportAllocs()
 	ctx := context.Background()
-	
+
 	for i := 0; i < b.N; i++ {
 		pool := NewWorkerPool(5, 100)
 		pool.Start(ctx, func(ctx context.Context, job Job) error {
 			return nil
 		})
-		
+
 		// Submit some jobs
 		for j := 0; j < 10; j++ {
 			pool.Submit(ctx, Job{ID: "bench-job"})
 		}
-		
+
 		time.Sleep(1 * time.Millisecond)
 		pool.Stop()
 	}
@@ -43,16 +43,16 @@ func BenchmarkWorkerPoolStartStop(b *testing.B) {
 func BenchmarkWorkerPoolSubmit(b *testing.B) {
 	pool := NewWorkerPool(5, 1000)
 	ctx := context.Background()
-	
+
 	pool.Start(ctx, func(ctx context.Context, job Job) error {
 		time.Sleep(100 * time.Microsecond)
 		return nil
 	})
 	defer pool.Stop()
-	
+
 	b.ReportAllocs()
 	b.ResetTimer()
-	
+
 	for i := 0; i < b.N; i++ {
 		pool.Submit(ctx, Job{
 			ID:   "bench-job",
@@ -65,16 +65,16 @@ func BenchmarkWorkerPoolSubmit(b *testing.B) {
 func BenchmarkWorkerPoolSubmitParallel(b *testing.B) {
 	pool := NewWorkerPool(10, 10000)
 	ctx := context.Background()
-	
+
 	pool.Start(ctx, func(ctx context.Context, job Job) error {
 		time.Sleep(50 * time.Microsecond)
 		return nil
 	})
 	defer pool.Stop()
-	
+
 	b.ReportAllocs()
 	b.ResetTimer()
-	
+
 	b.RunParallel(func(pb *testing.PB) {
 		i := 0
 		for pb.Next() {
@@ -90,31 +90,31 @@ func BenchmarkWorkerPoolSubmitParallel(b *testing.B) {
 // TestWorkerPoolMemoryLeak detects memory leaks in worker pool
 func TestWorkerPoolMemoryLeak(t *testing.T) {
 	ctx := context.Background()
-	
+
 	// Run multiple start/stop cycles
 	for cycle := 0; cycle < 10; cycle++ {
 		pool := NewWorkerPool(5, 100)
-		
+
 		processed := 0
 		var mu sync.Mutex
-		
+
 		pool.Start(ctx, func(ctx context.Context, job Job) error {
 			mu.Lock()
 			processed++
 			mu.Unlock()
 			return nil
 		})
-		
+
 		// Submit jobs
 		for i := 0; i < 50; i++ {
 			if err := pool.Submit(ctx, Job{ID: "leak-test"}); err != nil {
 				t.Logf("Submit error: %v", err)
 			}
 		}
-		
+
 		time.Sleep(100 * time.Millisecond)
 		pool.Stop()
-		
+
 		t.Logf("Cycle %d: Processed %d jobs", cycle, processed)
 	}
 }
@@ -123,26 +123,26 @@ func TestWorkerPoolMemoryLeak(t *testing.T) {
 func TestWorkerPoolLongRunning(t *testing.T) {
 	pool := NewWorkerPool(5, 1000)
 	ctx := context.Background()
-	
+
 	processed := make(chan int, 1000)
-	
+
 	pool.Start(ctx, func(ctx context.Context, job Job) error {
 		processed <- 1
 		return nil
 	})
 	defer pool.Stop()
-	
+
 	// Submit jobs over time
 	totalJobs := 1000
 	for i := 0; i < totalJobs; i++ {
 		pool.Submit(ctx, Job{ID: "long-running"})
-		if i % 100 == 0 {
+		if i%100 == 0 {
 			time.Sleep(10 * time.Millisecond)
 		}
 	}
-	
+
 	// Wait for processing
 	time.Sleep(500 * time.Millisecond)
-	
+
 	t.Logf("Processed %d jobs", totalJobs)
 }

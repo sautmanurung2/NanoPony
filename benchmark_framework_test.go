@@ -106,8 +106,6 @@ func BenchmarkFrameworkWithWorkerPoolFromInstance(b *testing.B) {
 	}
 }
 
-
-
 // BenchmarkFrameworkAddCleanup tests adding cleanup functions
 func BenchmarkFrameworkAddCleanup(b *testing.B) {
 	b.ReportAllocs()
@@ -400,8 +398,6 @@ func TestFrameworkWorkerPoolMemoryLeak(t *testing.T) {
 		t.Errorf("Potential memory leak: %d KB growth", memGrowth/1024)
 	}
 }
-
-
 
 // TestFrameworkConcurrentMemoryLeak tests concurrent framework usage
 func TestFrameworkConcurrentMemoryLeak(t *testing.T) {

@@ -18,7 +18,7 @@ func main() {
 
 	// Example 2: Loading dynamic environment variables
 	fmt.Println("\n=== Example 2: Dynamic Configuration ===")
-	
+
 	// This will load all environment variables with CUSTOM_ prefix
 	// For demonstration, we'll show the concept
 	config.LoadDynamic("CUSTOM_")

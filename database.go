@@ -186,8 +186,6 @@ func CloseDB(db *sql.DB) error {
 	return nil
 }
 
-
-
 // InterpolateQuery replaces named parameters in SQL query with actual values.
 // This is useful for debugging and logging queries.
 //

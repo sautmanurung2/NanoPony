@@ -10,14 +10,14 @@ import (
 // BenchmarkPollerCreation tests memory allocation for poller creation
 func BenchmarkPollerCreation(b *testing.B) {
 	b.ReportAllocs()
-	
+
 	pool := NewWorkerPool(5, 100)
 	defer pool.Stop()
-	
+
 	fetcher := DataFetcherFunc(func() ([]interface{}, error) {
 		return []interface{}{"data"}, nil
 	})
-	
+
 	for i := 0; i < b.N; i++ {
 		poller := NewPoller(DefaultPollerConfig(), pool, fetcher)
 		if poller == nil {
@@ -29,18 +29,18 @@ func BenchmarkPollerCreation(b *testing.B) {
 // BenchmarkPollerStartStop tests memory allocation for poller start/stop cycles
 func BenchmarkPollerStartStop(b *testing.B) {
 	b.ReportAllocs()
-	
+
 	pool := NewWorkerPool(5, 100)
 	ctx := context.Background()
 	pool.Start(ctx, func(ctx context.Context, job Job) error {
 		return nil
 	})
 	defer pool.Stop()
-	
+
 	fetcher := DataFetcherFunc(func() ([]interface{}, error) {
 		return []interface{}{"data"}, nil
 	})
-	
+
 	for i := 0; i < b.N; i++ {
 		poller := NewPoller(DefaultPollerConfig(), pool, fetcher)
 		poller.Start()
@@ -57,19 +57,19 @@ func BenchmarkPollerFetch(b *testing.B) {
 		return nil
 	})
 	defer pool.Stop()
-	
+
 	fetchCount := 0
 	fetcher := DataFetcherFunc(func() ([]interface{}, error) {
 		fetchCount++
 		return []interface{}{map[string]interface{}{"count": fetchCount}}, nil
 	})
-	
+
 	config := DefaultPollerConfig()
 	config.Interval = 1 * time.Millisecond
-	
+
 	b.ReportAllocs()
 	b.ResetTimer()
-	
+
 	poller := NewPoller(config, pool, fetcher)
 	poller.Start()
 	time.Sleep(100 * time.Millisecond)
@@ -85,18 +85,18 @@ func TestPollerMemoryLeak(t *testing.T) {
 		return nil
 	})
 	defer pool.Stop()
-	
+
 	// Run multiple start/stop cycles
 	for cycle := 0; cycle < 10; cycle++ {
 		fetcher := DataFetcherFunc(func() ([]interface{}, error) {
 			return []interface{}{"data"}, nil
 		})
-		
+
 		poller := NewPoller(DefaultPollerConfig(), pool, fetcher)
 		poller.Start()
 		time.Sleep(50 * time.Millisecond)
 		poller.Stop()
-		
+
 		t.Logf("Cycle %d completed", cycle)
 	}
 }

@@ -359,5 +359,3 @@ func (fc *FrameworkComponents) Shutdown(ctx context.Context) error {
 	// Return aggregated errors or nil
 	return errors.Join(allErrors...)
 }
-
-

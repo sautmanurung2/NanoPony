@@ -77,7 +77,6 @@ func TestFrameworkWithPollerFromInstance(t *testing.T) {
 	}
 }
 
-
 func TestFrameworkAddCleanup(t *testing.T) {
 	cleanupCalled := false
 	framework := NewFramework().

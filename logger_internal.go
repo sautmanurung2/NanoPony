@@ -34,7 +34,7 @@ var (
 // logRequest represents an internal request to process a log entry.
 type logRequest struct {
 	entry   *LoggerEntry
-	payload any     // Still needed for ES processing
+	payload any // Still needed for ES processing
 	mode    string
 }
 

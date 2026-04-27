@@ -19,10 +19,10 @@ import (
 // ============================================================================
 
 type userService struct {
-	userRepo   interfaces.UserRepository
-	orderRepo  interfaces.OrderRepository
-	eventSvc   interfaces.EventService
-	db         *sql.DB
+	userRepo  interfaces.UserRepository
+	orderRepo interfaces.OrderRepository
+	eventSvc  interfaces.EventService
+	db        *sql.DB
 }
 
 // NewUserService membuat instance UserService
@@ -33,10 +33,10 @@ func NewUserService(
 	db *sql.DB,
 ) interfaces.UserService {
 	return &userService{
-		userRepo:    userRepo,
-		orderRepo:   orderRepo,
-		eventSvc:    eventSvc,
-		db:          db,
+		userRepo:  userRepo,
+		orderRepo: orderRepo,
+		eventSvc:  eventSvc,
+		db:        db,
 	}
 }
 
@@ -86,7 +86,7 @@ func (s *userService) ActivateUser(ctx context.Context, userID int) error {
 
 	// Send event
 	data := map[string]interface{}{
-		"user_name": user.Name,
+		"user_name":  user.Name,
 		"user_email": user.Email,
 	}
 
@@ -129,7 +129,7 @@ func (s *userService) SendUserEvent(ctx context.Context, userID int, eventType s
 	}
 
 	data := map[string]interface{}{
-		"user_name": user.Name,
+		"user_name":  user.Name,
 		"user_email": user.Email,
 	}
 
@@ -160,12 +160,12 @@ func (s *userService) GetUserStats(ctx context.Context) (map[string]interface{},
 // ============================================================================
 
 type orderService struct {
-	orderRepo  interfaces.OrderRepository
-	userRepo   interfaces.UserRepository
+	orderRepo   interfaces.OrderRepository
+	userRepo    interfaces.UserRepository
 	productRepo interfaces.ProductRepository
-	eventSvc   interfaces.EventService
-	db         *sql.DB
-	cfg        *config.AppConfig
+	eventSvc    interfaces.EventService
+	db          *sql.DB
+	cfg         *config.AppConfig
 }
 
 // NewOrderService membuat instance OrderService
@@ -178,12 +178,12 @@ func NewOrderService(
 	cfg *config.AppConfig,
 ) interfaces.OrderService {
 	return &orderService{
-		orderRepo:     orderRepo,
-		userRepo:      userRepo,
-		productRepo:   productRepo,
-		eventSvc:      eventSvc,
-		db:            db,
-		cfg:           cfg,
+		orderRepo:   orderRepo,
+		userRepo:    userRepo,
+		productRepo: productRepo,
+		eventSvc:    eventSvc,
+		db:          db,
+		cfg:         cfg,
 	}
 }
 
@@ -227,7 +227,7 @@ func (s *orderService) processSingleOrder(ctx context.Context, order *models.Ord
 
 	// Send event
 	data := map[string]interface{}{
-		"user_name": user.Name,
+		"user_name":  user.Name,
 		"user_email": user.Email,
 		"product":    order.Product,
 		"amount":     order.Amount,
@@ -271,7 +271,7 @@ func (s *orderService) CreateOrderAndNotify(ctx context.Context, order *models.O
 
 	// Send event
 	eventData := map[string]interface{}{
-		"user_name": user.Name,
+		"user_name":  user.Name,
 		"user_email": user.Email,
 		"product":    order.Product,
 		"amount":     order.Amount,
@@ -373,7 +373,7 @@ func (s *productService) UpdateProductStock(ctx context.Context, productID int, 
 	// Send notification if stock is low
 	if stock < 10 {
 		data := map[string]interface{}{
-			"product_name": product.Name,
+			"product_name":  product.Name,
 			"current_stock": stock,
 		}
 
@@ -417,8 +417,8 @@ func NewEventService(
 	cfg *config.AppConfig,
 ) interfaces.EventService {
 	return &eventService{
-		producer:    producer,
-		cfg:         cfg,
+		producer: producer,
+		cfg:      cfg,
 	}
 }
 
