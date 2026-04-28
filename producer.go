@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/segmentio/kafka-go"
+	"google.golang.org/protobuf/proto"
 )
 
 // MessageProducer defines the interface for producing messages to Kafka.
@@ -56,6 +57,12 @@ func (p *KafkaProducer) Produce(topic string, message any, loggerEntry *LoggerEn
 	return p.ProduceWithContext(context.Background(), topic, message, loggerEntry)
 }
 
+// Produce Proto sends a message to the specified topic using background context.
+// Returns true if successful, or an error if the message could not be sent.
+func (p *KafkaProducer) ProduceProto(topic string, message proto.Message, loggerEntry *LoggerEntry) (bool, error) {
+	return p.ProduceWithContextProto(context.Background(), topic, message, loggerEntry)
+}
+
 // ProduceWithContext sends a message with context support for cancellation and timeout.
 // The message is marshaled to JSON before sending.
 func (p *KafkaProducer) ProduceWithContext(ctx context.Context, topic string, message any, loggerEntry *LoggerEntry) (bool, error) {
@@ -66,6 +73,37 @@ func (p *KafkaProducer) ProduceWithContext(ctx context.Context, topic string, me
 
 	kafkaMsg := kafka.Message{
 		Topic: topic,
+		Value: messageBytes,
+	}
+
+	if err := p.writer.WriteMessages(ctx, kafkaMsg); err != nil {
+		info := fmt.Sprintf("Error writing message to Kafka : %s", err)
+		loggerEntry.LoggingData("error", message, ResponseLog{
+			Status:  "error",
+			Message: info,
+		})
+		return false, fmt.Errorf("failed to write message to kafka: %w", err)
+	}
+
+	info := fmt.Sprintf("message sent to topic : %s and data : %s", topic, messageBytes)
+	loggerEntry.LoggingData("info", message, ResponseLog{
+		Status:  "success",
+		Message: info,
+	})
+
+	return true, nil
+}
+
+// ProduceWithContextProto sends a message with context support for cancellation and timeout.
+// The message is marshaled to Proto file before sending
+func (p *KafkaProducer) ProduceWithContextProto(ctx context.Context, topic string, message proto.Message, loggerEntry *LoggerEntry) (bool, error) {
+	p.writer.Topic = topic
+	messageBytes, err := proto.Marshal(message)
+	if err != nil {
+		return false, fmt.Errorf("failed to marshal message: %w", err)
+	}
+
+	kafkaMsg := kafka.Message{
 		Value: messageBytes,
 	}
 
