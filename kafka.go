@@ -27,12 +27,17 @@ func DefaultKafkaWriterConfig() KafkaWriterConfig {
 
 // NewKafkaWriter creates a new Kafka writer with the given configuration
 func NewKafkaWriter(config KafkaWriterConfig) *kafka.Writer {
-	return &kafka.Writer{
+	w := &kafka.Writer{
 		Addr:         kafka.TCP(config.Brokers...),
 		Balancer:     config.Balancer,
 		BatchTimeout: config.BatchTimeout,
-		Transport:    config.Transport,
 	}
+
+	if config.Transport != nil {
+		w.Transport = config.Transport
+	}
+
+	return w
 }
 
 // NewKafkaWriterFromConfig creates Kafka writer from Config.
