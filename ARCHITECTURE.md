@@ -147,7 +147,7 @@ type DatabaseConfig struct {
 - `ConnIdleTime`: 5 menit
 - `ConnMaxLifetime`: 60 menit
 
-**Pola Desain:** Factory + Wrapper. Variabel `oracleDB` di package-level berfungsi sebagai singleton accessor via `GetOracleDB()`.
+**Pola Desain:** Factory + Wrapper. Penggunaan `GetOracleDB()` telah didepresiasi; gunakan `Framework.WithDatabase()` dan akses melalui `FrameworkComponents.DB`.
 
 ---
 
@@ -282,7 +282,7 @@ type KafkaWriterConfig struct {
 |--------|-----------|-------------------|
 | `WithConfig(config)` | Tidak ada | Menerima `*Config` |
 | `WithDatabase()` | Config diperlukan | Membuat Oracle dari config |
-| `WithDatabaseFromConnection(db)` | Tidak ada | Menerima `*sql.DB` yang ada |
+| `WithDatabaseFromInstance(db)` | Tidak ada | Menerima `*sql.DB` yang ada |
 | `WithKafkaWriter()` | Config diperlukan | Membuat writer dari config |
 | `WithKafkaWriterFromInstance(writer)` | Tidak ada | Menerima `*kafka.Writer` yang ada |
 | `WithProducer()` | KafkaWriter diperlukan | Membuat producer |

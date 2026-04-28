@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/segmentio/kafka-go"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -28,6 +29,10 @@ type MessageProducer interface {
 	// ProduceWithContext sends a message with context support for cancellation and timeout.
 	// The loggerEntry is used to log the outcome of the send operation.
 	ProduceWithContext(ctx context.Context, topic string, message any, loggerEntry *LoggerEntry) (bool, error)
+	// ProduceProto sends a protobuf message to the specified topic using background context.
+	ProduceProto(topic string, message proto.Message, loggerEntry *LoggerEntry) (bool, error)
+	// ProduceWithContextProto sends a protobuf message with context support.
+	ProduceWithContextProto(ctx context.Context, topic string, message proto.Message, loggerEntry *LoggerEntry) (bool, error)
 	// Close closes the producer and releases resources
 	Close() error
 }
@@ -57,7 +62,7 @@ func (p *KafkaProducer) Produce(topic string, message any, loggerEntry *LoggerEn
 	return p.ProduceWithContext(context.Background(), topic, message, loggerEntry)
 }
 
-// Produce Proto sends a message to the specified topic using background context.
+// ProduceProto sends a message to the specified topic using background context.
 // Returns true if successful, or an error if the message could not be sent.
 func (p *KafkaProducer) ProduceProto(topic string, message proto.Message, loggerEntry *LoggerEntry) (bool, error) {
 	return p.ProduceWithContextProto(context.Background(), topic, message, loggerEntry)
@@ -116,7 +121,9 @@ func (p *KafkaProducer) ProduceWithContextProto(ctx context.Context, topic strin
 		return false, fmt.Errorf("failed to write message to kafka: %w", err)
 	}
 
-	info := fmt.Sprintf("message sent to topic : %s and data : %s", topic, messageBytes)
+	// Use protojson for human-readable logging of binary data
+	logData, _ := protojson.Marshal(message)
+	info := fmt.Sprintf("message sent to topic : %s and data : %s", topic, string(logData))
 	loggerEntry.LoggingData("info", message, ResponseLog{
 		Status:  "success",
 		Message: info,
@@ -136,6 +143,9 @@ func (p *KafkaProducer) Close() error {
 // MessageHandler defines the handler for processing consumed messages.
 // It receives the raw message bytes and returns an error if processing fails.
 type MessageHandler func(message []byte) error
+
+// ProtoMessageHandler is a generic handler for Protobuf messages.
+type ProtoMessageHandler[T proto.Message] func(message T) error
 
 // KafkaConsumer implements a Kafka consumer using kafka-go Reader.
 // It provides a simple way to consume messages from a single topic.
@@ -244,6 +254,18 @@ func (c *KafkaConsumer) ConsumeWithContext(ctx context.Context, handler MessageH
 			}
 		}
 	}
+}
+
+// ConsumeWithContextProto starts consuming messages, unmarshaling them into the provided proto.Message type.
+// The factory function should return a new instance of the target proto message.
+func (c *KafkaConsumer) ConsumeWithContextProto(ctx context.Context, factory func() proto.Message, handler func(proto.Message) error) error {
+	return c.ConsumeWithContext(ctx, func(data []byte) error {
+		msg := factory()
+		if err := proto.Unmarshal(data, msg); err != nil {
+			return fmt.Errorf("failed to unmarshal proto message: %w", err)
+		}
+		return handler(msg)
+	})
 }
 
 // Close closes the consumer and releases resources

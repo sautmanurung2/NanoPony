@@ -106,6 +106,17 @@ func TestGetOracleDB(t *testing.T) {
 	if db != nil {
 		t.Log("Oracle DB already initialized")
 	}
+
+	// New way via Framework
+	ResetConfig()
+	conf := NewConfig()
+	// Mock database connection for testing
+	fw := NewFramework().WithConfig(conf).WithDatabaseFromInstance(nil)
+	components := fw.Build()
+
+	if components.DB != nil {
+		t.Error("Expected components.DB to be nil (mocked as nil)")
+	}
 }
 
 func TestCloseDB(t *testing.T) {
