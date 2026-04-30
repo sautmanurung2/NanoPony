@@ -98,10 +98,10 @@ func NewOracleConnection(config DatabaseConfig) (*sql.DB, error) {
 
 	// Apply pool settings with sensible defaults
 	defaults := DefaultDatabaseConfig()
-	db.SetMaxIdleConns(intOrDefault(config.MaxIdleConns, defaults.MaxIdleConns))
-	db.SetMaxOpenConns(intOrDefault(config.MaxOpenConns, defaults.MaxOpenConns))
-	db.SetConnMaxIdleTime(durationOrDefault(config.ConnIdleTime, defaults.ConnIdleTime))
-	db.SetConnMaxLifetime(durationOrDefault(config.ConnMaxLifetime, defaults.ConnMaxLifetime))
+	db.SetMaxIdleConns(GetOrDefault(config.MaxIdleConns, defaults.MaxIdleConns))
+	db.SetMaxOpenConns(GetOrDefault(config.MaxOpenConns, defaults.MaxOpenConns))
+	db.SetConnMaxIdleTime(GetOrDefault(config.ConnIdleTime, defaults.ConnIdleTime))
+	db.SetConnMaxLifetime(GetOrDefault(config.ConnMaxLifetime, defaults.ConnMaxLifetime))
 
 	// Verify connection
 	if err := db.Ping(); err != nil {
@@ -115,22 +115,6 @@ func NewOracleConnection(config DatabaseConfig) (*sql.DB, error) {
 	dbMutex.Unlock()
 
 	return db, nil
-}
-
-// intOrDefault returns val if positive, otherwise def.
-func intOrDefault(val, def int) int {
-	if val > 0 {
-		return val
-	}
-	return def
-}
-
-// durationOrDefault returns val if positive, otherwise def.
-func durationOrDefault(val, def time.Duration) time.Duration {
-	if val > 0 {
-		return val
-	}
-	return def
 }
 
 // parsePort converts string port to int, returning error if invalid

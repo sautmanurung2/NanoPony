@@ -72,6 +72,8 @@ type AppConfig struct {
 	Operation string
 	// LogFilePrefix is the prefix for log file naming
 	LogFilePrefix string
+	// LogOutputMode determines where logs are sent: console, file, elasticsearch, hybrid
+	LogOutputMode string
 }
 
 // OracleConfig holds Oracle database configuration
