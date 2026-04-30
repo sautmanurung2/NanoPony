@@ -102,13 +102,13 @@ func (p *KafkaProducer) ProduceWithContext(ctx context.Context, topic string, me
 // ProduceWithContextProto sends a message with context support for cancellation and timeout.
 // The message is marshaled to Proto file before sending
 func (p *KafkaProducer) ProduceWithContextProto(ctx context.Context, topic string, message proto.Message, loggerEntry *LoggerEntry) (bool, error) {
-	p.writer.Topic = topic
 	messageBytes, err := proto.Marshal(message)
 	if err != nil {
 		return false, fmt.Errorf("failed to marshal message: %w", err)
 	}
 
 	kafkaMsg := kafka.Message{
+		Topic: topic,
 		Value: messageBytes,
 	}
 

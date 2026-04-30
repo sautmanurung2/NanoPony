@@ -1,4 +1,3 @@
-nanopony
 *.test
 example-nanopony
 layered_separation
@@ -7,3 +6,6 @@ nanopony-example
 src/*
 logs/
 .idea/
+/nanopony
+**/nanopony
+!**/nanopony/
