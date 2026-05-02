@@ -195,7 +195,9 @@ func TestInitElasticsearch(t *testing.T) {
 	}
 
 	// Reset global client
+	esClientMutex.Lock()
 	EsClient = nil
+	esClientMutex.Unlock()
 
 	_, err := InitElasticsearch()
 
@@ -206,7 +208,9 @@ func TestInitElasticsearch(t *testing.T) {
 
 func TestEnsureElasticsearchClient(t *testing.T) {
 	// Test with nil client
+	esClientMutex.Lock()
 	EsClient = nil
+	esClientMutex.Unlock()
 
 	err := ensureElasticsearchClient()
 	// May fail if Elasticsearch not configured, which is expected
