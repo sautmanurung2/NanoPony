@@ -9,3 +9,4 @@ logs/
 .idea/
 **/nanopony
 !**/nanopony/
+logger_*_test.go

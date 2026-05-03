@@ -8,20 +8,20 @@
 //	   ↓
 //	logChan (buffered channel, cap=1000)
 //	   ↓
-//	background worker goroutine
-//	   ↓ dispatches by mode:
-//	   ├── "console"       → stdout JSON
-//	   ├── "file"          → rolling log file (lumberjack)
-//	   ├── "elasticsearch" → ES index
-//	   └── "hybrid" (default) → console + file + ES
+//	background dispatcher goroutine
+//	   ↓ dispatches to specialized sink workers (non-blocking):
+//	   ├── consoleWorker       → stdout JSON
+//	   ├── fileWorker          → rolling log file (lumberjack)
+//	   └── esWorker            → ES index
 //
-// All logging is non-blocking. If the channel is full, the log is dropped
-// with a warning printed to stdout.
+// All logging is non-blocking. If a specific sink's channel is full, that 
+// specific output is dropped to prevent blocking the entire logging pipeline.
 package nanopony
 
 import (
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/elastic/go-elasticsearch/v8"
@@ -34,6 +34,7 @@ const (
 
 // LoggerEntry represents a structured log entry with rich metadata.
 type LoggerEntry struct {
+	mu              sync.RWMutex
 	StartTimestamp  time.Time   `json:"start_timestamp"`
 	EndTimestamp    time.Time   `json:"end_timestamp"`
 	ReferenceId     string      `json:"reference_id"`
@@ -137,9 +138,17 @@ func (le *LoggerEntry) finalize(level string, response ResponseLog) {
 func (le *LoggerEntry) sendLog(level, mode string, payload any, response ResponseLog) {
 	le.finalize(level, response)
 
+	// Pre-process payload (Deep Copy) in the caller's goroutine to avoid data races
+	// if the caller modifies the payload map/struct immediately after this call.
+	processedPayload, _ := processPayload(payload)
+	
+	le.mu.Lock()
+	le.Request.Payload = processedPayload
+	le.mu.Unlock()
+
 	if logChan != nil {
 		select {
-		case logChan <- logRequest{entry: le, payload: payload, mode: mode}:
+		case logChan <- logRequest{entry: le, mode: mode}:
 		default:
 			fmt.Printf("[WARNING] Log channel full, dropping log\n")
 		}

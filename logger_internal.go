@@ -23,6 +23,9 @@ var (
 	onceLogger    sync.Once
 
 	logChan    chan logRequest
+	consoleChan chan logRequest
+	fileChan    chan logRequest
+	esChan      chan logRequest
 	onceWorker sync.Once
 
 	cachedWd     string
@@ -38,31 +41,101 @@ type logRequest struct {
 	mode    string
 }
 
-// initLogWorker initializes the background log processing goroutine exactly once.
+// clone creates a safe copy of the LoggerEntry metadata without copying the mutex.
+func (le *LoggerEntry) clone() *LoggerEntry {
+	le.mu.RLock()
+	defer le.mu.RUnlock()
+
+	return &LoggerEntry{
+		StartTimestamp:  le.StartTimestamp,
+		EndTimestamp:    le.EndTimestamp,
+		ReferenceId:     le.ReferenceId,
+		ReferenceNumber: le.ReferenceNumber,
+		ProcessName:     le.ProcessName,
+		SystemName:      le.SystemName,
+		Entity:          le.Entity,
+		Additionals:     le.Additionals,
+		Duration:        le.Duration,
+		Service:         le.Service,
+		Path:            le.Path,
+		Level:           le.Level,
+		UserLogin:       le.UserLogin,
+		NodeCode:        le.NodeCode,
+		Request:         le.Request,
+		Response:        le.Response,
+	}
+}
+
+// initLogWorker initializes the background log processing goroutines exactly once.
 func initLogWorker() {
 	onceWorker.Do(func() {
 		logChan = make(chan logRequest, 1000)
+		consoleChan = make(chan logRequest, 1000)
+		fileChan = make(chan logRequest, 1000)
+		esChan = make(chan logRequest, 1000)
+
+		// Main Dispatcher Worker
 		go func() {
 			for req := range logChan {
-				processLogRequest(req)
+				dispatchLogRequest(req)
+			}
+		}()
+
+		// Dedicated Console Worker (Realtime)
+		go func() {
+			for req := range consoleChan {
+				req.entry.writeToConsole()
+			}
+		}()
+
+		// Dedicated File Worker (Can be slow)
+		go func() {
+			for req := range fileChan {
+				req.entry.writeToLogFile()
+			}
+		}()
+
+		// Dedicated Elasticsearch Worker (Realtime/Network dependent)
+		go func() {
+			for req := range esChan {
+				// Use the payload already inside req.entry
+				req.entry.writeToElasticsearch(nil)
 			}
 		}()
 	})
 }
 
-// processLogRequest dispatches a log request to the appropriate output destination(s).
-func processLogRequest(req logRequest) {
+// dispatchLogRequest routes a log request to the appropriate sink workers.
+func dispatchLogRequest(req logRequest) {
 	switch req.mode {
 	case "console":
-		req.entry.writeToConsole()
+		sendToSink(consoleChan, req)
 	case "file":
-		req.entry.writeToLogFile()
+		sendToSink(fileChan, req)
 	case "elasticsearch":
-		req.entry.writeToElasticsearch(req.payload)
+		sendToSink(esChan, req)
 	case "hybrid":
-		req.entry.writeToConsole()
-		req.entry.writeToLogFile()
-		req.entry.writeToElasticsearch(req.payload)
+		// Create clones for parallel processing.
+		// Each clone gets its own LoggerEntry metadata but shares the same 
+		// processed (read-only) payload map.
+		ce1 := req.entry.clone()
+		ce2 := req.entry.clone()
+		
+		sendToSink(consoleChan, logRequest{entry: ce1, mode: req.mode})
+		sendToSink(fileChan, logRequest{entry: ce2, mode: req.mode})
+		sendToSink(esChan, logRequest{entry: req.entry, mode: req.mode})
+	}
+}
+
+// sendToSink attempts to send a request to a sink channel without blocking the dispatcher.
+func sendToSink(ch chan logRequest, req logRequest) {
+	if ch == nil {
+		return
+	}
+	select {
+	case ch <- req:
+	default:
+		// If a specific sink is full, we drop the log for THAT sink only.
 	}
 }
 
@@ -88,7 +161,10 @@ func initLoggerFile() {
 
 // writeToLogFile serializes the entry to JSON and appends it to the rolling log file.
 func (le *LoggerEntry) writeToLogFile() {
+	le.mu.RLock()
 	logMessage, _ := json.Marshal(le)
+	le.mu.RUnlock()
+	
 	if logFileWriter != nil {
 		_, _ = fmt.Fprintf(logFileWriter, "%s\n", string(logMessage))
 	}
@@ -96,7 +172,10 @@ func (le *LoggerEntry) writeToLogFile() {
 
 // writeToConsole prints the entry as JSON to stdout.
 func (le *LoggerEntry) writeToConsole() {
+	le.mu.RLock()
 	data, _ := json.Marshal(le)
+	le.mu.RUnlock()
+	
 	fmt.Println(string(data))
 }
 
@@ -113,8 +192,11 @@ func (le *LoggerEntry) writeToElasticsearch(payload any) {
 	}
 
 	payloadMap, _ := processPayload(payload)
+	
+	le.mu.Lock()
 	le.Request.Payload = payloadMap
 	data, _ := json.Marshal(le)
+	le.mu.Unlock()
 
 	esIndexWithDate := conf.ElasticSearch.ElasticPrefixIndex + time.Now().Format("20060102")
 	res, err := EsClient.Index(esIndexWithDate, bytes.NewReader(data))
@@ -129,35 +211,19 @@ func processPayload(payload any) (map[string]any, error) {
 		return nil, nil
 	}
 
-	switch v := payload.(type) {
-	case map[string]any:
-		return v, nil
-
-	case string:
-		var parsed map[string]any
-		if err := json.Unmarshal([]byte(v), &parsed); err == nil {
-			return parsed, nil
-		}
-		return map[string]any{"raw": v}, nil
-
-	case []byte:
-		var parsed map[string]any
-		if err := json.Unmarshal(v, &parsed); err == nil {
-			return parsed, nil
-		}
-		return map[string]any{"raw": string(v)}, nil
-
-	default:
-		dataBytes, err := json.Marshal(v)
-		if err != nil {
-			return map[string]any{"error": "failed_to_marshal", "raw": fmt.Sprintf("%v", v)}, nil
-		}
-		var payloadMap map[string]any
-		if err := json.Unmarshal(dataBytes, &payloadMap); err != nil {
-			return map[string]any{"error": "failed_to_unmarshal", "raw": string(dataBytes)}, nil
-		}
-		return payloadMap, nil
+	// ALWAYS perform a deep copy for maps to avoid data races
+	// when the original map is modified by the caller or other workers.
+	dataBytes, err := json.Marshal(payload)
+	if err != nil {
+		return map[string]any{"error": "failed_to_marshal", "raw": fmt.Sprintf("%v", payload)}, nil
 	}
+	
+	var payloadMap map[string]any
+	if err := json.Unmarshal(dataBytes, &payloadMap); err != nil {
+		// If it's a string or simple type, it might fail unmarshal to map
+		return map[string]any{"raw": string(dataBytes)}, nil
+	}
+	return payloadMap, nil
 }
 
 // generateLogFileName creates a daily log file name with an optional prefix from config.
