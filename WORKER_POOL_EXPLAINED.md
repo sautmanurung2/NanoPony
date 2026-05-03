@@ -111,58 +111,7 @@ T=30:  Worker 1 selesai J1 → baru bisa ambil J18
 
 ---
 
-## 5. Solusi Optimasi
-
-### A. Tambah Jumlah Worker
-
-```go
-pool := NewWorkerPool(20, 100) // 20 workers, bukan 5
-```
-
-**Kelebihan:** Sederhana, lebih banyak paralelisme  
-**Kekurangan:** Penggunaan memory/CPU lebih tinggi
-
----
-
-### B. Async Handler (Produce di Background Goroutine)
-
-```go
-handler := func(ctx context.Context, job Job) error {
-    // Jangan blocking di sini
-    go func() {
-        produceToKafka(job) // jalankan di background
-    }()
-    return nil // langsung return
-}
-```
-
-**Kelebihan:** Worker tetap tersedia untuk job baru  
-**Kekurangan:** ⚠️ Kehilangan kontrol error dan jaminan graceful shutdown
-
----
-
-### C. Bounded Semaphore untuk Operasi Produce
-
-```go
-// Batasi operasi produce yang berjalan bersamaan
-sem := make(chan struct{}, 10) // maks 10 produce bersamaan
-
-handler := func(ctx context.Context, job Job) error {
-    sem <- struct{}{} // acquire
-    go func() {
-        defer func() { <-sem }() // release
-        produceToKafka(job)
-    }()
-    return nil
-}
-```
-
-**Kelebihan:** Kontrol konkurensi, tidak membebani sistem downstream  
-**Kekurangan:** Lebih kompleks, butuh penanganan error yang hati-hati
-
----
-
-## 6. Ringkasan
+## 5. Ringkasan
 
 | Pertanyaan | Jawaban |
 |------------|---------|
@@ -176,4 +125,4 @@ handler := func(ctx context.Context, job Job) error {
 
 ## Kesimpulan
 
-Desain worker pool ini **aman dan predictable**, tapi bisa jadi bottleneck kalau ada job yang memakan waktu jauh lebih lama daripada job lainnya. Worker **harus menyelesaikan job saat ini** sebelum bisa mengambil job berikutnya. Ini adalah desain untuk keandalan (reliability), tapi bisa dioptimasi menggunakan strategi yang dijelaskan di atas jika diperlukan.
+Desain worker pool ini **aman dan predictable**, tapi bisa jadi bottleneck kalau ada job yang memakan waktu jauh lebih lama daripada job lainnya. Worker **harus menyelesaikan job saat ini** sebelum bisa mengambil job berikutnya. Ini adalah desain yang mengutamakan keandalan (*reliability*) dan kemudahan pelacakan (*traceability*).
