@@ -34,11 +34,11 @@ var (
 // logRequest represents an internal request to process a log entry.
 type logRequest struct {
 	entry   *LoggerEntry
-	payload any // Still needed for ES processing
+	payload any // Payload for Elasticsearch processing
 	mode    string
 }
 
-// initLogWorker initializes the background log processing goroutine.
+// initLogWorker initializes the background log processing goroutine exactly once.
 func initLogWorker() {
 	onceWorker.Do(func() {
 		logChan = make(chan logRequest, 1000)
@@ -50,7 +50,7 @@ func initLogWorker() {
 	})
 }
 
-// processLogRequest dispatches a log request to the appropriate output destination.
+// processLogRequest dispatches a log request to the appropriate output destination(s).
 func processLogRequest(req logRequest) {
 	switch req.mode {
 	case "console":
@@ -66,7 +66,7 @@ func processLogRequest(req logRequest) {
 	}
 }
 
-// initLoggerFile sets up the rolling file writer.
+// initLoggerFile sets up the rolling file writer exactly once.
 func initLoggerFile() {
 	onceLogger.Do(func() {
 		onceDirChecked.Do(func() {
@@ -86,8 +86,6 @@ func initLoggerFile() {
 	})
 }
 
-// --- Output methods (called by processLogRequest) ---
-
 // writeToLogFile serializes the entry to JSON and appends it to the rolling log file.
 func (le *LoggerEntry) writeToLogFile() {
 	logMessage, _ := json.Marshal(le)
@@ -102,8 +100,8 @@ func (le *LoggerEntry) writeToConsole() {
 	fmt.Println(string(data))
 }
 
-// writeToElasticsearch sends the entry + payload to an Elasticsearch index.
-// The index name is: <ELASTIC_PREFIX_INDEX><YYYYMMDD>
+// writeToElasticsearch sends the entry and its payload to an Elasticsearch index.
+// The index name follows the pattern: <ELASTIC_PREFIX_INDEX><YYYYMMDD>
 func (le *LoggerEntry) writeToElasticsearch(payload any) {
 	if err := ensureElasticsearchClient(); err != nil {
 		return
@@ -125,72 +123,59 @@ func (le *LoggerEntry) writeToElasticsearch(payload any) {
 	}
 }
 
+// processPayload normalizes various payload types into a map[string]any for JSON logging.
 func processPayload(payload any) (map[string]any, error) {
-	var payloadMap map[string]any
+	if payload == nil {
+		return nil, nil
+	}
 
 	switch v := payload.(type) {
 	case map[string]any:
-		payloadMap = v
+		return v, nil
 
 	case string:
 		var parsed map[string]any
 		if err := json.Unmarshal([]byte(v), &parsed); err == nil {
-			payloadMap = parsed
-		} else {
-			payloadMap = map[string]any{
-				"raw": v,
-			}
+			return parsed, nil
 		}
+		return map[string]any{"raw": v}, nil
+
 	case []byte:
 		var parsed map[string]any
 		if err := json.Unmarshal(v, &parsed); err == nil {
-			payloadMap = parsed
-		} else {
-			payloadMap = map[string]any{
-				"raw": string(v),
-			}
+			return parsed, nil
 		}
+		return map[string]any{"raw": string(v)}, nil
 
 	default:
-		if v == nil {
-			return nil, nil
-		}
 		dataBytes, err := json.Marshal(v)
 		if err != nil {
-			payloadMap = map[string]any{
-				"error": "failed_to_marshal",
-				"raw":   fmt.Sprintf("%v", v),
-			}
-		} else {
-			if err := json.Unmarshal(dataBytes, &payloadMap); err != nil {
-				payloadMap = map[string]any{
-					"error": "failed_to_unmarshal_after_marshal",
-					"raw":   string(dataBytes),
-				}
-			}
+			return map[string]any{"error": "failed_to_marshal", "raw": fmt.Sprintf("%v", v)}, nil
 		}
+		var payloadMap map[string]any
+		if err := json.Unmarshal(dataBytes, &payloadMap); err != nil {
+			return map[string]any{"error": "failed_to_unmarshal", "raw": string(dataBytes)}, nil
+		}
+		return payloadMap, nil
 	}
-
-	return payloadMap, nil
 }
 
+// generateLogFileName creates a daily log file name with an optional prefix from config.
 func generateLogFileName() string {
 	now := time.Now()
 	prefix := "orion-to-core"
-	conf := getAppConfig()
-	if conf != nil && conf.App.LogFilePrefix != "" {
+	if conf := getAppConfig(); conf != nil && conf.App.LogFilePrefix != "" {
 		prefix = conf.App.LogFilePrefix
 	}
 	return fmt.Sprintf("%s-%d-%02d-%02d.log", prefix, now.Year(), int(now.Month()), now.Day())
 }
 
+// ensureLogDirectoryExists creates the log directory if it doesn't already exist.
 func ensureLogDirectoryExists() error {
-	if _, err := os.Stat(LogDir); os.IsNotExist(err) {
-		return os.Mkdir(LogDir, 0755)
-	}
-	return nil
+	return os.MkdirAll(LogDir, 0755)
 }
 
+// ensureElasticsearchClient initializes the ES client if it hasn't been initialized yet.
 func ensureElasticsearchClient() error {
 	esClientMutex.Lock()
 	defer esClientMutex.Unlock()

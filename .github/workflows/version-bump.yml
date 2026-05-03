@@ -14,9 +14,12 @@ permissions:
   contents: write
 
 jobs:
-  release:
+  calculate:
     runs-on: ubuntu-latest
-
+    outputs:
+      new_version: ${{ steps.bump.outputs.new_version }}
+      changelog: ${{ steps.changelog.outputs.content }}
+      should_release: ${{ steps.check.outputs.should_release }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -90,19 +93,32 @@ jobs:
 
           COMMITS="${{ steps.commits.outputs.commits }}"
 
-          if echo "$COMMITS" | grep -qiE "BREAKING|feat!"; then
+          if [ -z "$COMMITS" ]; then
+            NEW_VERSION="$LAST"
+          elif echo "$COMMITS" | grep -qiE "BREAKING|feat!"; then
             MAJOR=$((MAJOR + 1))
             MINOR=0
             PATCH=0
+            NEW_VERSION="v${MAJOR}.${MINOR}.${PATCH}"
           elif echo "$COMMITS" | grep -qiE "^feat"; then
             MINOR=$((MINOR + 1))
             PATCH=0
+            NEW_VERSION="v${MAJOR}.${MINOR}.${PATCH}"
           else
             PATCH=$((PATCH + 1))
+            NEW_VERSION="v${MAJOR}.${MINOR}.${PATCH}"
           fi
 
-          NEW_VERSION="v${MAJOR}.${MINOR}.${PATCH}"
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Check if release needed
+        id: check
+        run: |
+          if [ "${{ steps.get_tag.outputs.last_tag }}" != "${{ steps.bump.outputs.new_version }}" ]; then
+            echo "should_release=true" >> $GITHUB_OUTPUT
+          else
+            echo "should_release=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Generate changelog
         id: changelog
@@ -116,27 +132,36 @@ jobs:
             CHANGELOG+="- $line\n"
           done
 
-          echo -e "$CHANGELOG" > CHANGELOG.md
+          echo "content<<EOF" >> $GITHUB_OUTPUT
+          echo -e "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
-      # 🔥 INI YANG PALING PENTING
-      # TAG dibuat langsung di commit HEAD (yang ada perubahan)
+  tag_and_release:
+    needs: calculate
+    if: needs.calculate.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    environment: Production
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Create tag
         run: |
-          git tag ${{ steps.bump.outputs.new_version }}
-          git push origin ${{ steps.bump.outputs.new_version }}
+          git tag ${{ needs.calculate.outputs.new_version }}
+          git push origin ${{ needs.calculate.outputs.new_version }}
 
       - name: Create GitHub Release
         uses: actions/github-script@v7
+        env:
+          RELEASE_BODY: ${{ needs.calculate.outputs.changelog }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const fs = require('fs');
-            const body = fs.readFileSync('CHANGELOG.md', 'utf8');
-
+            const body = process.env.RELEASE_BODY;
             await github.rest.repos.createRelease({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              tag_name: '${{ steps.bump.outputs.new_version }}',
-              name: 'Release ${{ steps.bump.outputs.new_version }}',
+              tag_name: '${{ needs.calculate.outputs.new_version }}',
+              name: 'Release ${{ needs.calculate.outputs.new_version }}',
               body: body
             });

@@ -154,9 +154,9 @@ func (le *LoggerEntry) sendLog(level, mode string, payload any, response Respons
 //	"elasticsearch" — send to Elasticsearch index
 //	"hybrid"        — all three (default if LOG_OUTPUT_MODE is not set)
 func (le *LoggerEntry) LoggingData(level string, payload any, response ResponseLog) {
-	mode := os.Getenv("LOG_OUTPUT_MODE")
-	if mode == "" {
-		mode = "hybrid"
+	mode := "hybrid"
+	if conf := getAppConfig(); conf != nil && conf.App.LogOutputMode != "" {
+		mode = conf.App.LogOutputMode
 	}
 	le.sendLog(level, mode, payload, response)
 }
