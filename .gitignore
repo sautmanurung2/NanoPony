@@ -1,4 +1,7 @@
+<<<<<<< HEAD
+=======
 /nanopony
+>>>>>>> 16e7304897bbaadb20607674034073fc002a339d
 *.test
 example-nanopony
 layered_separation
@@ -7,5 +10,9 @@ nanopony-example
 src/*
 logs/
 .idea/
+<<<<<<< HEAD
+/nanopony
+=======
+>>>>>>> 16e7304897bbaadb20607674034073fc002a339d
 **/nanopony
 !**/nanopony/
