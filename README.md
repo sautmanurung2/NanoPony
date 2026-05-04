@@ -9,11 +9,11 @@
 
 | Dokumen                      | Deskripsi                                           | Link                                                 |
 | ---------------------------- | --------------------------------------------------- | ---------------------------------------------------- |
-| **📖 Dokumentasi Lengkap**   | Panduan komprehensif semua komponen framework       | [DOKUMENTASI.md](DOKUMENTASI.md)                     |
-| **🏗️ Arsitektur**            | Diagram arsitektur, pola desain, dan alur data      | [ARCHITECTURE.md](ARCHITECTURE.md)                   |
-| **🔧 Panduan Testing**       | Cara menjalankan test, coverage, dan best practices | [TESTING_GUIDE.md](TESTING_GUIDE.md)                 |
-| **📊 Benchmark Report**      | Hasil benchmark performa dan memory leak test       | [BENCHMARK_REPORT.md](BENCHMARK_REPORT.md)           |
-| **⚙️ Worker Pool Deep Dive** | Penjelasan detail cara kerja worker pool            | [WORKER_POOL_EXPLAINED.md](WORKER_POOL_EXPLAINED.md) |
+| **📖 Dokumentasi Lengkap**   | Panduan komprehensif semua komponen framework       | [DOKUMENTASI.md](docs/DOKUMENTASI.md)                     |
+| **🏗️ Arsitektur**            | Diagram arsitektur, pola desain, dan alur data      | [ARCHITECTURE.md](docs/ARCHITECTURE.md)                   |
+| **🔧 Panduan Testing**       | Cara menjalankan test, coverage, dan best practices | [TESTING_GUIDE.md](docs/TESTING_GUIDE.md)                 |
+| **📊 Benchmark Report**      | Hasil benchmark performa dan memory leak test       | [BENCHMARK_REPORT.md](docs/BENCHMARK_REPORT.md)           |
+| **⚙️ Worker Pool Deep Dive** | Penjelasan detail cara kerja worker pool            | [WORKER_POOL_EXPLAINED.md](docs/WORKER_POOL_EXPLAINED.md) |
 
 ## Fitur Lengkap
 
@@ -359,7 +359,7 @@ pool.Submit(ctx, nanopony.Job{
 pool.Stop()
 ```
 
-> 📖 **Deep Dive:** Baca [WORKER_POOL_EXPLAINED.md](WORKER_POOL_EXPLAINED.md) untuk penjelasan detail tentang cara kerja worker pool, blocking behavior, dan optimasi.
+> 📖 **Deep Dive:** Baca [WORKER_POOL_EXPLAINED.md](docs/WORKER_POOL_EXPLAINED.md) untuk penjelasan detail tentang cara kerja worker pool, blocking behavior, dan optimasi.
 
 ### Poller
 
@@ -398,7 +398,7 @@ Framework NanoPony telah melalui pengujian performa menyeluruh:
 - ✅ **Memory Leak Test**: Lolos uji 40+ siklus setup-shutdown tanpa kebocoran.
 - ✅ **Multi-Framework**: Terbukti lebih efisien dibandingkan Fiber, Echo, dan Iris untuk job processing.
 
-> 📖 **Detail:** Baca [BENCHMARK_REPORT.md](BENCHMARK_REPORT.md) untuk hasil lengkap.
+> 📖 **Detail:** Baca [BENCHMARK_REPORT.md](docs/BENCHMARK_REPORT.md) untuk hasil lengkap.
 
 ## 🧪 Testing
 
@@ -419,7 +419,7 @@ go test -coverprofile=coverage.out ./...
 go tool cover -html=coverage.out
 ```
 
-> 📖 **Panduan:** Baca [TESTING_GUIDE.md](TESTING_GUIDE.md) untuk cara menjalankan test, coverage goals, dan debugging tips.
+> 📖 **Panduan:** Baca [TESTING_GUIDE.md](docs/TESTING_GUIDE.md) untuk cara menjalankan test, coverage goals, dan debugging tips.
 
 ## Menjalankan Contoh
 
@@ -438,15 +438,15 @@ go run main.go
 6. **Reuse WorkerPool** - jangan buat/hapus secara terus-menerus, buat sekali di startup
 7. **Monitor error channel** - gunakan `range` pada `pool.Errors()` untuk melacak kegagalan job
 
-> 📖 **Arsitektur:** Baca [ARCHITECTURE.md](ARCHITECTURE.md) untuk diagram arsitektur lengkap dan pola desain.
+> 📖 **Arsitektur:** Baca [ARCHITECTURE.md](docs/ARCHITECTURE.md) untuk diagram arsitektur lengkap dan pola desain.
 >
-> 📖 **Dokumentasi:** Baca [DOKUMENTASI.md](DOKUMENTASI.md) untuk panduan penggunaan setiap komponen.
->
+> 📖 **Dokumentasi:** Baca [DOKUMENTASI.md](docs/DOKUMENTASI.md) untuk panduan penggunaan setiap komponen.
+
 > 📖 **Contoh Lainnya:** Lihat folder `/examples` untuk implementasi:
->
-> - `dynamic_config`: Penggunaan konfigurasi dinamis.
-> - `memory_monitoring`: Integrasi monitoring memori.
-> - `layered_separation`: Pemisahan layer repository dan service yang clean.
+
+- `dynamic_config`: Penggunaan konfigurasi dinamis.
+- `memory_monitoring`: Integrasi monitoring memori.
+- `layered_separation`: Pemisahan layer repository dan service yang clean.
 
 ## Project Structure
 
@@ -465,12 +465,13 @@ go run main.go
 ├── memory.go              # Memory monitoring utilities
 ├── *_test.go              # Unit tests & benchmarks
 ├── go.mod                 # Go module definition
-├── ARCHITECTURE.md        # 📐 Arsitektur & pola desain
-├── BENCHMARK_REPORT.md    # 📊 Hasil benchmark & memory test
-├── TESTING_GUIDE.md       # 🧪 Panduan testing
-├── CONTRIBUTING.md        # 🤝 Panduan kontribusi project
-├── DOKUMENTASI.md         # 📖 Dokumentasi lengkap komponen
-├── WORKER_POOL_EXPLAINED.md # ⚙️ Deep dive worker pool
+├── docs/                  # 📚 Dokumentasi Project
+│   ├── ARCHITECTURE.md        # 📐 Arsitektur & pola desain
+│   ├── BENCHMARK_REPORT.md    # 📊 Hasil benchmark & memory test
+│   ├── TESTING_GUIDE.md       # 🧪 Panduan testing
+│   ├── CONTRIBUTING.md        # 🤝 Panduan kontribusi project
+│   ├── DOKUMENTASI.md         # 📖 Dokumentasi lengkap komponen
+│   └── WORKER_POOL_EXPLAINED.md # ⚙️ Deep dive worker pool
 ├── src/                   # Source tambahan (logs, etc)
 └── examples/              # Koleksi contoh aplikasi
     ├── main.go
