@@ -129,5 +129,3 @@ func (p *KafkaProducer) Close() error {
 	}
 	return nil
 }
-
-

@@ -22,11 +22,11 @@ var (
 	logFileWriter *lumberjack.Logger
 	onceLogger    sync.Once
 
-	logChan    chan logRequest
+	logChan     chan logRequest
 	consoleChan chan logRequest
 	fileChan    chan logRequest
 	esChan      chan logRequest
-	onceWorker sync.Once
+	onceWorker  sync.Once
 
 	cachedWd     string
 	onceCachedWd sync.Once
@@ -71,7 +71,6 @@ func (le *LoggerEntry) cloneUnlocked() *LoggerEntry {
 		Response:        le.Response,
 	}
 }
-
 
 // initLogWorker initializes the background log processing goroutines exactly once.
 func initLogWorker() {
@@ -123,11 +122,11 @@ func dispatchLogRequest(req logRequest) {
 		sendToSink(esChan, req)
 	case "hybrid":
 		// Create clones for parallel processing.
-		// Each clone gets its own LoggerEntry metadata but shares the same 
+		// Each clone gets its own LoggerEntry metadata but shares the same
 		// processed (read-only) payload map.
 		ce1 := req.entry.clone()
 		ce2 := req.entry.clone()
-		
+
 		sendToSink(consoleChan, logRequest{entry: ce1, mode: req.mode})
 		sendToSink(fileChan, logRequest{entry: ce2, mode: req.mode})
 		sendToSink(esChan, logRequest{entry: req.entry, mode: req.mode})
@@ -171,7 +170,7 @@ func (le *LoggerEntry) writeToLogFile() {
 	le.mu.RLock()
 	logMessage, _ := json.Marshal(le)
 	le.mu.RUnlock()
-	
+
 	if logFileWriter != nil {
 		_, _ = fmt.Fprintf(logFileWriter, "%s\n", string(logMessage))
 	}
@@ -182,7 +181,7 @@ func (le *LoggerEntry) writeToConsole() {
 	le.mu.RLock()
 	data, _ := json.Marshal(le)
 	le.mu.RUnlock()
-	
+
 	fmt.Println(string(data))
 }
 
@@ -199,7 +198,7 @@ func (le *LoggerEntry) writeToElasticsearch(payload any) {
 	}
 
 	payloadMap, _ := processPayload(payload)
-	
+
 	le.mu.Lock()
 	le.Request.Payload = payloadMap
 	data, _ := json.Marshal(le)
@@ -224,7 +223,7 @@ func processPayload(payload any) (map[string]any, error) {
 	if err != nil {
 		return map[string]any{"error": "failed_to_marshal", "raw": fmt.Sprintf("%v", payload)}, nil
 	}
-	
+
 	var payloadMap map[string]any
 	if err := json.Unmarshal(dataBytes, &payloadMap); err != nil {
 		// If it's a string or simple type, it might fail unmarshal to map

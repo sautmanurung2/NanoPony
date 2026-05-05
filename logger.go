@@ -14,7 +14,7 @@
 //	   ├── fileWorker          → rolling log file (lumberjack)
 //	   └── esWorker            → ES index
 //
-// All logging is non-blocking. If a specific sink's channel is full, that 
+// All logging is non-blocking. If a specific sink's channel is full, that
 // specific output is dropped to prevent blocking the entire logging pipeline.
 package nanopony
 

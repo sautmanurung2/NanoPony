@@ -18,16 +18,16 @@ func main() {
 	// Stress the logger
 	go func() {
 		logger := nanopony.NewLoggerFromOptions(nanopony.LoggerOptions{
-			ServiceName: "StressTest",
-			UserLogin:   "admin",
-			ReferenceId: "123",
+			ServiceName:     "StressTest",
+			UserLogin:       "admin",
+			ReferenceId:     "123",
 			ReferenceNumber: "456",
-			SystemName:  "System",
-			ProcessName: "Process",
-			Entity:      "Entity",
-			Additionals: "Add",
+			SystemName:      "System",
+			ProcessName:     "Process",
+			Entity:          "Entity",
+			Additionals:     "Add",
 		})
-		
+
 		// Large payload
 		payload := make(map[string]interface{})
 		for i := 0; i < 100; i++ {
