@@ -10,3 +10,7 @@ logs/
 **/nanopony
 !**/nanopony/
 logger_*_test.go
+
+# Debug/test artifacts in examples
+examples/*.log
+examples/LOGGING_OPTIMIZATION_REPORT.txt

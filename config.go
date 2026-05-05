@@ -210,7 +210,8 @@ func ResetConfig() {
 	configMutex.Lock()
 	defer configMutex.Unlock()
 	appConfig = nil
-	configOnce = sync.Once{} // Reset so NewConfig() can reinitialize
+	configOnce = sync.Once{}   // Reset so NewConfig() can reinitialize
+	loadEnvOnce = sync.Once{} // Reset so .env will be re-read
 }
 
 // BuildConfig builds configuration with custom initializers.

@@ -108,12 +108,6 @@ func NewOracleConnection(config DatabaseConfig) (*sql.DB, error) {
 		return nil, fmt.Errorf("failed to ping oracle database: %w", err)
 	}
 
-	// Set global variable for backward compatibility (thread-safe)
-	// Note: For new code, prefer using the returned *sql.DB directly
-	dbMutex.Lock()
-	oracleDB = db
-	dbMutex.Unlock()
-
 	return db, nil
 }
 

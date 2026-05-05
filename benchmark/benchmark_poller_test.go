@@ -1,4 +1,6 @@
-package nanopony
+//go:build benchmark
+
+package benchmark
 
 import (
 	"context"

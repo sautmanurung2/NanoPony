@@ -13,9 +13,6 @@ import (
 // It receives the raw message bytes and returns an error if processing fails.
 type MessageHandler func(message []byte) error
 
-// ProtoMessageHandler is a generic handler for Protobuf messages.
-type ProtoMessageHandler[T proto.Message] func(message T) error
-
 // KafkaConsumer implements a Kafka consumer using kafka-go Reader.
 // It provides a simple way to consume messages from a single topic.
 //

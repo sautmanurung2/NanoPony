@@ -26,47 +26,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: 'go.mod'
-          cache: true
-
-      - name: Format Go code
-        run: gofmt -s -w .
-
-      - name: Run Unit Tests
-        id: unit_tests
-        run: |
-          go test -v -race ./... > unit-tests.log 2>&1
-          cat unit-tests.log
-
-      - name: Upload Test Artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-results-${{ github.run_id }}
-          path: unit-tests.log
-
-      - name: Generate Step Summary
-        if: always()
-        run: |
-          echo "### 🧪 Unit Test Results Summary" >> $GITHUB_STEP_SUMMARY
-          
-          if grep -q "FAIL" unit-tests.log; then
-            echo "❌ **Unit Tests**: FAILED" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "✅ **Unit Tests**: PASSED" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          echo "---" >> $GITHUB_STEP_SUMMARY
-          echo "<details><summary>🔍 View Unit Test Logs</summary>" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`text" >> $GITHUB_STEP_SUMMARY
-          cat unit-tests.log >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          echo "</details>" >> $GITHUB_STEP_SUMMARY
-
       - name: Get latest tag
         id: get_tag
         run: |

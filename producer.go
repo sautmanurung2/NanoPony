@@ -13,8 +13,9 @@ import (
 // MessageProducer defines the interface for producing messages to Kafka.
 // This abstraction allows for easy testing and swapping implementations.
 //
-// Each Produce call requires a *LoggerEntry for structured logging of the
-// send result (success or failure). Create one via NewLogger() or NewLoggerFromOptions().
+// Each Produce call accepts an optional *LoggerEntry for structured logging of the
+// send result (success or failure). Pass nil to skip logging.
+// Create one via NewLoggerFromOptions().
 //
 // Example:
 //
@@ -76,19 +77,23 @@ func (p *KafkaProducer) writeKafkaMessage(ctx context.Context, topic string, pay
 	}
 
 	if err := p.writer.WriteMessages(ctx, kafkaMsg); err != nil {
-		info := fmt.Sprintf("Error writing message to Kafka : %s", err)
-		loggerEntry.LoggingData("error", payload, ResponseLog{
-			Status:  "error",
-			Message: info,
-		})
+		if loggerEntry != nil {
+			info := fmt.Sprintf("Error writing message to Kafka : %s", err)
+			loggerEntry.LoggingData("error", payload, ResponseLog{
+				Status:  "error",
+				Message: info,
+			})
+		}
 		return false, fmt.Errorf("failed to write message to kafka: %w", err)
 	}
 
-	info := fmt.Sprintf("message sent to topic : %s and data : %s", topic, logData)
-	loggerEntry.LoggingData("info", payload, ResponseLog{
-		Status:  "success",
-		Message: info,
-	})
+	if loggerEntry != nil {
+		info := fmt.Sprintf("message sent to topic : %s and data : %s", topic, logData)
+		loggerEntry.LoggingData("info", payload, ResponseLog{
+			Status:  "success",
+			Message: info,
+		})
+	}
 
 	return true, nil
 }

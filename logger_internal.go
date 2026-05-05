@@ -15,8 +15,8 @@ import (
 
 // Global logging state
 var (
-	// EsClient is protected by esClientMutex for thread safety.
-	EsClient      *elasticsearch.Client
+	// esClient is protected by esClientMutex for thread safety.
+	esClient      *elasticsearch.Client
 	esClientMutex sync.RWMutex
 
 	logFileWriter *lumberjack.Logger
@@ -46,6 +46,12 @@ func (le *LoggerEntry) clone() *LoggerEntry {
 	le.mu.RLock()
 	defer le.mu.RUnlock()
 
+	return le.cloneUnlocked()
+}
+
+// cloneUnlocked creates a copy of the LoggerEntry without acquiring the lock.
+// The caller MUST hold le.mu (either RLock or Lock) before calling.
+func (le *LoggerEntry) cloneUnlocked() *LoggerEntry {
 	return &LoggerEntry{
 		StartTimestamp:  le.StartTimestamp,
 		EndTimestamp:    le.EndTimestamp,
@@ -65,6 +71,7 @@ func (le *LoggerEntry) clone() *LoggerEntry {
 		Response:        le.Response,
 	}
 }
+
 
 // initLogWorker initializes the background log processing goroutines exactly once.
 func initLogWorker() {
@@ -199,7 +206,7 @@ func (le *LoggerEntry) writeToElasticsearch(payload any) {
 	le.mu.Unlock()
 
 	esIndexWithDate := conf.ElasticSearch.ElasticPrefixIndex + time.Now().Format("20060102")
-	res, err := EsClient.Index(esIndexWithDate, bytes.NewReader(data))
+	res, err := esClient.Index(esIndexWithDate, bytes.NewReader(data))
 	if err == nil {
 		_ = res.Body.Close()
 	}
@@ -229,7 +236,7 @@ func processPayload(payload any) (map[string]any, error) {
 // generateLogFileName creates a daily log file name with an optional prefix from config.
 func generateLogFileName() string {
 	now := time.Now()
-	prefix := "orion-to-core"
+	prefix := "nanopony"
 	if conf := getAppConfig(); conf != nil && conf.App.LogFilePrefix != "" {
 		prefix = conf.App.LogFilePrefix
 	}
@@ -245,13 +252,13 @@ func ensureLogDirectoryExists() error {
 func ensureElasticsearchClient() error {
 	esClientMutex.Lock()
 	defer esClientMutex.Unlock()
-	if EsClient != nil {
+	if esClient != nil {
 		return nil
 	}
 	client, err := InitElasticsearch()
 	if err != nil {
 		return err
 	}
-	EsClient = client
+	esClient = client
 	return nil
 }

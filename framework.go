@@ -129,9 +129,21 @@ func (f *Framework) WithDatabaseFromInstance(db *sql.DB) *Framework {
 // Requires WithConfig to be called first.
 //
 // Panics if config is not set.
+// For error-handling version, see WithKafkaWriterSafe.
 func (f *Framework) WithKafkaWriter() *Framework {
+	fw, err := f.WithKafkaWriterSafe()
+	if err != nil {
+		panic(err.Error())
+	}
+	return fw
+}
+
+// WithKafkaWriterSafe sets up the Kafka writer with error handling.
+// Unlike WithKafkaWriter, this method returns an error instead of panicking.
+// This is recommended for production code.
+func (f *Framework) WithKafkaWriterSafe() (*Framework, error) {
 	if f.config == nil {
-		panic(ErrConfigNotSet.Error())
+		return f, ErrConfigNotSet
 	}
 
 	f.kafkaWriter = NewKafkaWriterFromConfig(f.config)
@@ -139,7 +151,7 @@ func (f *Framework) WithKafkaWriter() *Framework {
 		return CloseKafkaWriter(f.kafkaWriter)
 	})
 
-	return f
+	return f, nil
 }
 
 // WithKafkaWriterFromInstance allows using an existing Kafka writer
@@ -153,13 +165,25 @@ func (f *Framework) WithKafkaWriterFromInstance(writer *kafka.Writer) *Framework
 // Requires WithKafkaWriter or WithKafkaWriterFromInstance to be called first.
 //
 // Panics if kafka writer is not set.
+// For error-handling version, see WithProducerSafe.
 func (f *Framework) WithProducer() *Framework {
+	fw, err := f.WithProducerSafe()
+	if err != nil {
+		panic(err.Error())
+	}
+	return fw
+}
+
+// WithProducerSafe sets up the Kafka producer with error handling.
+// Unlike WithProducer, this method returns an error instead of panicking.
+// This is recommended for production code.
+func (f *Framework) WithProducerSafe() (*Framework, error) {
 	if f.kafkaWriter == nil {
-		panic(ErrKafkaNotSet.Error())
+		return f, ErrKafkaNotSet
 	}
 
 	f.producer = NewKafkaProducer(f.kafkaWriter)
-	return f
+	return f, nil
 }
 
 // WithProducerFromInstance allows using an existing producer instance
@@ -189,13 +213,25 @@ func (f *Framework) WithWorkerPoolFromInstance(pool *WorkerPool) *Framework {
 // The poller periodically fetches data and submits it as jobs to the worker pool.
 //
 // Panics if worker pool is not set.
+// For error-handling version, see WithPollerSafe.
 func (f *Framework) WithPoller(config PollerConfig, dataFetcher DataFetcher) *Framework {
+	fw, err := f.WithPollerSafe(config, dataFetcher)
+	if err != nil {
+		panic(err.Error())
+	}
+	return fw
+}
+
+// WithPollerSafe sets up the poller with error handling.
+// Unlike WithPoller, this method returns an error instead of panicking.
+// This is recommended for production code.
+func (f *Framework) WithPollerSafe(config PollerConfig, dataFetcher DataFetcher) (*Framework, error) {
 	if f.workerPool == nil {
-		panic(ErrWorkerPoolNotSet.Error())
+		return f, ErrWorkerPoolNotSet
 	}
 
 	f.poller = NewPoller(config, f.workerPool, dataFetcher)
-	return f
+	return f, nil
 }
 
 // WithPollerFromInstance allows using an existing poller instance

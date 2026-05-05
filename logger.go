@@ -2,7 +2,7 @@
 //
 // Architecture overview:
 //
-//	NewLogger()
+//	NewLoggerFromOptions()
 //	   ↓
 //	LoggerEntry.LoggingData(level, payload, response)
 //	   ↓
@@ -64,13 +64,13 @@ type ResponseLog struct {
 	Message string `json:"message"`
 }
 
-// NewLogger creates and returns a new structured logger entry.
+// newLogger creates and returns a new structured logger entry (internal).
 // It automatically handles working directory caching and internal worker initialization.
 //
-// For a more readable alternative with named parameters, see NewLoggerFromOptions.
-func NewLogger(
+// Callers should use NewLoggerFromOptions instead.
+func newLogger(
 	serviceName, userLogin, referenceId, referenceNumber,
-	systemName, processName, entity, additionals string,
+	systemName, processName, entity, additionals, nodeCode string,
 ) *LoggerEntry {
 	onceCachedWd.Do(func() {
 		cachedWd, _ = os.Getwd()
@@ -81,20 +81,21 @@ func NewLogger(
 
 	return &LoggerEntry{
 		StartTimestamp:  time.Now(),
-		Service:         "GO_" + serviceName,
+		Service:         serviceName,
 		UserLogin:       userLogin,
 		ReferenceId:     referenceId,
 		ReferenceNumber: referenceNumber,
 		ProcessName:     processName,
-		SystemName:      "GO-Producer-" + systemName,
+		SystemName:      systemName,
 		Entity:          entity,
 		Additionals:     additionals,
+		NodeCode:        nodeCode,
 		Path:            cachedWd,
 	}
 }
 
 // LoggerOptions provides named parameters for creating a LoggerEntry.
-// This is easier to read than NewLogger's 8 positional string parameters.
+// This is the sole public constructor for LoggerEntry.
 //
 // Example:
 //
@@ -114,18 +115,20 @@ type LoggerOptions struct {
 	ProcessName     string
 	Entity          string
 	Additionals     string
+	NodeCode        string
 }
 
 // NewLoggerFromOptions creates a LoggerEntry from named options.
-// This is the recommended way to create loggers in new code.
+// This is the recommended and only public way to create loggers.
 func NewLoggerFromOptions(opts LoggerOptions) *LoggerEntry {
-	return NewLogger(
+	return newLogger(
 		opts.ServiceName, opts.UserLogin, opts.ReferenceId, opts.ReferenceNumber,
-		opts.SystemName, opts.ProcessName, opts.Entity, opts.Additionals,
+		opts.SystemName, opts.ProcessName, opts.Entity, opts.Additionals, opts.NodeCode,
 	)
 }
 
 // finalize sets the end timestamp, duration, level, and response on a log entry.
+// Caller MUST hold le.mu.Lock() before calling.
 func (le *LoggerEntry) finalize(level string, response ResponseLog) {
 	le.EndTimestamp = time.Now()
 	le.Duration = le.EndTimestamp.Sub(le.StartTimestamp).Milliseconds()
@@ -134,21 +137,25 @@ func (le *LoggerEntry) finalize(level string, response ResponseLog) {
 }
 
 // sendLog is the shared entry point for all log dispatching.
-// It finalizes the entry and sends it to the async processing channel.
+// It finalizes the entry, creates an immutable snapshot, and sends the snapshot
+// to the async processing channel. This is safe for reusing the same LoggerEntry
+// across multiple calls.
 func (le *LoggerEntry) sendLog(level, mode string, payload any, response ResponseLog) {
-	le.finalize(level, response)
-
 	// Pre-process payload (Deep Copy) in the caller's goroutine to avoid data races
 	// if the caller modifies the payload map/struct immediately after this call.
 	processedPayload, _ := processPayload(payload)
-	
+
+	// Hold the lock while mutating AND cloning to prevent races when the same
+	// LoggerEntry is reused across multiple LoggingData calls.
 	le.mu.Lock()
+	le.finalize(level, response)
 	le.Request.Payload = processedPayload
+	snapshot := le.cloneUnlocked()
 	le.mu.Unlock()
 
 	if logChan != nil {
 		select {
-		case logChan <- logRequest{entry: le, mode: mode}:
+		case logChan <- logRequest{entry: snapshot, mode: mode}:
 		default:
 			fmt.Printf("[WARNING] Log channel full, dropping log\n")
 		}
@@ -180,18 +187,9 @@ func (le *LoggerEntry) SendToElasticSearch(level string, payload any, response R
 	le.sendLog(level, "elasticsearch", payload, response)
 }
 
-// LogInternal is a helper for logging internal messages using an existing LoggerEntry.
-func (le *LoggerEntry) LogInternal(level, process, message string) {
-	le.ProcessName = process
-	le.LoggingData(level, nil, ResponseLog{
-		Status:  level,
-		Message: message,
-	})
-}
-
 // LogFramework is a helper for internal framework logging.
 func LogFramework(level, process, message string) {
-	logger := NewLogger("NanoPony", "system", "internal", "", "Framework", process, "System", "")
+	logger := newLogger("NanoPony", "system", "internal", "", "Framework", process, "System", "", "")
 	logger.LoggingData(level, nil, ResponseLog{Status: level, Message: message})
 }
 

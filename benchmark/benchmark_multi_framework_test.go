@@ -1,4 +1,6 @@
-package nanopony
+//go:build benchmark
+
+package benchmark
 
 import (
 	"context"
@@ -12,6 +14,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/kataras/iris/v12"
 	"github.com/labstack/echo/v4"
+	"github.com/sautmanurung2/nanopony"
 )
 
 // ==================== MULTI-FRAMEWORK BENCHMARKS ====================
@@ -21,9 +24,9 @@ func BenchmarkFrameworks_Setup(b *testing.B) {
 	b.Run("NanoPony", func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			ResetConfig()
-			config := NewConfig()
-			fw := NewFramework().
+			nanopony.ResetConfig()
+			config := nanopony.NewConfig()
+			fw := nanopony.NewFramework().
 				WithConfig(config).
 				WithWorkerPool(10, 100).
 				Build()
@@ -74,15 +77,15 @@ func BenchmarkFrameworks_Throughput(b *testing.B) {
 	ctx := context.Background()
 
 	b.Run("NanoPony", func(b *testing.B) {
-		ResetConfig()
-		config := NewConfig()
-		fw := NewFramework().
+		nanopony.ResetConfig()
+		config := nanopony.NewConfig()
+		fw := nanopony.NewFramework().
 			WithConfig(config).
 			WithWorkerPool(runtime.NumCPU(), b.N+1).
 			Build()
 
 		done := make(chan struct{}, b.N)
-		fw.Start(ctx, func(ctx context.Context, job Job) error {
+		fw.Start(ctx, func(ctx context.Context, job nanopony.Job) error {
 			done <- struct{}{}
 			return nil
 		})
@@ -91,7 +94,7 @@ func BenchmarkFrameworks_Throughput(b *testing.B) {
 		b.ReportAllocs()
 
 		for i := 0; i < b.N; i++ {
-			fw.WorkerPool.Submit(ctx, Job{ID: fmt.Sprintf("%d", i)})
+			fw.WorkerPool.Submit(ctx, nanopony.Job{ID: fmt.Sprintf("%d", i)})
 		}
 
 		for i := 0; i < b.N; i++ {
@@ -193,13 +196,13 @@ func TestFrameworks_MemoryUsage(t *testing.T) {
 	}
 
 	runMemoryTest("NanoPony", func() {
-		ResetConfig()
-		config := NewConfig()
-		fw := NewFramework().
+		nanopony.ResetConfig()
+		config := nanopony.NewConfig()
+		fw := nanopony.NewFramework().
 			WithConfig(config).
 			WithWorkerPool(10, 100).
 			Build()
-		fw.Start(context.Background(), func(ctx context.Context, job Job) error { return nil })
+		fw.Start(context.Background(), func(ctx context.Context, job nanopony.Job) error { return nil })
 	})
 
 	runMemoryTest("Fiber", func() {

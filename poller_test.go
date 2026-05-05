@@ -65,9 +65,6 @@ func TestPollerConfig(t *testing.T) {
 	if config.Interval != 1*time.Second {
 		t.Errorf("Expected interval 1s, got %v", config.Interval)
 	}
-	if config.MaxRetries != 3 {
-		t.Errorf("Expected max retries 3, got %d", config.MaxRetries)
-	}
 	if config.BatchSize != 100 {
 		t.Errorf("Expected batch size 100, got %d", config.BatchSize)
 	}

@@ -49,11 +49,11 @@ var (
 	}
 
 	// logFilePrefixEnvConfig defines the prefix for rolling log files.
-	// Default: orion-to-core.
+	// Default: nanopony.
 	logFilePrefixEnvConfig = envConfig{
 		name:        "LOG_FILE_PREFIX",
 		validValues: []string{},
-		defaultVal:  "orion-to-core",
+		defaultVal:  "nanopony",
 	}
 
 	// logOutputModeEnvConfig defines where logs are sent.
@@ -198,9 +198,15 @@ func initElasticSearch(conf *Config) {
 // WithOperationValidValues sets valid values for the OPERATION environment variable.
 // This is useful for defining custom operation modes.
 //
+// IMPORTANT: This function must be called during program initialization (e.g., in init()),
+// BEFORE calling NewConfig(). It is NOT safe to call concurrently or after config has
+// been initialized, as it modifies package-level state without synchronization.
+//
 // Example:
 //
-//	WithOperationValidValues([]string{"read-only", "write", "admin"})
+//	func init() {
+//	    nanopony.WithOperationValidValues([]string{"read-only", "write", "admin"})
+//	}
 func WithOperationValidValues(values []string) {
 	operationEnvConfig.validValues = values
 }

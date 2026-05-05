@@ -28,10 +28,6 @@ import (
 type PollerConfig struct {
 	// Interval is the time between poll attempts
 	Interval time.Duration
-	// MaxRetries is the maximum number of retries on failure (currently reserved for future use)
-	MaxRetries int
-	// RetryDelay is the delay between retries (currently reserved for future use)
-	RetryDelay time.Duration
 	// BatchSize is the maximum number of items to process per batch iteration
 	BatchSize int
 	// JobSlotSize controls how many concurrent poll operations are allowed to fetch data
@@ -42,8 +38,6 @@ type PollerConfig struct {
 func DefaultPollerConfig() PollerConfig {
 	return PollerConfig{
 		Interval:    1 * time.Second,
-		MaxRetries:  3,
-		RetryDelay:  100 * time.Millisecond,
 		BatchSize:   100,
 		JobSlotSize: 1,
 	}

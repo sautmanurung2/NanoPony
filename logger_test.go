@@ -8,22 +8,22 @@ import (
 )
 
 func TestNewLogger(t *testing.T) {
-	logger := NewLogger(
-		"TestService",
-		"testuser",
-		"ref-001",
-		"ref-num-001",
-		"TestSystem",
-		"TestProcess",
-		"TestEntity",
-		"additional info",
-	)
+	logger := NewLoggerFromOptions(LoggerOptions{
+		ServiceName:     "TestService",
+		UserLogin:       "testuser",
+		ReferenceId:     "ref-001",
+		ReferenceNumber: "ref-num-001",
+		SystemName:      "TestSystem",
+		ProcessName:     "TestProcess",
+		Entity:          "TestEntity",
+		Additionals:     "additional info",
+	})
 
 	if logger == nil {
 		t.Fatal("Expected logger to be created")
 	}
-	if logger.Service != "GO_TestService" {
-		t.Errorf("Expected service 'GO_TestService', got '%s'", logger.Service)
+	if logger.Service != "TestService" {
+		t.Errorf("Expected service 'TestService', got '%s'", logger.Service)
 	}
 	if logger.UserLogin != "testuser" {
 		t.Errorf("Expected user 'testuser', got '%s'", logger.UserLogin)
@@ -31,13 +31,13 @@ func TestNewLogger(t *testing.T) {
 	if logger.ReferenceId != "ref-001" {
 		t.Errorf("Expected reference ID 'ref-001', got '%s'", logger.ReferenceId)
 	}
-	if logger.SystemName != "GO-Producer-TestSystem" {
-		t.Errorf("Expected system name 'GO-Producer-TestSystem', got '%s'", logger.SystemName)
+	if logger.SystemName != "TestSystem" {
+		t.Errorf("Expected system name 'TestSystem', got '%s'", logger.SystemName)
 	}
 }
 
 func TestLoggerEntry(t *testing.T) {
-	logger := NewLogger("TestService", "user", "ref", "", "System", "Process", "Entity", "")
+	logger := newLogger("TestService", "user", "ref", "", "System", "Process", "Entity", "", "")
 
 	// Test SendToFile (may fail if log directory doesn't exist, but should not panic)
 	response := ResponseLog{
@@ -101,7 +101,7 @@ func TestGenerateLogFileName(t *testing.T) {
 	fileName := generateLogFileName()
 
 	// Should contain date
-	expected := "orion-to-core-"
+	expected := "nanopony-"
 	if fileName[:len(expected)] != expected {
 		t.Errorf("Expected filename to start with '%s', got '%s'", expected, fileName)
 	}
@@ -121,7 +121,7 @@ func TestEnsureLogDirectoryExists(t *testing.T) {
 }
 
 func TestLoggerEntryWriteToConsole(t *testing.T) {
-	logger := NewLogger("TestService", "user", "ref", "", "System", "Process", "Entity", "")
+	logger := newLogger("TestService", "user", "ref", "", "System", "Process", "Entity", "", "")
 
 	// Should not panic
 	defer func() {
@@ -138,7 +138,7 @@ func TestLoggerEntryLoggingData(t *testing.T) {
 	os.Setenv("LOG_OUTPUT_MODE", "fluentd")
 	defer os.Unsetenv("LOG_OUTPUT_MODE")
 
-	logger := NewLogger("TestService", "user", "ref", "", "System", "Process", "Entity", "")
+	logger := newLogger("TestService", "user", "ref", "", "System", "Process", "Entity", "", "")
 
 	payload := map[string]any{"key": "value"}
 	response := ResponseLog{
@@ -170,7 +170,7 @@ func TestLoggerEntrySendToElasticSearch(t *testing.T) {
 		t.Skip("Elasticsearch not configured")
 	}
 
-	logger := NewLogger("TestService", "user", "ref", "", "System", "Process", "Entity", "")
+	logger := newLogger("TestService", "user", "ref", "", "System", "Process", "Entity", "", "")
 
 	payload := map[string]any{"key": "value"}
 	response := ResponseLog{
@@ -196,7 +196,7 @@ func TestInitElasticsearch(t *testing.T) {
 
 	// Reset global client
 	esClientMutex.Lock()
-	EsClient = nil
+	esClient = nil
 	esClientMutex.Unlock()
 
 	_, err := InitElasticsearch()
@@ -209,7 +209,7 @@ func TestInitElasticsearch(t *testing.T) {
 func TestEnsureElasticsearchClient(t *testing.T) {
 	// Test with nil client
 	esClientMutex.Lock()
-	EsClient = nil
+	esClient = nil
 	esClientMutex.Unlock()
 
 	err := ensureElasticsearchClient()
@@ -226,11 +226,11 @@ func TestLoggerEntryJSONMarshaling(t *testing.T) {
 		ReferenceId:     "ref-001",
 		ReferenceNumber: "ref-num-001",
 		ProcessName:     "TestProcess",
-		SystemName:      "GO-Producer-TestSystem",
+		SystemName:      "TestSystem",
 		Entity:          "TestEntity",
 		Additionals:     "additional",
 		Duration:        100,
-		Service:         "GO_TestService",
+		Service:         "TestService",
 		Path:            "/test/path",
 		Level:           "INFO",
 		UserLogin:       "testuser",
@@ -283,7 +283,7 @@ func TestLoggerOutputModes(t *testing.T) {
 			os.Setenv("LOG_OUTPUT_MODE", tt.outputMode)
 			defer os.Unsetenv("LOG_OUTPUT_MODE")
 
-			logger := NewLogger("TestService", "user", "ref", "", "System", "Process", "Entity", "")
+			logger := newLogger("TestService", "user", "ref", "", "System", "Process", "Entity", "", "")
 			payload := map[string]any{"key": "value"}
 			response := ResponseLog{Status: "success", Message: "Test"}
 

@@ -17,22 +17,6 @@ import (
 	"sync"
 )
 
-// WorkerPoolConfig holds configuration for the worker pool's capacity and throughput.
-type WorkerPoolConfig struct {
-	// NumWorkers is the number of concurrent goroutines processing jobs.
-	NumWorkers int
-	// QueueSize is the capacity of the job buffer.
-	QueueSize int
-}
-
-// DefaultWorkerPoolConfig returns a standard configuration for a small-scale background processor.
-func DefaultWorkerPoolConfig() WorkerPoolConfig {
-	return WorkerPoolConfig{
-		NumWorkers: 5,
-		QueueSize:  100,
-	}
-}
-
 // WorkerPool manages a collection of concurrent workers that process jobs from a shared queue.
 // It provides backpressure mechanisms via blocking and non-blocking job submission.
 type WorkerPool struct {
