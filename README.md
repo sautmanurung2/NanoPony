@@ -2,6 +2,12 @@
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/sautmanurung2/nanopony.svg)](https://pkg.go.dev/github.com/sautmanurung2/nanopony)
 [![Go Report Card](https://goreportcard.com/badge/github.com/sautmanurung2/nanopony)](https://goreportcard.com/report/github.com/sautmanurung2/nanopony)
+<a href="https://octocounts.com/?q=https%3A%2F%2Fgithub.com%2Fsautmanurung2%2FNanoPony.git&ref=main">
+  <img 
+    src="https://api.octocounts.com/badge/sautmanurung2/NanoPony/branch/main"
+    height="24"
+  />
+</a>
 
 **NanoPony** adalah framework Go untuk integrasi Kafka-Oracle dengan arsitektur yang clean, reusable, dan production-ready.
 
