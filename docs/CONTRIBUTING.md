@@ -1,53 +1,59 @@
-# Contributing to NanoPony
+# Kontribusi untuk NanoPony
 
-Terima kasih telah tertarik untuk berkontribusi di NanoPony! Proyek ini bertujuan untuk menyediakan framework integrasi Kafka-Oracle yang sangat efisien dan mudah digunakan.
+Pertama-tama, terima kasih telah mempertimbangkan untuk berkontribusi di NanoPony! Orang-orang seperti Anda lah yang membuat NanoPony menjadi alat yang luar biasa untuk integrasi Kafka-Oracle dengan efisiensi tinggi.
 
-## Panduan Pengembangan
+## Pemberitahuan Hukum & Perjanjian Lisensi Kontributor (CLA)
 
-### 🛠 Persiapan Environment
-1. Pastikan Anda memiliki Go versi terbaru (minimal 1.22+).
-2. Clone repository:
-   ```bash
-   git clone https://github.com/sautmanurung2/NanoPony.git
-   cd NanoPony
-   ```
-3. Install dependensi:
-   ```bash
-   go mod download
-   ```
+Dengan berkontribusi pada proyek ini, Anda menyetujui persyaratan dalam [Perjanjian Lisensi Kontributor (CLA)](CLA.md).
 
-### 📏 Standar Coding
-- **Komentar**: Semua fungsi publik (Exported) **WAJIB** memiliki komentar GoDoc yang menjelaskan fungsi, parameter, dan contoh penggunaan jika perlu.
-- **Naming**: Gunakan camelCase untuk variabel lokal dan PascalCase untuk item yang diekspor. Hindari singkatan yang tidak jelas (misal: `conf` daripada `config` di dalam fungsi kecil masih oke, tapi di struct lebih baik nama lengkap).
-- **Format**: Selalu jalankan `go fmt ./...` sebelum melakukan commit.
+**Penting:** Kontribusi Anda akan menjadi hak milik bersama oleh **Saut Manurung** dan **JNE Indonesia**. Dengan mengirimkan Pull Request (PR), Anda mengakui dan menyetujui pengalihan hak kepemilikan ini sebagaimana dijelaskan secara rinci dalam CLA. Setiap Pull Request wajib menyertakan tanda centang pada template PR yang menandakan persetujuan Anda.
 
-### 🧪 Testing & Benchmark
-Kami sangat mementingkan performa. Jika Anda melakukan perubahan pada core logic, pastikan untuk menjalankan benchmark untuk memantau regresi performa.
+## Standar Pengembangan
 
-**Menjalankan Unit Test:**
-```bash
-go test -v ./...
-```
+### Persiapan Lingkungan (Environment Setup)
+- **Versi Go**: 1.21+ (direkomendasikan 1.22+)
+- **Dependensi**: Dikelola melalui Go modules. Jalankan `go mod download` untuk mempersiapkan.
 
-**Menjalankan Benchmark:**
-```bash
-go test -bench=. -benchmem -v
-```
+### Standar Penulisan Kode (Coding Standards)
+- **Formatting**: Selalu jalankan `go fmt ./...` sebelum melakukan commit.
+- **Dokumentasi**: Semua fungsi, tipe, dan konstanta publik (Exported) **WAJIB** memiliki komentar GoDoc yang menjelaskan tujuan, parameter, dan nilai kembaliannya.
+- **Penamaan**: Gunakan `camelCase` untuk variabel lokal dan `PascalCase` untuk item yang diekspor.
+- **Gaya (Style)**: Ikuti idiom standar Go. Utamakan komposisi eksplisit daripada pewarisan (inheritance) yang kompleks.
 
-### 📁 Struktur Project
+### Pengujian & Performa
+Kami memprioritaskan performa dan stabilitas.
+- **Unit Test**: Pastikan semua logika tercakup. Jalankan `go test -v ./...`.
+- **Benchmark**: Jika Anda mengubah logika inti (Worker Pool, Poller, adaptor Kafka/DB), Anda **WAJIB** menjalankan benchmark untuk memastikan tidak ada penurunan performa (regresi).
+  - Jalankan benchmark: `go test -bench=. -benchmem -v ./...`
+
+## Cara Berkontribusi
+
+### Melaporkan Bug
+*   Periksa [Issues](https://github.com/sautmanurung/NanoPony/issues) untuk melihat apakah bug tersebut sudah dilaporkan.
+*   Jika belum, buka issue baru. Jelaskan masalahnya secara jelas, termasuk detail lingkungan dan langkah-langkah untuk mereproduksi bug tersebut.
+
+### Menyarankan Peningkatan
+*   Buka issue baru dan jelaskan fitur yang ingin Anda lihat, masalah yang diselesaikannya, dan potensi dampaknya terhadap performa.
+
+### Pull Request
+1.  Fork repository ini.
+2.  Buat branch baru (`git checkout -b feature/fitur-baru-saya`).
+3.  Terapkan perubahan Anda dan tambahkan pengujian yang sesuai.
+4.  Jalankan semua pengujian dan benchmark.
+5.  Commit perubahan Anda dengan pesan yang jelas dan deskriptif (`git commit -m 'feat: add support for X'`).
+6.  Push ke fork Anda (`git push origin feature/fitur-baru-saya`).
+7.  Buat Pull Request baru. Pastikan Anda mengisi template PR secara lengkap, termasuk persetujuan CLA.
+
+## Struktur Proyek
 - `framework.go`: Entry point utama menggunakan Builder Pattern.
-- `job.go`: Definisi unit kerja (Job Struct) & Handler.
-- `worker.go`: Implementasi Worker Pool & manajemen concurrency.
-- `poller.go`: Logic untuk pengambilan data periodik & rate limiting.
-- `logger.go` & `logger_internal.go`: Sistem logging terstruktur (Public API vs Machinery).
-- `database.go` & `kafka.go`: Adaptor untuk database Oracle dan Kafka.
+- `job.go`: Definisi Job inti dan Handler.
+- `worker.go`: Implementasi Worker Pool dan manajemen konkurensi.
+- `poller.go`: Pengambilan data periodik dan pembatasan laju (rate limiting).
+- `logger.go`: Sistem logging terstruktur.
+- `database.go` & `kafka.go`: Adaptor untuk Oracle dan Kafka.
 
-## Cara Mengirimkan Kontribusi
-1. Fork repository ini.
-2. Buat branch baru untuk fitur atau perbaikan bug Anda (`git checkout -b feature/amazing-feature`).
-3. Lakukan commit perubahan Anda dengan pesan yang deskriptif.
-4. Push ke branch tersebut (`git push origin feature/amazing-feature`).
-5. Buat Pull Request ke branch `main`.
+## Kode Etik (Code of Conduct)
+Harap bersikap hormat, profesional, dan kolaboratif dalam semua interaksi.
 
 ---
 Dibuat dengan ❤️ oleh tim NanoPony.

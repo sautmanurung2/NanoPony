@@ -1,5 +1,7 @@
 # 🚀 Panduan Kontribusi & Pengembangan NanoPony
 
+> **PENTING / IMPORTANT:** Sebelum berkontribusi, pastikan Anda telah membaca dan menyetujui **[CONTRIBUTING.md](./CONTRIBUTING.md)** dan **[CLA.md](./CLA.md)**. Setiap kontribusi akan menjadi hak milik bersama Saut Manurung & JNE Indonesia.
+
 Selamat datang di NanoPony! Framework ini dirancang untuk menjadi "jembatan" performa tinggi antara Oracle Database dan Kafka. Dokumen ini akan membantu kamu memahami struktur kode, pola desain, dan standar teknis yang kami gunakan.
 
 ---

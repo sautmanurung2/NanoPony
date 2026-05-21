@@ -476,6 +476,7 @@ go run main.go
 │   ├── BENCHMARK_REPORT.md    # 📊 Hasil benchmark & memory test
 │   ├── TESTING_GUIDE.md       # 🧪 Panduan testing
 │   ├── CONTRIBUTING.md        # 🤝 Panduan kontribusi project
+│   ├── CLA.md                 # ⚖️ Contributor License Agreement
 │   ├── DOKUMENTASI.md         # 📖 Dokumentasi lengkap komponen
 │   └── WORKER_POOL_EXPLAINED.md # ⚙️ Deep dive worker pool
 ├── src/                   # Source tambahan (logs, etc)
@@ -500,4 +501,4 @@ go run main.go
 
 ## Lisensi
 
-MIT License
+Apache License 2.0
