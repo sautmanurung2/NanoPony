@@ -74,25 +74,22 @@ func (p *KafkaProducer) writeKafkaMessage(ctx context.Context, topic string, pay
 	kafkaMsg := kafka.Message{
 		Topic: topic,
 		Value: messageBytes,
+		WriterData: KafkaMessageMetadata{
+			LoggerEntry: loggerEntry,
+			Payload:     payload,
+			LogData:     logData,
+		},
 	}
 
 	if err := p.writer.WriteMessages(ctx, kafkaMsg); err != nil {
 		if loggerEntry != nil {
-			info := fmt.Sprintf("Error writing message to Kafka : %s", err)
+			info := fmt.Sprintf("Error writing message to Kafka (immediate): %s", err)
 			loggerEntry.LoggingData("error", payload, ResponseLog{
 				Status:  "error",
 				Message: info,
 			})
 		}
 		return false, fmt.Errorf("failed to write message to kafka: %w", err)
-	}
-
-	if loggerEntry != nil {
-		info := fmt.Sprintf("message sent to topic : %s and data : %s", topic, logData)
-		loggerEntry.LoggingData("info", payload, ResponseLog{
-			Status:  "success",
-			Message: info,
-		})
 	}
 
 	return true, nil

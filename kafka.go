@@ -2,6 +2,7 @@ package nanopony
 
 import (
 	"crypto/tls"
+	"fmt"
 	"time"
 
 	"github.com/segmentio/kafka-go"
@@ -13,7 +14,16 @@ type KafkaWriterConfig struct {
 	Brokers      []string
 	Balancer     kafka.Balancer
 	BatchTimeout time.Duration
+	BatchSize    int
+	Async        bool
 	Transport    *kafka.Transport
+}
+
+// KafkaMessageMetadata holds metadata for a Kafka message, primarily for logging.
+type KafkaMessageMetadata struct {
+	LoggerEntry *LoggerEntry
+	Payload     any
+	LogData     string
 }
 
 // DefaultKafkaWriterConfig returns default Kafka writer configuration
@@ -21,6 +31,8 @@ func DefaultKafkaWriterConfig() KafkaWriterConfig {
 	return KafkaWriterConfig{
 		Balancer:     &kafka.RoundRobin{},
 		BatchTimeout: 10 * time.Millisecond,
+		BatchSize:    1100,
+		Async:        true,
 		Transport:    nil,
 	}
 }
@@ -31,6 +43,31 @@ func NewKafkaWriter(config KafkaWriterConfig) *kafka.Writer {
 		Addr:         kafka.TCP(config.Brokers...),
 		Balancer:     config.Balancer,
 		BatchTimeout: config.BatchTimeout,
+		BatchSize:    config.BatchSize,
+		Async:        config.Async,
+		Completion: func(messages []kafka.Message, err error) {
+			for _, msg := range messages {
+				meta, ok := msg.WriterData.(KafkaMessageMetadata)
+				if !ok || meta.LoggerEntry == nil {
+					if err != nil {
+						fmt.Printf("[Kafka-Async-Error] Gagal mengirim pesan ke topic %s. Error: %v\n", msg.Topic, err)
+					}
+					continue
+				}
+
+				if err != nil {
+					meta.LoggerEntry.LoggingData("error", meta.Payload, ResponseLog{
+						Status:  "error",
+						Message: fmt.Sprintf("Kafka produce error to topic %s: %v", msg.Topic, err),
+					})
+				} else {
+					meta.LoggerEntry.LoggingData("info", meta.Payload, ResponseLog{
+						Status:  "success",
+						Message: fmt.Sprintf("message sent to topic : %s and data : %s", msg.Topic, meta.LogData),
+					})
+				}
+			}
+		},
 	}
 
 	if config.Transport != nil {
