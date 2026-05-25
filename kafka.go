@@ -14,8 +14,6 @@ type KafkaWriterConfig struct {
 	Brokers      []string
 	Balancer     kafka.Balancer
 	BatchTimeout time.Duration
-	BatchSize    int
-	Async        bool
 	Transport    *kafka.Transport
 }
 
@@ -31,8 +29,6 @@ func DefaultKafkaWriterConfig() KafkaWriterConfig {
 	return KafkaWriterConfig{
 		Balancer:     &kafka.RoundRobin{},
 		BatchTimeout: 10 * time.Millisecond,
-		BatchSize:    1100,
-		Async:        true,
 		Transport:    nil,
 	}
 }
@@ -43,8 +39,6 @@ func NewKafkaWriter(config KafkaWriterConfig) *kafka.Writer {
 		Addr:         kafka.TCP(config.Brokers...),
 		Balancer:     config.Balancer,
 		BatchTimeout: config.BatchTimeout,
-		BatchSize:    config.BatchSize,
-		Async:        config.Async,
 		Completion: func(messages []kafka.Message, err error) {
 			for _, msg := range messages {
 				meta, ok := msg.WriterData.(KafkaMessageMetadata)
