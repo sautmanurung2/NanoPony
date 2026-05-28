@@ -125,28 +125,57 @@ func (f *Framework) WithDatabaseFromInstance(db *sql.DB) *Framework {
 	return f
 }
 
-// WithKafkaWriter sets up the Kafka writer using the configured config.
+// WithKafkaWriterRoundRobin sets up the Kafka writer using the configured config.
 // Requires WithConfig to be called first.
 //
 // Panics if config is not set.
-// For error-handling version, see WithKafkaWriterSafe.
-func (f *Framework) WithKafkaWriter() *Framework {
-	fw, err := f.WithKafkaWriterSafe()
+// For error-handling version, see WithKafkaWriterSafeRoundRobin.
+func (f *Framework) WithKafkaWriterRoundRobin() *Framework {
+	fw, err := f.WithKafkaWriterSafeRoundRobin()
 	if err != nil {
 		panic(err.Error())
 	}
 	return fw
 }
 
-// WithKafkaWriterSafe sets up the Kafka writer with error handling.
-// Unlike WithKafkaWriter, this method returns an error instead of panicking.
+// WithKafkaWriterHash sets up the Kafka writer with Hash balancer using the configured config.
+// Requires WithConfig to be called first.
+//
+// Panics if config is not set.
+// For error-handling version, see WithKafkaWriterSafeHash.
+func (f *Framework) WithKafkaWriterHash() *Framework {
+	fw, err := f.WithKafkaWriterSafeHash()
+	if err != nil {
+		panic(err.Error())
+	}
+	return fw
+}
+
+// WithKafkaWriterSafeHash sets up the Kafka writer with Hash balancer with error handling.
+// Unlike WithKafkaWriterHash, this method returns an error instead of panicking.
 // This is recommended for production code.
-func (f *Framework) WithKafkaWriterSafe() (*Framework, error) {
+func (f *Framework) WithKafkaWriterSafeHash() (*Framework, error) {
 	if f.config == nil {
 		return f, ErrConfigNotSet
 	}
 
-	f.kafkaWriter = NewKafkaWriterFromConfig(f.config)
+	f.kafkaWriter = NewKafkaWriterFromConfigHash(f.config)
+	f.AddCleanup(func() error {
+		return CloseKafkaWriter(f.kafkaWriter)
+	})
+
+	return f, nil
+}
+
+// WithKafkaWriterSafeRoundRobin sets up the Kafka writer with error handling.
+// Unlike WithKafkaWriterRoundRobin, this method returns an error instead of panicking.
+// This is recommended for production code.
+func (f *Framework) WithKafkaWriterSafeRoundRobin() (*Framework, error) {
+	if f.config == nil {
+		return f, ErrConfigNotSet
+	}
+
+	f.kafkaWriter = NewKafkaWriterFromConfigRoundRobin(f.config)
 	f.AddCleanup(func() error {
 		return CloseKafkaWriter(f.kafkaWriter)
 	})

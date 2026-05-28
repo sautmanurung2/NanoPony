@@ -23,12 +23,12 @@ func TestNewKafkaWriter(t *testing.T) {
 	}
 }
 
-func TestNewKafkaWriterFromConfig(t *testing.T) {
+func TestNewKafkaWriterFromConfigRoundRobin(t *testing.T) {
 	ResetConfig()
 	config := NewConfig()
 
 	// This will create a writer, but may fail if Kafka is not available
-	writer := NewKafkaWriterFromConfig(config)
+	writer := NewKafkaWriterFromConfigRoundRobin(config)
 	if writer == nil {
 		t.Log("Warning: Writer not created (Kafka may not be configured)")
 		return
@@ -93,7 +93,7 @@ func TestCreateSASLTransport(t *testing.T) {
 	}
 }
 
-func TestNewKafkaWriterFromConfluentConfig(t *testing.T) {
+func TestNewKafkaWriterFromConfluentConfigRoundRobin(t *testing.T) {
 	ResetConfig()
 
 	// Manually set confluent config
@@ -104,7 +104,48 @@ func TestNewKafkaWriterFromConfluentConfig(t *testing.T) {
 	conf.KafkaConfluent.BootstrapServers = []string{"pkc-test.us-east-1.aws.confluent.cloud:9092"}
 
 	// This should create a writer with SASL transport
-	writer := NewKafkaWriterFromConfig(conf)
+	writer := NewKafkaWriterFromConfigRoundRobin(conf)
+	if writer == nil {
+		t.Log("Warning: Writer not created (may be expected)")
+		return
+	}
+
+	// Clean up
+	err := CloseKafkaWriter(writer)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+}
+
+func TestNewKafkaWriterFromConfigHash(t *testing.T) {
+	ResetConfig()
+	config := NewConfig()
+
+	writer := NewKafkaWriterFromConfigHash(config)
+	if writer == nil {
+		t.Log("Warning: Writer not created (Kafka may not be configured)")
+		return
+	}
+
+	// Clean up
+	err := CloseKafkaWriter(writer)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+}
+
+func TestNewKafkaWriterFromConfluentConfigHash(t *testing.T) {
+	ResetConfig()
+
+	// Manually set confluent config
+	conf := &Config{}
+	conf.App.KafkaModels = "kafka-confluent"
+	conf.KafkaConfluent.ApiKey = "test-key"
+	conf.KafkaConfluent.ApiSecret = "test-secret"
+	conf.KafkaConfluent.BootstrapServers = []string{"pkc-test.us-east-1.aws.confluent.cloud:9092"}
+
+	// This should create a writer with SASL transport
+	writer := NewKafkaWriterFromConfigRoundRobin(conf)
 	if writer == nil {
 		t.Log("Warning: Writer not created (may be expected)")
 		return

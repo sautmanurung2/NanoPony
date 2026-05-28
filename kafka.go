@@ -24,8 +24,17 @@ type KafkaMessageMetadata struct {
 	LogData     string
 }
 
-// DefaultKafkaWriterConfig returns default Kafka writer configuration
-func DefaultKafkaWriterConfig() KafkaWriterConfig {
+// DefaultKafkaWriterConfigRoundRobin returns default Kafka writer configuration with RoundRobin balancer
+func DefaultKafkaWriterConfigRoundRobin() KafkaWriterConfig {
+	return KafkaWriterConfig{
+		Balancer:     &kafka.RoundRobin{},
+		BatchTimeout: 10 * time.Millisecond,
+		Transport:    nil,
+	}
+}
+
+// DefaultKafkaWriterConfigHash returns default Kafka writer configuration with Hash balancer
+func DefaultKafkaWriterConfigHash() KafkaWriterConfig {
 	return KafkaWriterConfig{
 		Balancer:     &kafka.Hash{},
 		BatchTimeout: 10 * time.Millisecond,
@@ -73,8 +82,24 @@ func NewKafkaWriter(config KafkaWriterConfig) *kafka.Writer {
 
 // NewKafkaWriterFromConfig creates Kafka writer from Config.
 // Reuses NewKafkaWriter to avoid duplicating the writer construction.
-func NewKafkaWriterFromConfig(conf *Config) *kafka.Writer {
-	config := DefaultKafkaWriterConfig()
+func NewKafkaWriterFromConfigRoundRobin(conf *Config) *kafka.Writer {
+	config := DefaultKafkaWriterConfigRoundRobin()
+
+	if conf.App.KafkaModels == "kafka-confluent" {
+		kconf := conf.EnsureKafkaConfluent()
+		config.Brokers = kconf.BootstrapServers
+		config.Transport = createSASLTransport(kconf.ApiKey, kconf.ApiSecret)
+	} else {
+		config.Brokers = conf.EnsureKafka().Brokers
+	}
+
+	return NewKafkaWriter(config)
+}
+
+// NewKafkaWriterFromConfigHash creates Kafka writer with Hash balancer from Config.
+// Reuses NewKafkaWriter to avoid duplicating the writer construction.
+func NewKafkaWriterFromConfigHash(conf *Config) *kafka.Writer {
+	config := DefaultKafkaWriterConfigHash()
 
 	if conf.App.KafkaModels == "kafka-confluent" {
 		kconf := conf.EnsureKafkaConfluent()
