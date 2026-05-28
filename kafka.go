@@ -27,7 +27,7 @@ type KafkaMessageMetadata struct {
 // DefaultKafkaWriterConfig returns default Kafka writer configuration
 func DefaultKafkaWriterConfig() KafkaWriterConfig {
 	return KafkaWriterConfig{
-		Balancer:     &kafka.RoundRobin{},
+		Balancer:     &kafka.Hash{},
 		BatchTimeout: 10 * time.Millisecond,
 		Transport:    nil,
 	}
