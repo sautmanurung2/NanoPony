@@ -155,7 +155,7 @@ func BenchmarkFrameworkStartStop(b *testing.B) {
 		components := framework.Build()
 
 		b.StartTimer()
-		components.Start(ctx, func(ctx context.Context, job Job) error {
+		components.Start(ctx, func(ctx context.Context, job *Job) error {
 			return nil
 		})
 		b.StopTimer()
@@ -183,7 +183,7 @@ func BenchmarkFrameworkShutdown(b *testing.B) {
 			AddCleanup(func() error { return nil })
 
 		components := framework.Build()
-		components.Start(ctx, func(ctx context.Context, job Job) error {
+		components.Start(ctx, func(ctx context.Context, job *Job) error {
 			return nil
 		})
 
@@ -213,7 +213,7 @@ func BenchmarkFrameworkWithMultipleCleanup(b *testing.B) {
 		}
 
 		components := framework.Build()
-		components.Start(ctx, func(ctx context.Context, job Job) error {
+		components.Start(ctx, func(ctx context.Context, job *Job) error {
 			return nil
 		})
 
@@ -265,7 +265,7 @@ func TestFrameworkMemoryLeak(t *testing.T) {
 
 		components := framework.Build()
 
-		components.Start(ctx, func(ctx context.Context, job Job) error {
+		components.Start(ctx, func(ctx context.Context, job *Job) error {
 			return nil
 		})
 
@@ -308,7 +308,7 @@ func TestFrameworkMemoryLeakDetailed(t *testing.T) {
 
 		components := framework.Build()
 
-		components.Start(ctx, func(ctx context.Context, job Job) error {
+		components.Start(ctx, func(ctx context.Context, job *Job) error {
 			time.Sleep(1 * time.Millisecond)
 			return nil
 		})
@@ -367,17 +367,17 @@ func TestFrameworkWorkerPoolMemoryLeak(t *testing.T) {
 
 	components := framework.Build()
 
-	components.Start(ctx, func(ctx context.Context, job Job) error {
+	components.Start(ctx, func(ctx context.Context, job *Job) error {
 		time.Sleep(1 * time.Millisecond)
 		return nil
 	})
 
 	// Submit 1000 jobs
 	for i := 0; i < 1000; i++ {
-		components.WorkerPool.Submit(ctx, Job{
-			ID:   fmt.Sprintf("job-%d", i),
-			Data: map[string]interface{}{"index": i, "data": make([]byte, 100)},
-		})
+		job := AcquireJob()
+		job.ID = fmt.Sprintf("job-%d", i)
+		job.Data = map[string]interface{}{"index": i, "data": make([]byte, 100)}
+		components.WorkerPool.Submit(ctx, job)
 	}
 
 	time.Sleep(500 * time.Millisecond)
@@ -428,7 +428,7 @@ func TestFrameworkConcurrentMemoryLeak(t *testing.T) {
 
 			components := framework.Build()
 
-			components.Start(ctx, func(ctx context.Context, job Job) error {
+			components.Start(ctx, func(ctx context.Context, job *Job) error {
 				time.Sleep(1 * time.Millisecond)
 				return nil
 			})

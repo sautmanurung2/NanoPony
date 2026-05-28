@@ -1,6 +1,6 @@
-# Dokumentasi Framework NanoPony (v0.0.30 - Sync April 2026)
+# Dokumentasi Framework NanoPony (v0.0.35 - Sync Mei 2026)
 
-**NanoPony** adalah framework Go untuk integrasi Kafka-Oracle dengan arsitektur yang clean, reusable, dan production-ready. Framework ini menyediakan komponen-komponen siap pakai untuk membangun sistem data pipeline yang scalable dengan minimal boilerplate.
+**NanoPony** adalah framework Go untuk integrasi Kafka-Oracle dengan arsitektur yang clean, reusable, dan production-ready. Framework ini menyediakan komponen-komponen siap pakai untuk membangun sistem data pipeline yang scalable dengan minimal boilerplate dan efisiensi memori tingkat tinggi menggunakan `sync.Pool`.
 
 ---
 
@@ -140,16 +140,17 @@ Jika `KAFKA_MODELS=kafka-confluent`, NanoPony otomatis mengaktifkan autentikasi 
 **File**: `job.go`, `worker.go`
 
 ### Konsep Utama
-Worker Pool mengelola kumpulan goroutine yang memproses `Job` secara konkuren. `job.go` menangani definisi data, sementara `worker.go` menangani orkestrasi pemrosesan.
+Worker Pool mengelola kumpulan goroutine yang memproses `Job` secara konkuren. Sejak v0.0.35, NanoPony menggunakan `sync.Pool` untuk mendaur ulang objek `Job`, sehingga mengurangi alokasi memori secara drastis.
 
-### Job Metadata
-Field `Meta` pada struct `Job` memungkinkan Anda menyisipkan data tambahan seperti *source*, *retry count*, atau *trace ID*.
+### Job Metadata & sync.Pool
+Anda harus menggunakan `nanopony.AcquireJob()` untuk membuat job baru. Objek ini akan otomatis dikembalikan ke pool oleh worker setelah handler selesai.
 ```go
-job := nanopony.Job{
-    ID:   "job-123",
-    Data: payload,
-    Meta: map[string]any{"source": "poller-01"},
-}
+job := nanopony.AcquireJob()
+job.ID = "job-123"
+job.Data = payload
+job.Meta["source"] = "poller-01"
+// Tidak perlu release manual jika di-submit ke WorkerPool
+pool.SubmitBlocking(ctx, job)
 ```
 
 ### Mekanisme Backpressure (SubmitBlocking)

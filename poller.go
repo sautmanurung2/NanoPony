@@ -173,20 +173,19 @@ func (p *Poller) pollOnce() {
 
 	for _, item := range data {
 		jobID := atomic.AddInt64(&p.jobCounter, 1)
-		job := Job{
-			ID:   fmt.Sprintf("poll-%s-%d", p.sessionID, jobID),
-			Data: item,
-			Meta: map[string]any{
-				"source":    "poller",
-				"timestamp": time.Now().Unix(),
-			},
-		}
+		job := AcquireJob()
+		job.ID = fmt.Sprintf("poll-%s-%d", p.sessionID, jobID)
+		job.Data = item
+		job.Meta["source"] = "poller"
+		job.Meta["timestamp"] = time.Now().Unix()
 
 		// Use SubmitBlocking to provide backpressure
 		if err := p.workerPool.SubmitBlocking(p.ctx, job); err != nil {
 			if p.ctx.Err() == nil {
 				LogFramework("ERROR", "Poller", fmt.Sprintf("failed to submit job: %v", err))
 			}
+			// If submission fails, we should release the job as it won't be processed
+			job.Release()
 		}
 	}
 }

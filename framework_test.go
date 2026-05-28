@@ -139,7 +139,7 @@ func TestFrameworkComponentsStartStop(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	components.Start(ctx, func(ctx context.Context, job Job) error {
+	components.Start(ctx, func(ctx context.Context, job *Job) error {
 		return nil
 	})
 

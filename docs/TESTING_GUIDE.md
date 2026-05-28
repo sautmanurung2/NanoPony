@@ -116,14 +116,16 @@ func TestWorkerPoolConcurrency(t *testing.T) {
     ctx := context.Background()
     
     var processed int32
-    pool.Start(ctx, func(ctx context.Context, job Job) error {
+    pool.Start(ctx, func(ctx context.Context, job *nanopony.Job) error {
         atomic.AddInt32(&processed, 1)
         return nil
     })
 
     // Submit jobs
     for i := 0; i < 10; i++ {
-        pool.Submit(ctx, Job{ID: fmt.Sprintf("job-%d", i)})
+        job := nanopony.AcquireJob()
+        job.ID = fmt.Sprintf("job-%d", i)
+        pool.Submit(ctx, job)
     }
 
     time.Sleep(100 * time.Millisecond)

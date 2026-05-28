@@ -26,6 +26,7 @@
 **NanoPony** adalah framework Go (`github.com/sautmanurung2/nanopony`) yang menyediakan platform integrasi Kafka-Oracle yang komprehensif dengan kemampuan worker pool dan polling. Framework ini dirancang menggunakan pola builder yang fluent untuk menghubungkan koneksi database, Kafka producer/consumer, worker pool konkuren, dan data poller.
 
 **Fitur Utama:**
+- ✅ **Ultra-Efficient sync.Pool** - Reuse objek Job untuk performa tinggi dan GC yang ringan
 - ✅ **Kafka Producer & Consumer** - Integrasi dengan Kafka menggunakan `kafka-go`
 - ✅ **Oracle Database** - Koneksi menggunakan `go-ora` dengan connection pooling
 - ✅ **Worker Pool** - Pemrosesan job konkuren dengan queue bounded
@@ -220,8 +221,8 @@ type KafkaWriterConfig struct {
       Meta map[string]any
   }
   ```
-- `JobHandler` - `func(ctx context.Context, job Job) error`
-- `WorkerPool` - Mengelola `numWorkers`, `jobChan` buffered, `errChan`, `sync.WaitGroup`, context, flag `running` yang dilindungi mutex
+- `JobHandler` - `func(ctx context.Context, job *Job) error`
+- `WorkerPool` - Mengelola `numWorkers`, `jobChan` buffered pointer `*Job`, `errChan`, `sync.WaitGroup`, context, flag `running` yang dilindungi mutex
 
 **Fungsi Utama:**
 - `NewWorkerPool(numWorkers, queueSize)` - Membuat channel buffered, context yang dapat dibatalkan
@@ -472,18 +473,19 @@ Config
 
 ## Referensi Interface
 
-| Interface | Method | Tujuan |
+| Referensi Interface | Method | Tujuan |
 |-----------|---------|---------|
 | `DataFetcher` | `Fetch() ([]any, error)` | Sumber data abstrak untuk poller |
-| `JobHandler` | `func(ctx, Job) error` | Callback pemrosesan job |
+| `JobHandler` | `func(ctx, *Job) error` | Callback pemrosesan job |
 | `MessageProducer` | `Produce`, `ProduceWithContext`, `Close` | Abstraksi Kafka producer |
+
 
 ---
 
 ## Panduan Cepat
 
-### 1. Analisis dibuat pada: 20 April 2026
-*Codebase: NanoPony v0.0.30 (Go 1.25.1)*
+### 1. Analisis dibuat pada: 28 Mei 2026
+*Codebase: NanoPony v0.0.35 (Go 1.25.1)*
 
 ### 2. Build Framework
 
@@ -503,7 +505,7 @@ components := framework.Build()
 
 ```go
 ctx := context.Background()
-components.Start(ctx, func(ctx context.Context, job nanopony.Job) error {
+components.Start(ctx, func(ctx context.Context, job *nanopony.Job) error {
     log.Printf("Memproses job: %+v", job)
     return nil
 })
@@ -553,7 +555,7 @@ func main() {
     defer cancel()
 
     // Mulai pemrosesan
-    components.Start(ctx, func(ctx context.Context, job nanopony.Job) error {
+    components.Start(ctx, func(ctx context.Context, job *nanopony.Job) error {
         log.Printf("Memproses job: %+v", job)
 
         // Kirim ke Kafka

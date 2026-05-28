@@ -101,10 +101,9 @@ func FuzzJobSubmission(f *testing.F) {
 		wp := NewWorkerPool(1, 10)
 		ctx := context.Background()
 
-		job := Job{
-			ID:   id,
-			Data: data,
-		}
+		job := AcquireJob()
+		job.ID = id
+		job.Data = data
 
 		// Submit job
 		_ = wp.Submit(ctx, job)
@@ -186,7 +185,7 @@ func FuzzStressFrameworkLifecycle(f *testing.F) {
 		comp := fw.Build()
 
 		// Test Start behavior
-		comp.Start(ctx, func(ctx context.Context, job Job) error {
+		comp.Start(ctx, func(ctx context.Context, job *Job) error {
 			return nil
 		})
 
@@ -231,12 +230,14 @@ func FuzzStressWorkerPoolParams(f *testing.F) {
 		// Attempt to start - should handle extreme values gracefully
 		// Note: Very large values might cause OOM, so we might want to cap it for CI
 		if numWorkers > 0 && numWorkers < 500 {
-			wp.Start(ctx, func(ctx context.Context, job Job) error {
+			wp.Start(ctx, func(ctx context.Context, job *Job) error {
 				return nil
 			})
 
 			// Submit some data
-			_ = wp.Submit(ctx, Job{ID: "stress-job"})
+			job := AcquireJob()
+			job.ID = "stress-job"
+			_ = wp.Submit(ctx, job)
 
 			wp.Stop()
 		}

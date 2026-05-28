@@ -2,18 +2,11 @@ package nanopony
 
 import (
 	"context"
+	"sync"
 )
 
 // Job represents a unit of work to be processed by the worker pool.
 // It contains a unique ID, payload data, and optional metadata.
-//
-// Example:
-//
-//	job := Job{
-//	    ID:   "job-1",
-//	    Data: map[string]interface{}{"key": "value"},
-//	    Meta: map[string]interface{}{"source": "poller"},
-//	}
 type Job struct {
 	// ID is a unique identifier for the job
 	ID string
@@ -23,13 +16,34 @@ type Job struct {
 	Meta map[string]any
 }
 
+var jobPool = sync.Pool{
+	New: func() any {
+		return &Job{
+			Meta: make(map[string]any),
+		}
+	},
+}
+
+// AcquireJob retrieves a Job from the pool.
+// Always call job.Release() when finished with the job to return it to the pool.
+func AcquireJob() *Job {
+	return jobPool.Get().(*Job)
+}
+
+// Release returns the job to the pool after resetting its fields.
+// Do not use the job after calling Release.
+func (j *Job) Release() {
+	if j == nil {
+		return
+	}
+	j.ID = ""
+	j.Data = nil
+	for k := range j.Meta {
+		delete(j.Meta, k)
+	}
+	jobPool.Put(j)
+}
+
 // JobHandler defines the function signature for processing jobs.
-// It receives a context and a job, and returns an error if processing fails.
-//
-// Example:
-//
-//	handler := func(ctx context.Context, job Job) error {
-//	    log.Printf("Processing job %s: %+v", job.ID, job.Data)
-//	    return nil
-//	}
-type JobHandler func(ctx context.Context, job Job) error
+// It receives a context and a job pointer, and returns an error if processing fails.
+type JobHandler func(ctx context.Context, job *Job) error

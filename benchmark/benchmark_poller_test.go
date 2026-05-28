@@ -34,7 +34,7 @@ func BenchmarkPollerStartStop(b *testing.B) {
 
 	pool := NewWorkerPool(5, 100)
 	ctx := context.Background()
-	pool.Start(ctx, func(ctx context.Context, job Job) error {
+	pool.Start(ctx, func(ctx context.Context, job *Job) error {
 		return nil
 	})
 	defer pool.Stop()
@@ -55,7 +55,7 @@ func BenchmarkPollerStartStop(b *testing.B) {
 func BenchmarkPollerFetch(b *testing.B) {
 	pool := NewWorkerPool(5, 1000)
 	ctx := context.Background()
-	pool.Start(ctx, func(ctx context.Context, job Job) error {
+	pool.Start(ctx, func(ctx context.Context, job *Job) error {
 		return nil
 	})
 	defer pool.Stop()
@@ -82,7 +82,7 @@ func BenchmarkPollerFetch(b *testing.B) {
 func TestPollerMemoryLeak(t *testing.T) {
 	pool := NewWorkerPool(5, 100)
 	ctx := context.Background()
-	pool.Start(ctx, func(ctx context.Context, job Job) error {
+	pool.Start(ctx, func(ctx context.Context, job *Job) error {
 		time.Sleep(1 * time.Millisecond)
 		return nil
 	})
@@ -109,7 +109,7 @@ func TestPollerLongRunning(t *testing.T) {
 	ctx := context.Background()
 
 	var processed atomic.Int64
-	pool.Start(ctx, func(ctx context.Context, job Job) error {
+	pool.Start(ctx, func(ctx context.Context, job *Job) error {
 		processed.Add(1)
 		return nil
 	})

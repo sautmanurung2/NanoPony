@@ -2,7 +2,7 @@
 
 ## Ringkasan
 
-Dokumen ini menjelaskan arsitektur worker pool di framework NanoPony, mencakup cara worker memproses job, manajemen queue, dan karakteristik performa. Sejak v0.0.30, logika orkestrasi berada di `worker.go` sementara definisi data berada di `job.go`.
+Dokumen ini menjelaskan arsitektur worker pool di framework NanoPony, mencakup cara worker memproses job, manajemen queue, dan karakteristik performa. Sejak v0.0.35, NanoPony menggunakan `sync.Pool` untuk mendaur ulang objek `Job` guna meminimalkan alokasi memori dan GC pressure.
 
 ---
 
@@ -34,8 +34,11 @@ Dokumen ini menjelaskan arsitektur worker pool di framework NanoPony, mencakup c
 
 ```go
 func (wp *WorkerPool) worker(ctx context.Context, id int) {
+    defer wp.wg.Done()
     for {
         select {
+        case <-ctx.Done():
+            return
         case job, ok := <-wp.jobChan:
             if !ok {
                 return
@@ -47,13 +50,18 @@ func (wp *WorkerPool) worker(ctx context.Context, id int) {
             if err := wp.handler(ctx, job); err != nil {
                 // handle error
             }
+
+            // ♻️ OTOMATIS DI-RELEASE KE POOL
+            // Setelah handler selesai, objek job dibersihkan
+            // dan dikembalikan ke sync.Pool untuk dipakai lagi.
+            job.Release()
         }
     }
 }
 ```
 
 **Implikasi:**
-- **Worker 1** ambil `Job A` → proses (misal 10 detik) → selesai → baru bisa ambil `Job B`
+- **Worker 1** ambil `Job A` → proses (misal 10 detik) → selesai → **Release** → baru bisa ambil `Job B`
 - Sementara itu, **Worker 2-5** tetap memproses job mereka masing-masing secara paralel
 
 ---

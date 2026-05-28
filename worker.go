@@ -21,7 +21,7 @@ import (
 // It provides backpressure mechanisms via blocking and non-blocking job submission.
 type WorkerPool struct {
 	numWorkers int
-	jobChan    chan Job
+	jobChan    chan *Job
 	errChan    chan error
 	wg         sync.WaitGroup
 	ctx        context.Context
@@ -40,7 +40,7 @@ type WorkerPool struct {
 func NewWorkerPool(numWorkers, queueSize int) *WorkerPool {
 	return &WorkerPool{
 		numWorkers: numWorkers,
-		jobChan:    make(chan Job, queueSize),
+		jobChan:    make(chan *Job, queueSize),
 		errChan:    make(chan error, queueSize),
 	}
 }
@@ -81,6 +81,9 @@ func (wp *WorkerPool) worker(ctx context.Context, id int) {
 			if err := wp.handler(ctx, job); err != nil {
 				wp.reportError(fmt.Errorf("worker %d: job %s failed: %w", id, job.ID, err))
 			}
+
+			// Return job to the pool
+			job.Release()
 		}
 	}
 }
@@ -95,7 +98,7 @@ func (wp *WorkerPool) reportError(err error) {
 }
 
 // Submit sends a job to the queue. Returns ErrQueueFull if the buffer is at capacity.
-func (wp *WorkerPool) Submit(ctx context.Context, job Job) error {
+func (wp *WorkerPool) Submit(ctx context.Context, job *Job) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -108,7 +111,7 @@ func (wp *WorkerPool) Submit(ctx context.Context, job Job) error {
 
 // SubmitBlocking sends a job to the queue and waits until space is available.
 // This is the recommended way to handle backpressure in high-load scenarios.
-func (wp *WorkerPool) SubmitBlocking(ctx context.Context, job Job) error {
+func (wp *WorkerPool) SubmitBlocking(ctx context.Context, job *Job) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()

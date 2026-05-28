@@ -20,7 +20,7 @@
 | Tes Benchmark   | 15+             | 15+      | 0     | ✅ LOLOS  |
 | Komparasi Fiber | 3               | 3        | 0     | ✅ UNGGUL |
 
-**Kesimpulan**: Framework NanoPony menunjukkan performa yang **sebanding dengan Fiber** dalam hal kecepatan startup dan **jauh lebih unggul (~39x lebih cepat)** dalam throughput pemrosesan job internal dengan alokasi memori yang sangat efisien (16 B/op).
+**Kesimpulan**: Framework NanoPony menunjukkan performa yang **sebanding dengan Fiber** dalam hal kecepatan startup dan **jauh lebih unggul (~18x-20x lebih cepat)** dalam throughput pemrosesan job internal dengan alokasi memori yang sangat efisien (17 B/op) berkat penggunaan `sync.Pool`.
 
 ---
 
@@ -43,12 +43,12 @@ _Mengukur berapa lama waktu yang dibutuhkan untuk membuat instance framework bar
 
 _Mengukur kecepatan pemrosesan 1.000+ unit kerja._
 
-| Framework    | Throughput   | Memori/Op   | Alokasi/Op | Performa Relatif        |
-| ------------ | ------------ | ----------- | ---------- | ----------------------- |
-| **NanoPony** | **374,8 ns** | **16 B/op** | **1**      | 🚀 **Juara Umum**       |
-| **Echo**     | 2.452 ns     | 5.312 B/op  | 13         | 🥈 Cepat                |
-| **Iris**     | 2.803 ns     | 5.312 B/op  | 13         | 🥉 Cepat                |
-| **Fiber**    | 11.118 ns    | 5.529 B/op  | 21         | 🐢 Lambat (di test ini) |
+| Framework    | Throughput     | Memori/Op   | Alokasi/Op | Performa Relatif        |
+| ------------ | -------------- | ----------- | ---------- | ----------------------- |
+| **NanoPony** | **~589.1 ns**  | **17 B/op** | **2**      | 🚀 **Juara Umum**       |
+| **Echo**     | ~2.502 ns      | 5.319 B/op  | 13         | 🥈 Cepat                |
+| **Iris**     | ~2.827 ns      | 5.323 B/op  | 13         | 🥉 Cepat                |
+| **Fiber**    | ~10.769 ns     | 5.616 B/op  | 21         | 🐢 Lambat (di test ini) |
 
 > [!NOTE]
 > Fiber menunjukkan angka throughput yang lebih rendah dalam pengujian ini karena overhead dari `app.Test` yang melakukan simulasi HTTP request lengkap. NanoPony unggul telak karena optimasi antrean internal (Worker Pool).

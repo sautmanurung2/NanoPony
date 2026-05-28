@@ -29,17 +29,17 @@ func TestWorkerPoolNoMemoryLeak(t *testing.T) {
 	for cycle := 0; cycle < 20; cycle++ {
 		pool := NewWorkerPool(10, 500)
 
-		pool.Start(ctx, func(ctx context.Context, job Job) error {
+		pool.Start(ctx, func(ctx context.Context, job *Job) error {
 			time.Sleep(1 * time.Millisecond)
 			return nil
 		})
 
 		// Submit many jobs
 		for i := 0; i < 100; i++ {
-			pool.Submit(ctx, Job{
-				ID:   "leak-test",
-				Data: map[string]interface{}{"index": i, "data": make([]byte, 100)},
-			})
+			job := AcquireJob()
+			job.ID = "leak-test"
+			job.Data = map[string]interface{}{"index": i, "data": make([]byte, 100)}
+			pool.Submit(ctx, job)
 		}
 
 		time.Sleep(50 * time.Millisecond)
@@ -67,7 +67,7 @@ func TestWorkerPoolNoMemoryLeak(t *testing.T) {
 func TestPollerNoMemoryLeak(t *testing.T) {
 	ctx := context.Background()
 	pool := NewWorkerPool(5, 500)
-	pool.Start(ctx, func(ctx context.Context, job Job) error {
+	pool.Start(ctx, func(ctx context.Context, job *Job) error {
 		time.Sleep(1 * time.Millisecond)
 		return nil
 	})
@@ -138,7 +138,7 @@ func TestFrameworkNoMemoryLeak(t *testing.T) {
 
 		components := framework.Build()
 
-		components.Start(ctx, func(ctx context.Context, job Job) error {
+		components.Start(ctx, func(ctx context.Context, job *Job) error {
 			time.Sleep(1 * time.Millisecond)
 			return nil
 		})
@@ -174,7 +174,7 @@ func BenchmarkMemoryAllocation(b *testing.B) {
 
 	ctx := context.Background()
 	pool := NewWorkerPool(5, 1000)
-	pool.Start(ctx, func(ctx context.Context, job Job) error {
+	pool.Start(ctx, func(ctx context.Context, job *Job) error {
 		return nil
 	})
 	defer pool.Stop()
@@ -182,9 +182,9 @@ func BenchmarkMemoryAllocation(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		pool.Submit(ctx, Job{
-			ID:   "bench",
-			Data: make([]byte, 100),
-		})
+		job := AcquireJob()
+		job.ID = "bench"
+		job.Data = make([]byte, 100)
+		pool.Submit(ctx, job)
 	}
 }

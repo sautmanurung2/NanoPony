@@ -65,6 +65,7 @@
 
 ### 🚀 Worker Pool
 
+- ✅ **Ultra-Efficient sync.Pool** - Reuse objek Job untuk mengurangi GC pressure
 - ✅ **Concurrent Job Processing** - Multiple workers untuk proses jobs secara parallel
 - ✅ **Bounded Queue** - Backpressure dengan queue size limit
 - ✅ **Non-blocking Submit** - Returns `ErrQueueFull` jika queue penuh
@@ -235,7 +236,7 @@ func main() {
     ctx, cancel := context.WithCancel(context.Background())
     defer cancel()
 
-    components.Start(ctx, func(ctx context.Context, job nanopony.Job) error {
+    components.Start(ctx, func(ctx context.Context, job *nanopony.Job) error {
         log.Printf("Memproses job: %+v", job)
         return nil
     })
@@ -349,17 +350,17 @@ success, err := producer.Produce("topic-name", map[string]interface{}{
 
 ```go
 pool := nanopony.NewWorkerPool(5, 100)
-pool.Start(ctx, func(ctx context.Context, job nanopony.Job) error {
+pool.Start(ctx, func(ctx context.Context, job *nanopony.Job) error {
     // proses job
     fmt.Printf("Memproses: %+v\n", job.Data)
     return nil
 })
 
 // Submit job
-pool.Submit(ctx, nanopony.Job{
-    ID:   "job-1",
-    Data: map[string]interface{}{"key": "value"},
-})
+job := nanopony.AcquireJob()
+job.ID = "job-1"
+job.Data = map[string]interface{}{"key": "value"}
+pool.Submit(ctx, job)
 
 // Hentikan pool
 pool.Stop()

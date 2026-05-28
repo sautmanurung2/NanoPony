@@ -75,7 +75,7 @@ func (f *exampleDataFetcher) Fetch() ([]interface{}, error) {
 }
 
 // exampleJobHandler handles jobs from the worker pool
-func exampleJobHandler(ctx context.Context, job nanopony.Job) error {
+func exampleJobHandler(ctx context.Context, job *nanopony.Job) error {
 	fmt.Printf("Processing job: %+v\n", job)
 	time.Sleep(100 * time.Millisecond) // Simulate work
 	return nil
