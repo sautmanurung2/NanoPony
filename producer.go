@@ -31,8 +31,12 @@ type MessageProducer interface {
 	ProduceWithContext(ctx context.Context, topic string, message any, loggerEntry *LoggerEntry) (bool, error)
 	// ProduceProto sends a protobuf message to the specified topic using background context.
 	ProduceProto(topic string, message proto.Message, loggerEntry *LoggerEntry) (bool, error)
+	// ProduceProtoWithKey sends a protobuf message with a specific key to the specified topic using background context.
+	ProduceProtoWithKey(topic string, key []byte, message proto.Message, loggerEntry *LoggerEntry) (bool, error)
 	// ProduceWithContextProto sends a protobuf message with context support.
 	ProduceWithContextProto(ctx context.Context, topic string, message proto.Message, loggerEntry *LoggerEntry) (bool, error)
+	// ProduceWithContextAndKeyProto sends a protobuf message with a specific key and context support.
+	ProduceWithContextAndKeyProto(ctx context.Context, topic string, key []byte, message proto.Message, loggerEntry *LoggerEntry) (bool, error)
 	// Close closes the producer and releases resources
 	Close() error
 }
@@ -68,6 +72,12 @@ func (p *KafkaProducer) ProduceProto(topic string, message proto.Message, logger
 	return p.ProduceWithContextProto(context.Background(), topic, message, loggerEntry)
 }
 
+// ProduceProtoWithKey sends a message to the specified topic using background context.
+// Returns true if successful, or an error if the message could not be sent.
+func (p *KafkaProducer) ProduceProtoWithKey(topic string, key []byte, message proto.Message, loggerEntry *LoggerEntry) (bool, error) {
+	return p.ProduceWithContextAndKeyProto(context.Background(), topic, key, message, loggerEntry)
+}
+
 // writeKafkaMessage is an internal helper that handles the common logic for sending messages
 // and logging the outcomes to reduce code duplication.
 func (p *KafkaProducer) writeKafkaMessage(ctx context.Context, topic string, payload any, messageBytes []byte, logData string, loggerEntry *LoggerEntry) (bool, error) {
@@ -93,6 +103,46 @@ func (p *KafkaProducer) writeKafkaMessage(ctx context.Context, topic string, pay
 	}
 
 	return true, nil
+}
+
+// writeKafkaMessageWithKey is an internal helper that handles the common logic for sending messages with a key
+// and logging the outcomes to reduce code duplication.
+func (p *KafkaProducer) writeKafkaMessageWithKey(ctx context.Context, topic string, key []byte, payload any, messageBytes []byte, logData string, loggerEntry *LoggerEntry) (bool, error) {
+	kafkaMsg := kafka.Message{
+		Topic: topic,
+		Value: messageBytes,
+		Key:   key,
+		WriterData: KafkaMessageMetadata{
+			LoggerEntry: loggerEntry,
+			Payload:     payload,
+			LogData:     logData,
+		},
+	}
+
+	if err := p.writer.WriteMessages(ctx, kafkaMsg); err != nil {
+		if loggerEntry != nil {
+			info := fmt.Sprintf("Error writing message to Kafka (immediate): %s", err)
+			loggerEntry.LoggingData("error", payload, ResponseLog{
+				Status:  "error",
+				Message: info,
+			})
+		}
+		return false, fmt.Errorf("failed to write message to kafka: %w", err)
+	}
+
+	return true, nil
+}
+
+// ProduceWithContextAndKeyProto sends a message with a specific key to the specified topic using the provided context.
+func (p *KafkaProducer) ProduceWithContextAndKeyProto(ctx context.Context, topic string, key []byte, message proto.Message, loggerEntry *LoggerEntry) (bool, error) {
+	messageBytes, err := proto.Marshal(message)
+	if err != nil {
+		return false, fmt.Errorf("failed to marshal message: %w", err)
+	}
+
+	// Use protojson for human-readable logging of binary data
+	logData, _ := protojson.Marshal(message)
+	return p.writeKafkaMessageWithKey(ctx, topic, key, message, messageBytes, string(logData), loggerEntry)
 }
 
 // ProduceWithContext sends a message with context support for cancellation and timeout.
