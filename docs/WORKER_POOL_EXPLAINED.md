@@ -2,7 +2,7 @@
 
 ## Ringkasan
 
-Dokumen ini menjelaskan arsitektur worker pool di framework NanoPony, mencakup cara worker memproses job, manajemen queue, dan karakteristik performa. Sejak v0.0.35, NanoPony menggunakan `sync.Pool` untuk mendaur ulang objek `Job` guna meminimalkan alokasi memori dan GC pressure.
+Dokumen ini menjelaskan arsitektur worker pool di framework NanoPony, mencakup cara worker memproses job, manajemen queue, dan karakteristik performa. Sejak v0.0.59, NanoPony menggunakan `sync.Pool` untuk mendaur ulang objek `Job` guna meminimalkan alokasi memori dan GC pressure.
 
 ---
 

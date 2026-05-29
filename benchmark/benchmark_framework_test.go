@@ -8,6 +8,8 @@ import (
 	"runtime"
 	"testing"
 	"time"
+
+	"github.com/sautmanurung2/nanopony"
 )
 
 // ==================== BENCHMARK TESTS ====================
@@ -17,7 +19,7 @@ func BenchmarkFrameworkCreation(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		framework := NewFramework()
+		framework := nanopony.NewFramework()
 		if framework == nil {
 			b.Fatal("Expected framework to be created")
 		}

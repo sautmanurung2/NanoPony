@@ -217,8 +217,12 @@ func processPayload(payload any) (map[string]any, error) {
 		return nil, nil
 	}
 
-	// ALWAYS perform a deep copy for maps to avoid data races
-	// when the original map is modified by the caller or other workers.
+	// Direct check if it's already a map
+	if m, ok := payload.(map[string]any); ok {
+		return deepCopyMap(m), nil
+	}
+
+	// Fallback to JSON marshalling for other types
 	dataBytes, err := json.Marshal(payload)
 	if err != nil {
 		return map[string]any{"error": "failed_to_marshal", "raw": fmt.Sprintf("%v", payload)}, nil
@@ -230,6 +234,20 @@ func processPayload(payload any) (map[string]any, error) {
 		return map[string]any{"raw": string(dataBytes)}, nil
 	}
 	return payloadMap, nil
+}
+
+// deepCopyMap performs a shallow copy of a map, and recursively copies nested maps.
+// This is faster than json.Marshal/Unmarshal for map deep copying.
+func deepCopyMap(m map[string]any) map[string]any {
+	cp := make(map[string]any, len(m))
+	for k, v := range m {
+		if vm, ok := v.(map[string]any); ok {
+			cp[k] = deepCopyMap(vm)
+		} else {
+			cp[k] = v
+		}
+	}
+	return cp
 }
 
 // generateLogFileName creates a daily log file name with an optional prefix from config.

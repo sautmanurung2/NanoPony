@@ -1,3 +1,5 @@
+> **Bahasa:** [Bahasa Indonesia](ARCHITECTURE.md) | [English](ARCHITECTURE_EN.md)
+
 # Framework NanoPony - Dokumentasi Arsitektur
 
 ## 📋 Daftar Isi
@@ -485,7 +487,7 @@ Config
 ## Panduan Cepat
 
 ### 1. Analisis dibuat pada: 28 Mei 2026
-*Codebase: NanoPony v0.0.35 (Go 1.25.1)*
+*Codebase: NanoPony v0.0.59 (Go 1.25.1)*
 
 ### 2. Build Framework
 

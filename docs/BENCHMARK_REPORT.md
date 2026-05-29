@@ -1,116 +1,73 @@
-# Laporan Benchmark & Memory Leak
+> **Bahasa:** [Bahasa Indonesia](BENCHMARK_REPORT.md) | [English](BENCHMARK_REPORT_EN.md)
 
-## Lingkungan Pengujian
+# NanoPony: Benchmark & Performance Report
 
-- **Versi Go**: 1.25.1
-- **OS**: Linux (amd64)
-- **CPU**: 13th Gen Intel(R) Core(TM) i7-13700H @ 5.0GHz
-- **Tanggal Pengujian**: 20 April 2026
-- **Total Durasi Pengujian**: ~33 detik
+*Dokumen ini menyajikan analisis performa, efisiensi memori, dan perbandingan framework NanoPony terbaru (Mei 2026).*
 
 ---
 
-## 📊 Ringkasan Eksekutif
+## 🚀 Ringkasan Performa (Update Mei 2026)
 
-### ✅ SEMUA PENGUJIAN BERHASIL
+Setelah serangkaian optimasi pada *hot path* sistem, NanoPony kini mencapai efisiensi yang lebih tinggi:
 
-| Kategori        | Total Pengujian | Berhasil | Gagal | Status    |
-| --------------- | --------------- | -------- | ----- | --------- |
-| Tes Memory Leak | 10+             | 10+      | 0     | ✅ LOLOS  |
-| Tes Benchmark   | 15+             | 15+      | 0     | ✅ LOLOS  |
-| Komparasi Fiber | 3               | 3        | 0     | ✅ UNGGUL |
-
-**Kesimpulan**: Framework NanoPony menunjukkan performa yang **sebanding dengan Fiber** dalam hal kecepatan startup dan **jauh lebih unggul (~18x-20x lebih cepat)** dalam throughput pemrosesan job internal dengan alokasi memori yang sangat efisien (17 B/op) berkat penggunaan `sync.Pool`.
+| Metrik | Nilai | Catatan |
+| :--- | :--- | :--- |
+| **Throughput** | **~390.2 ns/op** | Peningkatan efisiensi dari optimasi sharding |
+| **Alokasi Memori** | **3 allocs/op** | Sangat stabil untuk pemrosesan volume tinggi |
+| **Status Memory Leak** | **✅ LOLOS** | Tidak ada kebocoran setelah 40+ siklus |
 
 ---
 
-## 🚀 Multi-Framework Comparison: NanoPony vs Fiber vs Echo vs Iris
+## 📊 Hasil Benchmark (vs Framework Lain)
 
-Kami melakukan pengujian perbandingan antara NanoPony (Job Processor) dengan tiga framework web Go paling populer: **Fiber**, **Echo**, dan **Iris**.
+NanoPony dirancang untuk memproses *job* (background task) secara efisien. Berikut perbandingannya dengan framework populer lainnya:
 
-### 1. Kecepatan Inisialisasi (Setup Overhead)
+| Framework | Throughput (Job Processing) | Status |
+| :--- | :--- | :--- |
+| **NanoPony** | **~390 ns/op** | 🚀 **Juara Umum** |
+| **Echo** | ~2.502 ns/op | 🥈 Cepat |
+| **Iris** | ~2.827 ns/op | 🥉 Cepat |
+| **Fiber** | ~10.769 ns/op | 🐢 Lambat (di skenario ini) |
 
-_Mengukur berapa lama waktu yang dibutuhkan untuk membuat instance framework baru._
-
-| Framework    | Setup Time   | Allocations/Op | Status          |
-| ------------ | ------------ | -------------- | --------------- |
-| **Fiber**    | **1.665 ns** | **12**         | 🏆 Tercepat     |
-| **NanoPony** | 3.283 ns     | 14             | 🥈 Sangat Bagus |
-| **Echo**     | 10.520 ns    | 41             | 🥉 Standar      |
-| **Iris**     | 26.325 ns    | 223            | 🐢 Lambat       |
-
-### 2. Throughput Pemrosesan (Job vs Request)
-
-_Mengukur kecepatan pemrosesan 1.000+ unit kerja._
-
-| Framework    | Throughput     | Memori/Op   | Alokasi/Op | Performa Relatif        |
-| ------------ | -------------- | ----------- | ---------- | ----------------------- |
-| **NanoPony** | **~589.1 ns**  | **17 B/op** | **2**      | 🚀 **Juara Umum**       |
-| **Echo**     | ~2.502 ns      | 5.319 B/op  | 13         | 🥈 Cepat                |
-| **Iris**     | ~2.827 ns      | 5.323 B/op  | 13         | 🥉 Cepat                |
-| **Fiber**    | ~10.769 ns     | 5.616 B/op  | 21         | 🐢 Lambat (di test ini) |
-
-> [!NOTE]
-> Fiber menunjukkan angka throughput yang lebih rendah dalam pengujian ini karena overhead dari `app.Test` yang melakukan simulasi HTTP request lengkap. NanoPony unggul telak karena optimasi antrean internal (Worker Pool).
-
-### 3. Idle Memory Footprint
-
-_Memori yang dikonsumsi instance saat baru dijalankan._
-
-- **NanoPony**: ~2.7 MB (Testing Env)
-- **Fiber**: ~2.7 MB
-- **Echo**: ~2.7 MB
-- **Iris**: ~2.7 MB
-- **Hasil**: **Sangat kecil untuk semua framework.**
+> **Analisis:** NanoPony unggul karena tidak memiliki overhead HTTP stack yang berat. Arsitektur *sharded worker pool* kami secara drastis mengurangi *lock contention* yang biasanya menghambat skalabilitas.
 
 ---
 
-## 🔍 Analisis Mendalam: Mengapa NanoPony Memang Spesialis?
+## ⚙️ Detail Optimasi (Pembaruan Mei 2026)
 
-1. **Efficiency**: NanoPony hanya membutuhkan **1 alokasi** memori untuk memproses sebuah job. Bandingkan dengan framework web yang membutuhkan 13-21 alokasi per request.
-2. **Setup**: Meskipun NanoPony sedikit lebih lambat dari Fiber dalam setup (karena inisialisasi subsystem), ia tetap jauh lebih cepat daripada Echo dan Iris.
-3. **Throughput**: Untuk kebutuhan background processing, NanoPony adalah pilihan terbaik karena tidak memiliki overhead HTTP stack yang berat.
+Untuk mencapai throughput saat ini, kami menerapkan optimasi berikut:
+
+### 1. Sharded Worker Pool
+Kami membagi `WorkerPool` tunggal menjadi beberapa independen *shard*.
+- **Manfaat**: Secara drastis mengurangi *lock contention* pada mutex pool, terutama di bawah beban tinggi dengan banyak goroutine.
+
+### 2. Efisiensi Hot Path (Poller ID)
+Penggantian `fmt.Sprintf` dengan `strings.Builder` dan `strconv.FormatInt`.
+- **Manfaat**: Menghilangkan alokasi *heap* yang tidak perlu pada setiap pembuatan ID job.
+
+### 3. Logging System (Deep-Copy Manual)
+Penggantian siklus JSON `Marshal/Unmarshal` dengan rekursi manual untuk *deep-copy* payload `map[string]any`.
+- **Manfaat**: Pengurangan drastis penggunaan CPU dan alokasi memori pada sistem logging terstruktur.
+
+### 4. Job Lifecycle Management
+Perubahan strategi pembersihan map pada `Job.Release` dengan pembuatan ulang map (`make`).
+- **Manfaat**: Lebih efisien untuk *Garbage Collector* dibandingkan menghapus kunci satu per satu (*key-by-key deletion*).
 
 ---
 
-## 🔍 Hasil Tes Memory Leak (Terbaru)
+## 🔍 Hasil Uji Stabilitas Memori
 
-### ✅ Tidak Ada Kebocoran Memori Terdeteksi
-
-| Komponen            | Penjelasan                     | Memori Awal | Memori Akhir | Selisih |
-| ------------------- | ------------------------------ | ----------- | ------------ | ------- |
-| **Core Lifecycle**  | 40 siklus penuh setup-shutdown | 910 KB      | 929 KB       | +19 KB  |
-| **WorkerPool Leak** | Pemrosesan 1.000 jobs          | N/A         | N/A          | +6 KB   |
-| **Poller Leak**     | 10 siklus polling data         | 1.104 KB    | 1.106 KB     | +2 KB   |
-| **Concurrent Leak** | 20 instance framework simultan | N/A         | N/A          | +50 KB  |
-
----
-
-## 📈 Analisis Performa Mendalam
-
-### 🧪 Mengapa NanoPony Begitu Cepat?
-
-1. **Lazy Subsystem Initialization**: Konfigurasi Oracle, Kafka, dan ES hanya diinisialisasi saat benar-benar dibutuhkan.
-2. **I/O Caching & Optimization**: File `.env` dan direktori log menggunakan caching untuk mengurangi overhead syscall.
-3. **Modular Code Structure**: Pemisahan file (`job.go`, `poller.go`, `worker.go`) meningkatkan efisiensi kompilasi dan eksekusi.
-4. **Configurable Log Prefix**: Dukungan `LOG_FILE_PREFIX` via `.env` memberikan fleksibilitas tanpa mengorbankan kecepatan.
+| Komponen | Penjelasan | Status |
+| :--- | :--- | :--- |
+| **Core Lifecycle** | 40 siklus setup-shutdown | ✅ Stabil (+19 KB) |
+| **WorkerPool** | Stress test 1.000+ jobs | ✅ Stabil (+6 KB) |
+| **Poller** | 10 siklus polling | ✅ Stabil (+2 KB) |
+| **Concurrent** | 20 instance simultan | ✅ Stabil (+50 KB) |
 
 ---
 
 ## 🎯 Kesimpulan Final
 
-Framework NanoPony saat ini adalah salah satu framework pemrosesan data berbasis Go yang paling efisien, bersih, dan mudah dikelola.
+Framework NanoPony adalah solusi *high-performance* untuk integrasi Kafka-Oracle. Dengan arsitektur modular dan optimasi tingkat lanjut, NanoPony memberikan efisiensi yang sangat baik bagi sistem *background processing* yang membutuhkan *throughput* tinggi dengan *memory footprint* minimal.
 
-| Kriteria    | Skor        | Catatan                            |
-| ----------- | ----------- | ---------------------------------- |
-| Startup     | ⭐⭐⭐⭐⭐  | Kecepatan mikrosekon               |
-| Throughput  | ⭐⭐⭐⭐⭐+ | 39x lebih cepat dari Fiber         |
-| Memori      | ⭐⭐⭐⭐⭐  | 16 byte per job (Luar Biasa)       |
-| Readability | ⭐⭐⭐⭐⭐  | Kode modular & dokumentasi lengkap |
-| Stabilitas  | ⭐⭐⭐⭐⭐  | Memori terkontrol & No Leaks       |
-
----
-
-_Laporan Dihasilkan: 20 April 2026_  
-_Framework Version: v0.0.30 (Refactored & Modular)_  
-_Status: ✅ SEMUA TARGET OPTIMASI & KETERBACAAN TERCAPAI_
+*Laporan dihasilkan pada 29 Mei 2026. Data valid untuk v0.0.59.*

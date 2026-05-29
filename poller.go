@@ -19,6 +19,8 @@ package nanopony
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -64,7 +66,7 @@ func (f DataFetcherFunc) Fetch() ([]any, error) {
 type Poller struct {
 	config      PollerConfig
 	jobSlots    chan struct{}
-	workerPool  *WorkerPool
+	workerPool  *ShardedWorkerPool
 	dataFetcher DataFetcher
 	ctx         context.Context
 	cancel      context.CancelFunc
@@ -81,7 +83,7 @@ type Poller struct {
 //   - config: Configuration settings for timing and batching
 //   - workerPool: The pool where fetched items will be submitted as jobs
 //   - dataFetcher: The source of data items
-func NewPoller(config PollerConfig, workerPool *WorkerPool, dataFetcher DataFetcher) *Poller {
+func NewPoller(config PollerConfig, workerPool *ShardedWorkerPool, dataFetcher DataFetcher) *Poller {
 	ctx, cancel := context.WithCancel(context.Background())
 	// Use timestamp for session ID to ensure unique job IDs across restarts
 	sessionID := time.Now().Format("20060102150405")
@@ -174,7 +176,15 @@ func (p *Poller) pollOnce() {
 	for _, item := range data {
 		jobID := atomic.AddInt64(&p.jobCounter, 1)
 		job := AcquireJob()
-		job.ID = fmt.Sprintf("poll-%s-%d", p.sessionID, jobID)
+
+		// Use strings.Builder for efficient string concatenation
+		var sb strings.Builder
+		sb.WriteString("poll-")
+		sb.WriteString(p.sessionID)
+		sb.WriteString("-")
+		sb.WriteString(strconv.FormatInt(jobID, 10))
+		job.ID = sb.String()
+
 		job.Data = item
 		job.Meta["source"] = "poller"
 		job.Meta["timestamp"] = time.Now().Unix()

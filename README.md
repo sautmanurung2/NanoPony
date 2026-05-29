@@ -9,6 +9,8 @@
   />
 </a>
 
+> **Bahasa:** [Bahasa Indonesia](README.md) | [English](README_EN.md)
+
 **NanoPony** adalah framework Go untuk integrasi Kafka-Oracle dengan arsitektur yang clean, reusable, dan production-ready.
 
 ## 📚 Dokumentasi Lengkap
@@ -395,14 +397,15 @@ defer stop()
 ```
 
 
-## 📊 Performa & Benchmark
+## 📊 Performance & Benchmark
 
 Framework NanoPony telah melalui pengujian performa menyeluruh:
 
 - ✅ **High Throughput**: ~39x lebih cepat daripada Fiber untuk pemrosesan internal.
-- ✅ **Ultra Efficient**: Hanya mengonsumsi **16 byte** dengan **1 alokasi** per job.
+- ✅ **Ultra Efficient**: Hanya mengonsumsi **16 byte** dengan **1 alokasi** per job (Optimized).
 - ✅ **Micro-second Setup**: Inisialisasi framework hanya membutuhkan waktu **2.1 µs**.
 - ✅ **Memory Leak Test**: Lolos uji 40+ siklus setup-shutdown tanpa kebocoran.
+- ✅ **Optimized Hot Paths**: Pengurangan alokasi string di Poller dan optimasi deep-copying pada sistem logging.
 - ✅ **Multi-Framework**: Terbukti lebih efisien dibandingkan Fiber, Echo, dan Iris untuk job processing.
 
 > 📖 **Detail:** Baca [BENCHMARK_REPORT.md](docs/BENCHMARK_REPORT.md) untuk hasil lengkap.

@@ -63,7 +63,7 @@ type Framework struct {
 	db           *sql.DB
 	kafkaWriter  *kafka.Writer
 	producer     *KafkaProducer
-	workerPool   *WorkerPool
+	workerPool   *ShardedWorkerPool
 	poller       *Poller
 	cleanupFuncs []func() error
 	built        bool
@@ -231,7 +231,7 @@ func (f *Framework) WithWorkerPool(numWorkers, queueSize int) *Framework {
 
 // WithWorkerPoolFromInstance allows using an existing worker pool
 // instead of creating a new one.
-func (f *Framework) WithWorkerPoolFromInstance(pool *WorkerPool) *Framework {
+func (f *Framework) WithWorkerPoolFromInstance(pool *ShardedWorkerPool) *Framework {
 	f.workerPool = pool
 	return f
 }
@@ -324,7 +324,7 @@ func (f *Framework) BuildSafe() (*FrameworkComponents, error) {
 
 	// Dynamically adjust Kafka BatchSize based on worker pool size
 	if f.kafkaWriter != nil && f.workerPool != nil {
-		f.kafkaWriter.BatchSize = f.workerPool.numWorkers
+		f.kafkaWriter.BatchSize = f.workerPool.NumWorkers()
 	}
 
 	return &FrameworkComponents{
@@ -350,7 +350,7 @@ type FrameworkComponents struct {
 	// Producer is the Kafka producer wrapper
 	Producer *KafkaProducer
 	// WorkerPool manages the concurrent job processing
-	WorkerPool *WorkerPool
+	WorkerPool *ShardedWorkerPool
 	// Poller periodically fetches data and submits jobs
 	Poller *Poller
 

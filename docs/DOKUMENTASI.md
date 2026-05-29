@@ -1,4 +1,6 @@
-# Dokumentasi Framework NanoPony (v0.0.35 - Sync Mei 2026)
+> **Bahasa:** [Bahasa Indonesia](DOKUMENTASI.md) | [English](DOCUMENTATION_EN.md)
+
+# Dokumentasi Framework NanoPony (v0.0.59 - Sync Mei 2026)
 
 **NanoPony** adalah framework Go untuk integrasi Kafka-Oracle dengan arsitektur yang clean, reusable, dan production-ready. Framework ini menyediakan komponen-komponen siap pakai untuk membangun sistem data pipeline yang scalable dengan minimal boilerplate dan efisiensi memori tingkat tinggi menggunakan `sync.Pool`.
 
@@ -12,7 +14,8 @@
 4. [Layer Kafka](#3-layer-kafka)
 5. [Worker Pool](#4-worker-pool)
 6. [Poller](#5-poller)
-8. [Framework Builder & Lifecycle](#7-framework-builder--lifecycle)
+7. [Logging System (Optimized)](#6-logging-system-optimized)
+8. [Framework Builder & Lifecycle](#8-framework-builder--lifecycle)
 9. [Best Practices](#best-practices)
 
 ---
@@ -140,7 +143,7 @@ Jika `KAFKA_MODELS=kafka-confluent`, NanoPony otomatis mengaktifkan autentikasi 
 **File**: `job.go`, `worker.go`
 
 ### Konsep Utama
-Worker Pool mengelola kumpulan goroutine yang memproses `Job` secara konkuren. Sejak v0.0.35, NanoPony menggunakan `sync.Pool` untuk mendaur ulang objek `Job`, sehingga mengurangi alokasi memori secara drastis.
+Worker Pool mengelola kumpulan goroutine yang memproses `Job` secara konkuren. Sejak v0.0.59, NanoPony menggunakan `sync.Pool` untuk mendaur ulang objek `Job`, sehingga mengurangi alokasi memori secara drastis.
 
 ### Job Metadata & sync.Pool
 Anda harus menggunakan `nanopony.AcquireJob()` untuk membuat job baru. Objek ini akan otomatis dikembalikan ke pool oleh worker setelah handler selesai.
@@ -168,15 +171,35 @@ err := pool.SubmitBlocking(ctx, job)
 ### Mekanisme Slot (Semaphore)
 Poller menggunakan `JobSlotSize` untuk membatasi berapa banyak operasi polling yang boleh berjalan secara bersamaan. Jika slot penuh (misalnya karena polling sebelumnya masih berlangsung), polling berikutnya akan dilewati (*skipped*).
 
-### Keunikan ID Pekerjaan
+### Optimasi ID Pekerjaan (Mei 2026)
 Setiap pekerjaan yang dihasilkan oleh Poller memiliki ID format: `poll-[SessionID]-[Counter]`.
 - **SessionID**: Berbasis timestamp saat aplikasi dijalankan.
 - **Counter**: Atomic counter yang terus meningkat.
-Ini menjamin tidak ada duplikasi ID antar proses.
+Untuk menghindari *heap allocation* yang berlebihan, ID kini dikonstruksi menggunakan `strings.Builder` dan `strconv.FormatInt` yang jauh lebih efisien daripada `fmt.Sprintf`.
 
 ---
 
-## 6. Framework Builder & Lifecycle
+## 6. Logging System (Optimized)
+
+**File**: `logger.go`, `logger_internal.go`
+
+### Deskripsi
+Logging terstruktur dengan rotasi file, output console, dan integrasi Elasticsearch.
+
+### Optimasi Deep Copy (Mei 2026)
+Sebelumnya, `processPayload` menggunakan siklus JSON `Marshal/Unmarshal` untuk melakukan *deep copy* payload. Hal ini menyebabkan beban CPU dan memori yang tinggi.
+Kini, NanoPony menggunakan **Recursive Manual Copy** untuk tipe `map[string]any` yang jauh lebih cepat dan hemat alokasi.
+
+```go
+// Ilustrasi Deep Copy Baru
+func deepCopyMap(m map[string]any) map[string]any {
+    // ... rekursif manual jauh lebih efisien ...
+}
+```
+
+---
+
+## 8. Framework Builder & Lifecycle
 
 **File**: `framework.go`
 
@@ -242,4 +265,4 @@ Gunakan `DynamicConfig` untuk pengaturan yang bersifat opsional atau modul kusto
 ✅ **Safe-Fail Validation** - Validasi konfigurasi di awal aplikasi berjalan.  
 ✅ **Aggregated Shutdown Errors** - Melaporkan semua masalah saat proses shutdown berakhir.  
 ✅ **SQL Debugger** - Utilitas interpolasi query untuk logging yang mudah dibaca.  
-✅ **Multi-Framework Speed** - ~39x lebih cepat dari Fiber untuk internal jobs.
+✅ **High Performance** - ~39x lebih cepat dari Fiber untuk internal jobs, dengan alokasi memori yang dioptimalkan pada hot paths.

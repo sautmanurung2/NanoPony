@@ -1,3 +1,5 @@
+> **Bahasa:** [Bahasa Indonesia](CONTRIBUTING_GUIDE.md) | [English](CONTRIBUTING_GUIDE_EN.md)
+
 # 🚀 Panduan Kontribusi & Pengembangan NanoPony
 
 > **PENTING / IMPORTANT:** Sebelum berkontribusi, pastikan Anda telah membaca dan menyetujui **[CONTRIBUTING.md](./CONTRIBUTING.md)** dan **[CLA.md](./CLA.md)**. Setiap kontribusi akan menjadi hak milik bersama Saut Manurung & JNE Indonesia.

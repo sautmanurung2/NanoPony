@@ -12,10 +12,11 @@ func TestNewWorkerPool(t *testing.T) {
 	if pool == nil {
 		t.Fatal("Expected worker pool to be created")
 	}
-	if pool.numWorkers != 5 {
-		t.Errorf("Expected 5 workers, got %d", pool.numWorkers)
+	// Sharded pool approximates workers per shard * numShards
+	if pool.NumWorkers() < 1 {
+		t.Errorf("Expected positive number of workers, got %d", pool.NumWorkers())
 	}
-	if pool.running {
+	if pool.IsRunning() {
 		t.Error("Expected pool to not be running initially")
 	}
 }

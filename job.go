@@ -38,9 +38,9 @@ func (j *Job) Release() {
 	}
 	j.ID = ""
 	j.Data = nil
-	for k := range j.Meta {
-		delete(j.Meta, k)
-	}
+	// Recreating the map is generally faster than clearing it key-by-key for large maps
+	// and helps manage memory better.
+	j.Meta = make(map[string]any)
 	jobPool.Put(j)
 }
 

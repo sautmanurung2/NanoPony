@@ -1,3 +1,5 @@
+> **Bahasa:** [Bahasa Indonesia](CONTRIBUTING.md) | [English](CONTRIBUTING_EN.md)
+
 # Kontribusi untuk NanoPony
 
 Pertama-tama, terima kasih telah mempertimbangkan untuk berkontribusi di NanoPony! Orang-orang seperti Anda lah yang membuat NanoPony menjadi alat yang luar biasa untuk integrasi Kafka-Oracle dengan efisiensi tinggi.
