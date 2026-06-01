@@ -185,7 +185,7 @@ framework := nanopony.NewFramework().
     WithDatabase().
     WithKafkaWriter().
     WithProducer().
-    WithWorkerPool(5, 100).
+    WithWorkerPool(5, 100, 3).
     WithPoller(nanopony.DefaultPollerConfig(), dataFetcher)
 
 components := framework.Build()
@@ -230,7 +230,7 @@ func main() {
         WithDatabase().
         WithKafkaWriter().
         WithProducer().
-        WithWorkerPool(5, 100).
+        WithWorkerPool(5, 100, 3).
         WithPoller(nanopony.DefaultPollerConfig(), &myDataFetcher{})
 
     components := framework.Build()
@@ -351,7 +351,7 @@ success, err := producer.Produce("topic-name", map[string]interface{}{
 ### Worker Pool
 
 ```go
-pool := nanopony.NewWorkerPool(5, 100)
+pool := nanopony.NewWorkerPool(5, 100, 3)
 pool.Start(ctx, func(ctx context.Context, job *nanopony.Job) error {
     // proses job
     fmt.Printf("Memproses: %+v\n", job.Data)

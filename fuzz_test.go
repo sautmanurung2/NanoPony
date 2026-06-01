@@ -98,7 +98,7 @@ func FuzzJobSubmission(f *testing.F) {
 	f.Add("", "data-empty-id")
 
 	f.Fuzz(func(t *testing.T, id, data string) {
-		wp := NewWorkerPool(1, 10)
+		wp := NewWorkerPool(1, 10, 1)
 		ctx := context.Background()
 
 		job := AcquireJob()
@@ -148,9 +148,9 @@ func FuzzFormatBytes(f *testing.F) {
 
 // FuzzStressFrameworkLifecycle tests the orchestration logic with random sequences.
 func FuzzStressFrameworkLifecycle(f *testing.F) {
-	f.Add(int(1), int(1))
+	f.Add(int(1), int(1), int(1))
 
-	f.Fuzz(func(t *testing.T, workers int, queueSize int) {
+	f.Fuzz(func(t *testing.T, workers int, queueSize int, shards int) {
 		// Clean up global state
 		ResetConfig()
 
@@ -167,6 +167,9 @@ func FuzzStressFrameworkLifecycle(f *testing.F) {
 		if queueSize > 1000 {
 			queueSize = 1000
 		}
+		if shards < 1 {
+			shards = 1
+		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 		defer cancel()
@@ -176,7 +179,7 @@ func FuzzStressFrameworkLifecycle(f *testing.F) {
 				c.App.Env = "localhost"
 				c.App.KafkaModels = "kafka-localhost"
 			})).
-			WithWorkerPool(workers, queueSize).
+			WithWorkerPool(workers, queueSize, shards).
 			WithPoller(DefaultPollerConfig(), DataFetcherFunc(func() ([]any, error) {
 				return []any{"fuzz-item"}, nil
 			}))
@@ -199,11 +202,11 @@ func FuzzStressFrameworkLifecycle(f *testing.F) {
 
 // FuzzStressWorkerPoolParams tests worker pool with extreme parameter values.
 func FuzzStressWorkerPoolParams(f *testing.F) {
-	f.Add(5, 100)
-	f.Add(-1, -1)
-	f.Add(1000, 10000)
+	f.Add(5, 100, 2)
+	f.Add(-1, -1, -1)
+	f.Add(1000, 10000, 10)
 
-	f.Fuzz(func(t *testing.T, numWorkers int, queueSize int) {
+	f.Fuzz(func(t *testing.T, numWorkers int, queueSize int, numShards int) {
 		// Sanitize inputs for stability to avoid invalid channel sizes (panics)
 		if numWorkers < 1 {
 			numWorkers = 1
@@ -217,9 +220,12 @@ func FuzzStressWorkerPoolParams(f *testing.F) {
 		if queueSize > 10000 {
 			queueSize = 10000
 		}
+		if numShards < 1 {
+			numShards = 1
+		}
 
 		// Test initialization with random parameters
-		wp := NewWorkerPool(numWorkers, queueSize)
+		wp := NewWorkerPool(numWorkers, queueSize, numShards)
 		if wp == nil {
 			return
 		}
@@ -265,7 +271,7 @@ func FuzzStressPollerParams(f *testing.F) {
 			JobSlotSize: jobSlots,
 		}
 
-		wp := NewWorkerPool(1, 10)
+		wp := NewWorkerPool(1, 10, 1)
 		fetcher := DataFetcherFunc(func() ([]any, error) {
 			return []any{1, 2, 3}, nil
 		})

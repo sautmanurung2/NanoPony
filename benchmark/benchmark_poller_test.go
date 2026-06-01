@@ -13,7 +13,7 @@ import (
 func BenchmarkPollerCreation(b *testing.B) {
 	b.ReportAllocs()
 
-	pool := NewWorkerPool(5, 100)
+	pool := NewWorkerPool(5, 100, 2)
 	defer pool.Stop()
 
 	fetcher := DataFetcherFunc(func() ([]interface{}, error) {
@@ -32,7 +32,7 @@ func BenchmarkPollerCreation(b *testing.B) {
 func BenchmarkPollerStartStop(b *testing.B) {
 	b.ReportAllocs()
 
-	pool := NewWorkerPool(5, 100)
+	pool := NewWorkerPool(5, 100, 2)
 	ctx := context.Background()
 	pool.Start(ctx, func(ctx context.Context, job *Job) error {
 		return nil
@@ -53,7 +53,7 @@ func BenchmarkPollerStartStop(b *testing.B) {
 
 // BenchmarkPollerFetch tests memory allocation during polling
 func BenchmarkPollerFetch(b *testing.B) {
-	pool := NewWorkerPool(5, 1000)
+	pool := NewWorkerPool(5, 1000, 2)
 	ctx := context.Background()
 	pool.Start(ctx, func(ctx context.Context, job *Job) error {
 		return nil
@@ -80,7 +80,7 @@ func BenchmarkPollerFetch(b *testing.B) {
 
 // TestPollerMemoryLeak detects memory leaks in poller
 func TestPollerMemoryLeak(t *testing.T) {
-	pool := NewWorkerPool(5, 100)
+	pool := NewWorkerPool(5, 100, 2)
 	ctx := context.Background()
 	pool.Start(ctx, func(ctx context.Context, job *Job) error {
 		time.Sleep(1 * time.Millisecond)
@@ -105,7 +105,7 @@ func TestPollerMemoryLeak(t *testing.T) {
 
 // TestPollerLongRunning tests memory usage over extended polling period
 func TestPollerLongRunning(t *testing.T) {
-	pool := NewWorkerPool(5, 1000)
+	pool := NewWorkerPool(5, 1000, 2)
 	ctx := context.Background()
 
 	var processed atomic.Int64

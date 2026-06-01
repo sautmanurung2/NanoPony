@@ -8,7 +8,7 @@ import (
 )
 
 func TestPollerStartStop(t *testing.T) {
-	pool := NewWorkerPool(2, 10)
+	pool := NewWorkerPool(2, 10, 2)
 	ctx := context.Background()
 	pool.Start(ctx, func(ctx context.Context, job *Job) error {
 		return nil
@@ -71,7 +71,7 @@ func TestPollerConfig(t *testing.T) {
 }
 
 func TestPollerBatchSizeLimit(t *testing.T) {
-	pool := NewWorkerPool(1, 5)
+	pool := NewWorkerPool(1, 5, 1)
 	ctx := context.Background()
 
 	var processed atomic.Int64
@@ -117,7 +117,7 @@ func TestPollerBatchSizeLimit(t *testing.T) {
 }
 
 func TestPollerBlockingSubmitPreventsJobLoss(t *testing.T) {
-	pool := NewWorkerPool(1, 3)
+	pool := NewWorkerPool(1, 3, 1)
 	ctx := context.Background()
 
 	var processed atomic.Int64

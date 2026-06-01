@@ -210,7 +210,7 @@ components := nanopony.NewFramework().
     WithDatabase().
     WithKafkaWriter().
     WithProducer().
-    WithWorkerPool(5, 100).
+    WithWorkerPool(5, 100, 3).
     WithPoller(pollerConfig, fetcher).
     AddCleanup(myCleanupFunc).
     Build()

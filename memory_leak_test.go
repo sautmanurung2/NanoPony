@@ -27,7 +27,7 @@ func TestWorkerPoolNoMemoryLeak(t *testing.T) {
 
 	// Run multiple cycles
 	for cycle := 0; cycle < 20; cycle++ {
-		pool := NewWorkerPool(10, 500)
+		pool := NewWorkerPool(10, 500, 2)
 
 		pool.Start(ctx, func(ctx context.Context, job *Job) error {
 			time.Sleep(1 * time.Millisecond)
@@ -66,7 +66,7 @@ func TestWorkerPoolNoMemoryLeak(t *testing.T) {
 // TestPollerNoMemoryLeak verifies no memory leak in poller
 func TestPollerNoMemoryLeak(t *testing.T) {
 	ctx := context.Background()
-	pool := NewWorkerPool(5, 500)
+	pool := NewWorkerPool(5, 500, 2)
 	pool.Start(ctx, func(ctx context.Context, job *Job) error {
 		time.Sleep(1 * time.Millisecond)
 		return nil
@@ -134,7 +134,7 @@ func TestFrameworkNoMemoryLeak(t *testing.T) {
 
 		framework := NewFramework().
 			WithConfig(config).
-			WithWorkerPool(5, 200)
+			WithWorkerPool(5, 200, 2)
 
 		components := framework.Build()
 
@@ -173,7 +173,7 @@ func BenchmarkMemoryAllocation(b *testing.B) {
 	b.ReportAllocs()
 
 	ctx := context.Background()
-	pool := NewWorkerPool(5, 1000)
+	pool := NewWorkerPool(5, 1000, 2)
 	pool.Start(ctx, func(ctx context.Context, job *Job) error {
 		return nil
 	})

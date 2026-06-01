@@ -200,7 +200,7 @@ func main() {
 		WithConfig(nanoponyConfig).
 		WithKafkaWriterFromInstance(kafkaWriter).
 		WithProducerFromInstance(producer).
-		WithWorkerPool(cfg.WorkerPool.NumWorkers, cfg.WorkerPool.QueueSize).
+		WithWorkerPool(cfg.WorkerPool.NumWorkers, cfg.WorkerPool.QueueSize, 3).
 		WithPoller(nanopony.DefaultPollerConfig(), &pendingOrderFetcher{orderRepo: orderRepo})
 
 	components := framework.Build()
