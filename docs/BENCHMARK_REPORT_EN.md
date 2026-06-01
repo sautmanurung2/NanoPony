@@ -50,7 +50,7 @@ Replaced JSON `Marshal`/`Unmarshal` cycles with manual recursion for deep-copyin
 - **Benefit**: Drastically reduces CPU usage and memory allocation in the structured logging system.
 
 ### 4. Job Lifecycle Management
-Changed the strategy for clearing map metadata in `Job.Release` by recreating the map (`make`).
+Changed the strategy for clearing map metadata in `Job[T].Release` by recreating the map (`make`).
 - **Benefit**: More efficient for the *Garbage Collector* compared to removing keys one-by-one (*key-by-key deletion*).
 
 ---

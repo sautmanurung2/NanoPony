@@ -48,7 +48,7 @@ Kami memprioritaskan performa dan stabilitas.
 
 ## Struktur Proyek
 - `framework.go`: Entry point utama menggunakan Builder Pattern.
-- `job.go`: Definisi Job inti dan Handler.
+- `job.go`: Definisi unit kerja (Job Struct) dan Handler generik.
 - `worker.go`: Implementasi Worker Pool dan manajemen konkurensi.
 - `poller.go`: Pengambilan data periodik dan pembatasan laju (rate limiting).
 - `logger.go`: Sistem logging terstruktur.

@@ -48,7 +48,7 @@ We prioritize performance and stability.
 
 ## Project Structure
 - `framework.go`: Main entry point using Builder Pattern.
-- `job.go`: Core Job definition and Handler.
+- `job.go`: Core Job definition and generic Handler.
 - `worker.go`: Worker Pool implementation and concurrency management.
 - `poller.go`: Periodic data fetching and rate limiting.
 - `logger.go`: Structured logging system.

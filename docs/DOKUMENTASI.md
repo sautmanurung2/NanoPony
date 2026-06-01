@@ -146,9 +146,9 @@ Jika `KAFKA_MODELS=kafka-confluent`, NanoPony otomatis mengaktifkan autentikasi 
 Worker Pool mengelola kumpulan goroutine yang memproses `Job` secara konkuren. Sejak v0.0.59, NanoPony menggunakan `sync.Pool` untuk mendaur ulang objek `Job`, sehingga mengurangi alokasi memori secara drastis.
 
 ### Job Metadata & sync.Pool
-Anda harus menggunakan `nanopony.AcquireJob()` untuk membuat job baru. Objek ini akan otomatis dikembalikan ke pool oleh worker setelah handler selesai.
+Anda harus menggunakan `nanopony.AcquireJob[T]()` untuk membuat job baru. Objek ini akan otomatis dikembalikan ke pool oleh worker setelah handler selesai.
 ```go
-job := nanopony.AcquireJob()
+job := nanopony.AcquireJob[any]()
 job.ID = "job-123"
 job.Data = payload
 job.Meta["source"] = "poller-01"

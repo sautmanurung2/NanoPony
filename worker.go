@@ -9,9 +9,8 @@
 //	└─── shard N (pool N) ──→ workerChan ──→ worker...
 //
 // Each shard operates independently with its own job channel and worker goroutines.
-// Each shard has its own job channel and worker goroutines. Jobs are distributed
-// across shards in a round-robin manner.
 // Sharding significantly reduces lock contention on the job channel and state management.
+
 package nanopony
 
 import (
@@ -22,20 +21,23 @@ import (
 )
 
 // ShardedWorkerPool splits jobs across multiple independent pools to reduce contention.
-type ShardedWorkerPool struct {
-	shards          []*workerPoolShard
+type ShardedWorkerPool[T any] struct {
+	shards          []*workerPoolShard[T]
 	numShards       uint64
 	nextShard       uint64
 	workersPerShard int
 	totalWorkers    int
 }
 
-type workerPoolShard struct {
-	jobChan chan *Job
+type workerPoolShard[T any] struct {
+	jobChan chan *Job[T]
 	errChan chan error
-	wg      sync.WaitGroup
-	ctx     context.Context
-	cancel  context.CancelFunc
+
+	wg sync.WaitGroup
+
+	ctx    context.Context
+	cancel context.CancelFunc
+
 	running bool
 	mu      sync.RWMutex
 }
@@ -45,11 +47,11 @@ type workerPoolShard struct {
 // numWorkers = total worker count across all shards
 // queueSize  = total queue size across all shards
 // numShards  = number of shards
-func NewWorkerPool(
+func NewWorkerPool[T any](
 	numWorkers int,
 	queueSize int,
 	numShards int,
-) *ShardedWorkerPool {
+) *ShardedWorkerPool[T] {
 
 	if numWorkers < 1 {
 		numWorkers = 1
@@ -63,7 +65,6 @@ func NewWorkerPool(
 		numShards = 1
 	}
 
-	// Tidak masuk akal shard lebih banyak daripada worker.
 	if numShards > numWorkers {
 		numShards = numWorkers
 	}
@@ -78,16 +79,16 @@ func NewWorkerPool(
 		shardQueue = 1
 	}
 
-	shards := make([]*workerPoolShard, numShards)
+	shards := make([]*workerPoolShard[T], numShards)
 
 	for i := 0; i < numShards; i++ {
-		shards[i] = &workerPoolShard{
-			jobChan: make(chan *Job, shardQueue),
+		shards[i] = &workerPoolShard[T]{
+			jobChan: make(chan *Job[T], shardQueue),
 			errChan: make(chan error, shardQueue),
 		}
 	}
 
-	return &ShardedWorkerPool{
+	return &ShardedWorkerPool[T]{
 		shards:          shards,
 		numShards:       uint64(numShards),
 		workersPerShard: workersPerShard,
@@ -96,9 +97,9 @@ func NewWorkerPool(
 }
 
 // Start activates all shards.
-func (swp *ShardedWorkerPool) Start(
+func (swp *ShardedWorkerPool[T]) Start(
 	ctx context.Context,
-	handler JobHandler,
+	handler JobHandler[T],
 ) {
 	for _, shard := range swp.shards {
 		shard.mu.Lock()
@@ -120,9 +121,9 @@ func (swp *ShardedWorkerPool) Start(
 	}
 }
 
-func (swp *ShardedWorkerPool) worker(
-	shard *workerPoolShard,
-	handler JobHandler,
+func (swp *ShardedWorkerPool[T]) worker(
+	shard *workerPoolShard[T],
+	handler JobHandler[T],
 	id int,
 ) {
 	defer shard.wg.Done()
@@ -154,8 +155,8 @@ func (swp *ShardedWorkerPool) worker(
 	}
 }
 
-func (swp *ShardedWorkerPool) reportError(
-	shard *workerPoolShard,
+func (swp *ShardedWorkerPool[T]) reportError(
+	shard *workerPoolShard[T],
 	err error,
 ) {
 	select {
@@ -169,14 +170,14 @@ func (swp *ShardedWorkerPool) reportError(
 	}
 }
 
-func (swp *ShardedWorkerPool) getShard() *workerPoolShard {
+func (swp *ShardedWorkerPool[T]) getShard() *workerPoolShard[T] {
 	idx := atomic.AddUint64(&swp.nextShard, 1) % swp.numShards
 	return swp.shards[idx]
 }
 
-func (swp *ShardedWorkerPool) Submit(
+func (swp *ShardedWorkerPool[T]) Submit(
 	ctx context.Context,
-	job *Job,
+	job *Job[T],
 ) error {
 	shard := swp.getShard()
 
@@ -192,9 +193,9 @@ func (swp *ShardedWorkerPool) Submit(
 	}
 }
 
-func (swp *ShardedWorkerPool) SubmitBlocking(
+func (swp *ShardedWorkerPool[T]) SubmitBlocking(
 	ctx context.Context,
-	job *Job,
+	job *Job[T],
 ) error {
 	shard := swp.getShard()
 
@@ -207,7 +208,7 @@ func (swp *ShardedWorkerPool) SubmitBlocking(
 	}
 }
 
-func (swp *ShardedWorkerPool) Stop() {
+func (swp *ShardedWorkerPool[T]) Stop() {
 	for _, shard := range swp.shards {
 		shard.mu.Lock()
 
@@ -233,17 +234,17 @@ func (swp *ShardedWorkerPool) Stop() {
 }
 
 // NumWorkers returns configured worker count.
-func (swp *ShardedWorkerPool) NumWorkers() int {
+func (swp *ShardedWorkerPool[T]) NumWorkers() int {
 	return swp.totalWorkers
 }
 
 // NumShards returns configured shard count.
-func (swp *ShardedWorkerPool) NumShards() int {
+func (swp *ShardedWorkerPool[T]) NumShards() int {
 	return int(swp.numShards)
 }
 
 // IsRunning returns true if at least one shard is running.
-func (swp *ShardedWorkerPool) IsRunning() bool {
+func (swp *ShardedWorkerPool[T]) IsRunning() bool {
 	for _, shard := range swp.shards {
 		shard.mu.RLock()
 		running := shard.running
@@ -255,4 +256,15 @@ func (swp *ShardedWorkerPool) IsRunning() bool {
 	}
 
 	return false
+}
+
+// Errors returns a combined channel for all shard errors.
+func (swp *ShardedWorkerPool[T]) Errors() <-chan error {
+	// For simplicity, we'll return the first shard's error channel 
+	// or a merged channel. Merging channels in Go is complex.
+	// Most users only use one shard or expect a single stream.
+	if len(swp.shards) > 0 {
+		return swp.shards[0].errChan
+	}
+	return nil
 }

@@ -146,9 +146,9 @@ If `KAFKA_MODELS=kafka-confluent`, NanoPony automatically enables SASL/PLAIN aut
 The Worker Pool manages a collection of goroutines that process `Job`s concurrently. Since v0.0.59, NanoPony uses `sync.Pool` to recycle `Job` objects, drastically reducing memory allocation.
 
 ### Job Metadata & sync.Pool
-You must use `nanopony.AcquireJob()` to create a new job. This object will be automatically returned to the pool by the worker after the handler finishes.
+You must use `nanopony.AcquireJob[T]()` to create a new job. This object will be automatically returned to the pool by the worker after the handler finishes.
 ```go
-job := nanopony.AcquireJob()
+job := nanopony.AcquireJob[any]()
 job.ID = "job-123"
 job.Data = payload
 job.Meta["source"] = "poller-01"

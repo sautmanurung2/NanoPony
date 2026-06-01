@@ -8,27 +8,27 @@ import (
 )
 
 func TestPollerStartStop(t *testing.T) {
-	pool := NewWorkerPool(2, 10, 2)
+	pool := NewWorkerPool[any](2, 10, 2)
 	ctx := context.Background()
-	pool.Start(ctx, func(ctx context.Context, job *Job) error {
+	pool.Start(ctx, func(ctx context.Context, job *Job[any]) error {
 		return nil
 	})
 	defer pool.Stop()
 
-	fetchCount := 0
-	fetcher := DataFetcherFunc(func() ([]interface{}, error) {
-		fetchCount++
-		if fetchCount >= 3 {
-			return []interface{}{}, nil
+	var fetchCount int32
+	fetcher := DataFetcherFunc[any](func() ([]any, error) {
+		atomic.AddInt32(&fetchCount, 1)
+		if atomic.LoadInt32(&fetchCount) >= 3 {
+			return []any{}, nil
 		}
-		return []interface{}{"data1"}, nil
+		return []any{"data1"}, nil
 	})
 
 	config := DefaultPollerConfig()
 	config.Interval = 50 * time.Millisecond
 	config.JobSlotSize = 1
 
-	poller := NewPoller(config, pool, fetcher)
+	poller := NewPoller[any](config, pool, fetcher)
 	poller.Start()
 
 	if !poller.IsRunning() {
@@ -44,8 +44,8 @@ func TestPollerStartStop(t *testing.T) {
 }
 
 func TestDataFetcherFunc(t *testing.T) {
-	expected := []interface{}{"test1", "test2"}
-	fetcher := DataFetcherFunc(func() ([]interface{}, error) {
+	expected := []any{"test1", "test2"}
+	fetcher := DataFetcherFunc[any](func() ([]any, error) {
 		return expected, nil
 	})
 
@@ -61,7 +61,6 @@ func TestDataFetcherFunc(t *testing.T) {
 
 func TestPollerConfig(t *testing.T) {
 	config := DefaultPollerConfig()
-
 	if config.Interval != 1*time.Second {
 		t.Errorf("Expected interval 1s, got %v", config.Interval)
 	}
@@ -71,25 +70,23 @@ func TestPollerConfig(t *testing.T) {
 }
 
 func TestPollerBatchSizeLimit(t *testing.T) {
-	pool := NewWorkerPool(1, 5, 1)
+	pool := NewWorkerPool[any](1, 5, 1)
 	ctx := context.Background()
 
 	var processed atomic.Int64
-	pool.Start(ctx, func(ctx context.Context, job *Job) error {
+	pool.Start(ctx, func(ctx context.Context, job *Job[any]) error {
 		time.Sleep(10 * time.Millisecond)
 		processed.Add(1)
 		return nil
 	})
 	defer pool.Stop()
 
-	// Create fetcher that returns more data than batch size
 	var fetchCount atomic.Int64
-	fetcher := DataFetcherFunc(func() ([]any, error) {
+	fetcher := DataFetcherFunc[any](func() ([]any, error) {
 		count := fetchCount.Add(1)
 		if count >= 3 {
 			return []any{}, nil
 		}
-		// Return 20 items, but batch size will limit to 5
 		data := make([]any, 20)
 		for i := range data {
 			data[i] = "item"
@@ -100,37 +97,33 @@ func TestPollerBatchSizeLimit(t *testing.T) {
 	config := DefaultPollerConfig()
 	config.Interval = 50 * time.Millisecond
 	config.JobSlotSize = 1
-	config.BatchSize = 5 // Limit batch size
+	config.BatchSize = 5
 
-	poller := NewPoller(config, pool, fetcher)
+	poller := NewPoller[any](config, pool, fetcher)
 	poller.Start()
 
-	// Wait for polling to complete
 	time.Sleep(200 * time.Millisecond)
 	poller.Stop()
 
-	// Each poll should only process 5 items (not 20)
-	// With 2 successful polls, should have ~10 items processed
 	if processed.Load() > 15 {
-		t.Errorf("Expected ~10 jobs processed (limited by BatchSize=5), got %d", processed.Load())
+		t.Errorf("Expected ~10 jobs processed, got %d", processed.Load())
 	}
 }
 
 func TestPollerBlockingSubmitPreventsJobLoss(t *testing.T) {
-	pool := NewWorkerPool(1, 3, 1)
+	pool := NewWorkerPool[any](1, 3, 1)
 	ctx := context.Background()
 
 	var processed atomic.Int64
-	pool.Start(ctx, func(ctx context.Context, job *Job) error {
+	pool.Start(ctx, func(ctx context.Context, job *Job[any]) error {
 		time.Sleep(10 * time.Millisecond)
 		processed.Add(1)
 		return nil
 	})
 	defer pool.Stop()
 
-	// Create fetcher that returns 10 items
 	var fetchCount atomic.Int64
-	fetcher := DataFetcherFunc(func() ([]any, error) {
+	fetcher := DataFetcherFunc[any](func() ([]any, error) {
 		count := fetchCount.Add(1)
 		if count >= 2 {
 			return []any{}, nil
@@ -147,16 +140,14 @@ func TestPollerBlockingSubmitPreventsJobLoss(t *testing.T) {
 	config.JobSlotSize = 1
 	config.BatchSize = 10
 
-	poller := NewPoller(config, pool, fetcher)
+	poller := NewPoller[any](config, pool, fetcher)
 	poller.Start()
 
-	// Wait for all jobs to be processed
 	time.Sleep(300 * time.Millisecond)
 	poller.Stop()
 
-	// ALL jobs should be processed (no job loss with SubmitBlocking)
-	expectedJobs := int64(10) // 1 poll * 10 items
+	expectedJobs := int64(10)
 	if processed.Load() != expectedJobs {
-		t.Errorf("Expected %d jobs processed (no job loss), got %d", expectedJobs, processed.Load())
+		t.Errorf("Expected %d jobs processed, got %d", expectedJobs, processed.Load())
 	}
 }

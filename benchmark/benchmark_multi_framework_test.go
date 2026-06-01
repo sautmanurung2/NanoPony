@@ -26,7 +26,7 @@ func BenchmarkFrameworks_Setup(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			nanopony.ResetConfig()
 			config := nanopony.NewConfig()
-			fw := nanopony.NewFramework().
+			fw := nanopony.NewFramework[any]().
 				WithConfig(config).
 				WithWorkerPool(10, 100, 2).
 				Build()
@@ -79,13 +79,13 @@ func BenchmarkFrameworks_Throughput(b *testing.B) {
 	b.Run("NanoPony", func(b *testing.B) {
 		nanopony.ResetConfig()
 		config := nanopony.NewConfig()
-		fw := nanopony.NewFramework().
+		fw := nanopony.NewFramework[any]().
 			WithConfig(config).
 			WithWorkerPool(runtime.NumCPU(), b.N+1, 2).
 			Build()
 
 		done := make(chan struct{}, b.N)
-		fw.Start(ctx, func(ctx context.Context, job *nanopony.Job) error {
+		fw.Start(ctx, func(ctx context.Context, job *nanopony.Job[any]) error {
 			done <- struct{}{}
 			return nil
 		})
@@ -94,7 +94,7 @@ func BenchmarkFrameworks_Throughput(b *testing.B) {
 		b.ReportAllocs()
 
 		for i := 0; i < b.N; i++ {
-			job := nanopony.AcquireJob()
+			job := nanopony.AcquireJob[any]()
 			job.ID = fmt.Sprintf("%d", i)
 			fw.WorkerPool.Submit(ctx, job)
 		}
@@ -200,11 +200,11 @@ func TestFrameworks_MemoryUsage(t *testing.T) {
 	runMemoryTest("NanoPony", func() {
 		nanopony.ResetConfig()
 		config := nanopony.NewConfig()
-		fw := nanopony.NewFramework().
+		fw := nanopony.NewFramework[any]().
 			WithConfig(config).
 			WithWorkerPool(10, 100, 2).
 			Build()
-		fw.Start(context.Background(), func(ctx context.Context, job *nanopony.Job) error { return nil })
+		fw.Start(context.Background(), func(ctx context.Context, job *nanopony.Job[any]) error { return nil })
 	})
 
 	runMemoryTest("Fiber", func() {

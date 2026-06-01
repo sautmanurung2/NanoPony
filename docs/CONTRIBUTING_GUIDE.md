@@ -35,9 +35,9 @@ Ini adalah entry point utama. Framework menggunakan *method chaining*.
 * **Aturan:** Jika kamu menambah komponen baru, tambahkan method `.WithNamaKomponen()` yang mengembalikan `*Framework`.
 
 ### 2. Worker Pool & Job System (`worker.go`, `job.go`)
-NanoPony tidak langsung memproses data di satu loop. Data dibungkus menjadi `Job`.
+NanoPony tidak langsung memproses data di satu loop. Data dibungkus menjadi `Job[T]`.
 * **Job Struct:** Memiliki ID (*traceability*), Data (*payload*), dan Meta (konteks tambahan).
-* **Worker:** Goroutine yang terus menerus mengambil `Job` dari channel.
+* **Worker:** Goroutine yang terus menerus mengambil `Job[T]` dari channel.
 * **SubmitBlocking:** Ini fitur krusial. Jika antrean (*buffer channel*) penuh, fungsi ini akan "menahan" (*block*) pengirim sampai ada slot kosong. Ini mencegah RAM jebol karena tumpukan data.
 
 ### 3. Poller & Semaphore (`poller.go`)

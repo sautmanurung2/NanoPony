@@ -1,19 +1,4 @@
 // poller.go — Periodic data fetching with rate-limited job submission.
-//
-// Architecture:
-//
-//	ticker (every Interval)
-//	   ↓
-//	pollOnce()
-//	   ├── acquire jobSlot (semaphore — limits concurrent polls)
-//	   ├── dataFetcher.Fetch()  → []any
-//	   ├── for each item → workerPool.SubmitBlocking(job)
-//	   └── release jobSlot
-//
-// The jobSlots channel acts as a counting semaphore:
-//   - Capacity = JobSlotSize (default 1)
-//   - If no slot available, the tick is skipped (prevents pile-up)
-//   - This is NOT the same as WorkerPool queue size
 package nanopony
 
 import (
@@ -36,7 +21,7 @@ type PollerConfig struct {
 	JobSlotSize int
 }
 
-// DefaultPollerConfig returns default poller configuration with sensible defaults.
+// DefaultPollerConfig returns default poller configuration.
 func DefaultPollerConfig() PollerConfig {
 	return PollerConfig{
 		Interval:    1 * time.Second,
@@ -46,49 +31,40 @@ func DefaultPollerConfig() PollerConfig {
 }
 
 // DataFetcher defines the interface for fetching data during polling.
-// Implement this interface to provide custom data sources (e.g., Database, API).
-type DataFetcher interface {
+type DataFetcher[T any] interface {
 	// Fetch retrieves a slice of items to be processed as jobs.
-	Fetch() ([]any, error)
+	Fetch() ([]T, error)
 }
 
-// DataFetcherFunc is a function adapter that allows regular functions
-// to implement the DataFetcher interface.
-type DataFetcherFunc func() ([]any, error)
+// DataFetcherFunc is a function adapter.
+type DataFetcherFunc[T any] func() ([]T, error)
 
-// Fetch implements the DataFetcher interface by calling the adapter function.
-func (f DataFetcherFunc) Fetch() ([]any, error) {
+// Fetch implements the DataFetcher interface.
+func (f DataFetcherFunc[T]) Fetch() ([]T, error) {
 	return f()
 }
 
-// Poller manages periodic data fetching and submission of jobs to a WorkerPool.
-// It uses a semaphore-based rate limiting system (jobSlots) to control concurrency.
-type Poller struct {
+// Poller manages periodic data fetching.
+type Poller[T any] struct {
 	config      PollerConfig
 	jobSlots    chan struct{}
-	workerPool  *ShardedWorkerPool
-	dataFetcher DataFetcher
+	workerPool  *ShardedWorkerPool[T]
+	dataFetcher DataFetcher[T]
 	ctx         context.Context
 	cancel      context.CancelFunc
 	wg          sync.WaitGroup
 	running     bool
 	mu          sync.RWMutex
-	jobCounter  int64  // Atomic counter for unique job IDs within a session
-	sessionID   string // Unique session ID for job ID prefix (e.g., timestamp)
+	jobCounter  int64
+	sessionID   string
 }
 
 // NewPoller creates a new Poller instance.
-//
-// Parameters:
-//   - config: Configuration settings for timing and batching
-//   - workerPool: The pool where fetched items will be submitted as jobs
-//   - dataFetcher: The source of data items
-func NewPoller(config PollerConfig, workerPool *ShardedWorkerPool, dataFetcher DataFetcher) *Poller {
+func NewPoller[T any](config PollerConfig, workerPool *ShardedWorkerPool[T], dataFetcher DataFetcher[T]) *Poller[T] {
 	ctx, cancel := context.WithCancel(context.Background())
-	// Use timestamp for session ID to ensure unique job IDs across restarts
 	sessionID := time.Now().Format("20060102150405")
 
-	poller := &Poller{
+	poller := &Poller[T]{
 		config:      config,
 		jobSlots:    make(chan struct{}, config.JobSlotSize),
 		workerPool:  workerPool,
@@ -98,7 +74,6 @@ func NewPoller(config PollerConfig, workerPool *ShardedWorkerPool, dataFetcher D
 		sessionID:   sessionID,
 	}
 
-	// Pre-fill job slots (acts as semaphore for rate limiting)
 	for i := 0; i < config.JobSlotSize; i++ {
 		poller.jobSlots <- struct{}{}
 	}
@@ -106,9 +81,8 @@ func NewPoller(config PollerConfig, workerPool *ShardedWorkerPool, dataFetcher D
 	return poller
 }
 
-// Start initiates the polling loop in a separate goroutine.
-// If the poller is already running, this method does nothing.
-func (p *Poller) Start() {
+// Start initiates the polling loop.
+func (p *Poller[T]) Start() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -122,8 +96,7 @@ func (p *Poller) Start() {
 	go p.pollLoop()
 }
 
-// pollLoop is the main ticker loop for the poller.
-func (p *Poller) pollLoop() {
+func (p *Poller[T]) pollLoop() {
 	defer p.wg.Done()
 
 	ticker := time.NewTicker(p.config.Interval)
@@ -139,22 +112,13 @@ func (p *Poller) pollLoop() {
 	}
 }
 
-// pollOnce performs a single polling iteration:
-// 1. Acquire a slot
-// 2. Fetch data
-// 3. Submit jobs to WorkerPool
-// 4. Release slot
-func (p *Poller) pollOnce() {
-	// Try to acquire a job slot (rate limiting)
+func (p *Poller[T]) pollOnce() {
 	select {
 	case <-p.jobSlots:
-		// Slot acquired
 	default:
-		// No slot available, skipping this tick
 		return
 	}
 
-	// Always release slot when done
 	defer p.releaseSlot()
 
 	data, err := p.dataFetcher.Fetch()
@@ -167,7 +131,6 @@ func (p *Poller) pollOnce() {
 		return
 	}
 
-	// Limit batch size if configured
 	if p.config.BatchSize > 0 && len(data) > p.config.BatchSize {
 		LogFramework("WARNING", "Poller", fmt.Sprintf("limiting batch size from %d to %d", len(data), p.config.BatchSize))
 		data = data[:p.config.BatchSize]
@@ -175,9 +138,8 @@ func (p *Poller) pollOnce() {
 
 	for _, item := range data {
 		jobID := atomic.AddInt64(&p.jobCounter, 1)
-		job := AcquireJob()
+		job := AcquireJob[T]()
 
-		// Use strings.Builder for efficient string concatenation
 		var sb strings.Builder
 		sb.WriteString("poll-")
 		sb.WriteString(p.sessionID)
@@ -189,27 +151,23 @@ func (p *Poller) pollOnce() {
 		job.Meta["source"] = "poller"
 		job.Meta["timestamp"] = time.Now().Unix()
 
-		// Use SubmitBlocking to provide backpressure
 		if err := p.workerPool.SubmitBlocking(p.ctx, job); err != nil {
 			if p.ctx.Err() == nil {
 				LogFramework("ERROR", "Poller", fmt.Sprintf("failed to submit job: %v", err))
 			}
-			// If submission fails, we should release the job as it won't be processed
 			job.Release()
 		}
 	}
 }
 
-// releaseSlot returns a token to the jobSlots channel.
-func (p *Poller) releaseSlot() {
+func (p *Poller[T]) releaseSlot() {
 	select {
 	case p.jobSlots <- struct{}{}:
 	default:
 	}
 }
 
-// Stop stops the poller gracefully and waits for the loop to exit.
-func (p *Poller) Stop() {
+func (p *Poller[T]) Stop() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -222,8 +180,7 @@ func (p *Poller) Stop() {
 	p.running = false
 }
 
-// IsRunning returns the current status of the poller.
-func (p *Poller) IsRunning() bool {
+func (p *Poller[T]) IsRunning() bool {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.running

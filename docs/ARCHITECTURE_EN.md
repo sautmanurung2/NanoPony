@@ -156,6 +156,18 @@
 
 **Purpose:** Concurrent job processing with fixed goroutine pool and bounded queues.
 
+**Main Structs:**
+- `Job[T any]`
+  ```go
+  type Job[T any] struct {
+      ID   string
+      Data T
+      Meta map[string]any
+  }
+  ```
+- `JobHandler[T any]` - `func(ctx context.Context, job *Job[T]) error`
+- `WorkerPool[T any]` - Manages `numWorkers`, `jobChan` buffered pointer `*Job[T]`, `errChan`, `sync.WaitGroup`, context, and `running` flag protected by a mutex.
+
 **Design Pattern:** Worker Pool (bounded goroutine pool with channel communication). Thread-safe via `sync.RWMutex`.
 
 ---

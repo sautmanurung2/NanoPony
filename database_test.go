@@ -111,7 +111,7 @@ func TestGetOracleDB(t *testing.T) {
 	ResetConfig()
 	conf := NewConfig()
 	// Mock database connection for testing
-	fw := NewFramework().WithConfig(conf).WithDatabaseFromInstance(nil)
+	fw := NewFramework[any]().WithConfig(conf).WithDatabaseFromInstance(nil)
 	components := fw.Build()
 
 	if components.DB != nil {

@@ -8,11 +8,10 @@ import (
 )
 
 func TestNewWorkerPool(t *testing.T) {
-	pool := NewWorkerPool(5, 100, 2)
+	pool := NewWorkerPool[any](5, 100, 2)
 	if pool == nil {
 		t.Fatal("Expected worker pool to be created")
 	}
-	// Sharded pool approximates workers per shard * numShards
 	if pool.NumWorkers() < 1 {
 		t.Errorf("Expected positive number of workers, got %d", pool.NumWorkers())
 	}
@@ -22,11 +21,11 @@ func TestNewWorkerPool(t *testing.T) {
 }
 
 func TestWorkerPoolStartStop(t *testing.T) {
-	pool := NewWorkerPool(2, 10, 2)
+	pool := NewWorkerPool[any](2, 10, 2)
 	ctx := context.Background()
 
 	processed := int32(0)
-	pool.Start(ctx, func(ctx context.Context, job *Job) error {
+	pool.Start(ctx, func(ctx context.Context, job *Job[any]) error {
 		atomic.AddInt32(&processed, 1)
 		return nil
 	})
@@ -35,16 +34,13 @@ func TestWorkerPoolStartStop(t *testing.T) {
 		t.Error("Expected pool to be running after Start")
 	}
 
-	// Submit jobs
 	for i := 0; i < 5; i++ {
-		job := AcquireJob()
+		job := AcquireJob[any]()
 		job.ID = "test-job"
 		pool.Submit(ctx, job)
 	}
 
-	// Give workers time to process
 	time.Sleep(100 * time.Millisecond)
-
 	pool.Stop()
 
 	if pool.IsRunning() {
@@ -57,29 +53,23 @@ func TestWorkerPoolStartStop(t *testing.T) {
 }
 
 func TestWorkerPoolSubmitQueueFull(t *testing.T) {
-	// Small queue per shard. With 1 worker and 1 shard, queue size 1.
-	pool := NewWorkerPool(1, 1, 1)
+	pool := NewWorkerPool[any](1, 1, 1)
 	ctx := context.Background()
 
-	// Block the worker
-	pool.Start(ctx, func(ctx context.Context, job *Job) error {
+	pool.Start(ctx, func(ctx context.Context, job *Job[any]) error {
 		time.Sleep(1 * time.Second)
 		return nil
 	})
 
-	// Fill the queue
-	// First job is picked by worker, but worker sleeps
-	job1 := AcquireJob()
+	job1 := AcquireJob[any]()
 	job1.ID = "job1"
 	pool.Submit(ctx, job1)
 
-	// Second job fills the queue (size 1)
-	job2 := AcquireJob()
+	job2 := AcquireJob[any]()
 	job2.ID = "job2"
 	pool.Submit(ctx, job2)
 
-	// This should fail with queue full
-	job3 := AcquireJob()
+	job3 := AcquireJob[any]()
 	job3.ID = "job3"
 	err := pool.Submit(ctx, job3)
 	if err != ErrQueueFull {
@@ -91,17 +81,17 @@ func TestWorkerPoolSubmitQueueFull(t *testing.T) {
 }
 
 func TestWorkerPoolContextCancellation(t *testing.T) {
-	pool := NewWorkerPool(2, 10, 2)
+	pool := NewWorkerPool[any](2, 10, 2)
 	ctx, cancel := context.WithCancel(context.Background())
 
 	processed := int32(0)
-	pool.Start(ctx, func(ctx context.Context, job *Job) error {
+	pool.Start(ctx, func(ctx context.Context, job *Job[any]) error {
 		atomic.AddInt32(&processed, 1)
 		<-ctx.Done()
 		return ctx.Err()
 	})
 
-	job1 := AcquireJob()
+	job1 := AcquireJob[any]()
 	job1.ID = "job1"
 	pool.Submit(ctx, job1)
 	cancel()
@@ -111,21 +101,19 @@ func TestWorkerPoolContextCancellation(t *testing.T) {
 }
 
 func TestWorkerPoolSubmitBlocking(t *testing.T) {
-	pool := NewWorkerPool(1, 2, 1)
+	pool := NewWorkerPool[any](1, 2, 1)
 	ctx := context.Background()
 
 	processed := int32(0)
-	pool.Start(ctx, func(ctx context.Context, job *Job) error {
-		time.Sleep(50 * time.Millisecond) // Slow worker
+	pool.Start(ctx, func(ctx context.Context, job *Job[any]) error {
+		time.Sleep(50 * time.Millisecond)
 		atomic.AddInt32(&processed, 1)
 		return nil
 	})
 
-	// SubmitBlocking should block when queue is full, not return error
 	done := make(chan bool, 1)
 	go func() {
-		// This should block until worker processes jobs
-		job := AcquireJob()
+		job := AcquireJob[any]()
 		job.ID = "blocking-job"
 		err := pool.SubmitBlocking(ctx, job)
 		if err != nil {
@@ -135,13 +123,10 @@ func TestWorkerPoolSubmitBlocking(t *testing.T) {
 		done <- true
 	}()
 
-	// Give it time to block
 	time.Sleep(100 * time.Millisecond)
 
-	// SubmitBlocking should still be waiting (worker is slow)
 	select {
 	case <-done:
-		// Good, it completed
 	case <-time.After(50 * time.Millisecond):
 		t.Error("SubmitBlocking should have completed by now")
 	}
@@ -154,28 +139,22 @@ func TestWorkerPoolSubmitBlocking(t *testing.T) {
 }
 
 func TestWorkerPoolSubmitBlockingContextCancellation(t *testing.T) {
-	pool := NewWorkerPool(1, 1, 1) // Very small queue
+	pool := NewWorkerPool[any](1, 1, 1)
 	ctx := context.Background()
 
-	// Don't start the pool - no workers processing
-	// This ensures queue will fill up and block
-
-	// Fill the queue completely (size=1)
-	job1 := AcquireJob()
+	job1 := AcquireJob[any]()
 	job1.ID = "job1"
 	pool.Submit(ctx, job1)
 
-	// Now SubmitBlocking with timeout should block (queue is full, no workers)
 	timeoutCtx, timeoutCancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer timeoutCancel()
 
 	startTime := time.Now()
-	job2 := AcquireJob()
+	job2 := AcquireJob[any]()
 	job2.ID = "should-timeout"
 	err := pool.SubmitBlocking(timeoutCtx, job2)
 	elapsed := time.Since(startTime)
 
-	// Should timeout because queue is full and no worker to process
 	if err == nil {
 		t.Error("SubmitBlocking should return error when context times out")
 	} else {
@@ -187,24 +166,23 @@ func TestWorkerPoolSubmitBlockingContextCancellation(t *testing.T) {
 	}
 
 	pool.Stop()
-	job1.Release() // Release job1 manually because no worker processed it
+	job1.Release()
 }
 
 func TestWorkerPoolSubmitBlockingNoJobLoss(t *testing.T) {
-	pool := NewWorkerPool(1, 3, 1)
+	pool := NewWorkerPool[any](1, 3, 1)
 	ctx := context.Background()
 
 	processed := int32(0)
-	pool.Start(ctx, func(ctx context.Context, job *Job) error {
+	pool.Start(ctx, func(ctx context.Context, job *Job[any]) error {
 		time.Sleep(10 * time.Millisecond)
 		atomic.AddInt32(&processed, 1)
 		return nil
 	})
 
-	// Submit many jobs using SubmitBlocking
 	totalJobs := 20
 	for i := 0; i < totalJobs; i++ {
-		job := AcquireJob()
+		job := AcquireJob[any]()
 		job.ID = "job"
 		err := pool.SubmitBlocking(ctx, job)
 		if err != nil {
@@ -213,12 +191,10 @@ func TestWorkerPoolSubmitBlockingNoJobLoss(t *testing.T) {
 		}
 	}
 
-	// Wait for all jobs to be processed
 	time.Sleep(500 * time.Millisecond)
 
 	pool.Stop()
 
-	// ALL jobs should be processed (no job loss!)
 	if processed != int32(totalJobs) {
 		t.Errorf("Expected %d jobs processed (no job loss), got %d", totalJobs, processed)
 	}

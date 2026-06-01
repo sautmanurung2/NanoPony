@@ -35,9 +35,9 @@ This is the main entry point. The framework uses *method chaining*.
 * **Rule:** If you add a new component, add a `.WithComponent()` method that returns `*Framework`.
 
 ### 2. Worker Pool & Job System (`worker.go`, `job.go`)
-NanoPony does not process data directly in a single loop. Data is wrapped into a `Job`.
+NanoPony does not process data directly in a single loop. Data is wrapped into a `Job[T]`.
 * **Job Struct**: Holds an ID (traceability), Data (payload), and Meta (extra context).
-* **Worker**: Goroutines that continuously pull `Job`s from a channel.
+* **Worker**: Goroutines that continuously pull `Job[T]`s from a channel.
 * **SubmitBlocking**: This is a crucial feature. If the queue (buffer channel) is full, this function will "block" the sender until a slot is available. This prevents RAM exhaustion due to data pile-up.
 
 ### 3. Poller & Semaphore (`poller.go`)
