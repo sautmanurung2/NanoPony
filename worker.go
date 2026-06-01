@@ -8,6 +8,9 @@
 //
 //	└─── shard N (pool N) ──→ workerChan ──→ worker...
 //
+// Each shard operates independently with its own job channel and worker goroutines.
+// Each shard has its own job channel and worker goroutines. Jobs are distributed
+// across shards in a round-robin manner.
 // Sharding significantly reduces lock contention on the job channel and state management.
 package nanopony
 
@@ -30,12 +33,9 @@ type ShardedWorkerPool struct {
 type workerPoolShard struct {
 	jobChan chan *Job
 	errChan chan error
-
-	wg sync.WaitGroup
-
-	ctx    context.Context
-	cancel context.CancelFunc
-
+	wg      sync.WaitGroup
+	ctx     context.Context
+	cancel  context.CancelFunc
 	running bool
 	mu      sync.RWMutex
 }
