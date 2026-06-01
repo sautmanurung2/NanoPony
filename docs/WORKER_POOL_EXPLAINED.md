@@ -1,59 +1,71 @@
-# Arsitektur Worker Pool
+# Arsitektur Sharded Worker Pool
 
 ## Ringkasan
 
-Dokumen ini menjelaskan arsitektur worker pool di framework NanoPony, mencakup cara worker memproses job, manajemen queue, dan karakteristik performa. Sejak v0.0.59, NanoPony menggunakan `sync.Pool` untuk mendaur ulang objek `Job` guna meminimalkan alokasi memori dan GC pressure.
+Dokumen ini menjelaskan arsitektur *sharded worker pool* di framework NanoPony. NanoPony menggunakan sistem *sharding* untuk mengurangi *lock contention* dan mendaur ulang objek `Job` menggunakan `sync.Pool` untuk efisiensi memori.
 
 ---
 
-## Arsitektur: 5 Workers + Queue Size 100
+## Arsitektur: Sharded Pool
+
+NanoPony kini membagi beban kerja ke dalam beberapa *shard* (pool) yang independen.
 
 ```
-┌──────────────────────────────────────────────────────────┐
-│                    Queue (100 slot)                       │
-│  [J1][J2][J3]...[J100]                                   │
-└────────┬────────┬────────┬────────┬──────────────────────┘
-         │        │        │        │        │
-         ▼        ▼        ▼        ▼        ▼
-     ┌────────┐┌────────┐┌────────┐┌────────┐┌────────┐
-     │Worker 1││Worker 2││Worker 3││Worker 4││Worker 5│
-     └────────┘└────────┘└────────┘└────────┘└────────┘
+                               ┌──→ Shard 0 (Pool 0) ──→ Worker...
+Submit ──→ Shard Selector ──┼──→ Shard 1 (Pool 1) ──→ Worker...
+                               └──→ Shard N (Pool N) ──→ Worker...
 ```
 
----
-
-## Pertanyaan Utama
-
-**"Kalau Worker 1 produce lama, apakah harus selesai dulu sebelum bisa ambil job berikutnya?"**
-
-**YA, HARUS SELESAI DULU.** Berikut cara kerjanya:
+Setiap *shard* beroperasi secara independen dengan *channel* (`jobChan`) dan *goroutine worker* sendiri. Saat `Submit()` dipanggil, sistem memilih *shard* tujuan menggunakan mekanisme *round-robin* berbasis *atomic counter*.
 
 ---
 
-## 1. Worker Bersifat Blocking/Sinkron
+## 1. Implementasi Sharding
 
 ```go
-func (wp *WorkerPool) worker(ctx context.Context, id int) {
-    defer wp.wg.Done()
+// Worker Pool yang sharded
+type ShardedWorkerPool struct {
+    shards          []*workerPoolShard
+    // ...
+}
+
+// WorkerPoolShard
+type workerPoolShard struct {
+    jobChan chan *Job
+    errChan chan error
+    // ...
+}
+```
+
+*   **Reduced Contention**: Dengan *sharding*, proses submit *job* tidak lagi memperebutkan satu mutex *pool* yang sama, sehingga meningkatkan *throughput* secara signifikan di bawah beban tinggi.
+
+---
+
+## 2. Bagaimana Worker Memproses Job
+
+Worker tetap bersifat sinkron per *job*.
+
+```go
+func (swp *ShardedWorkerPool) worker(shard *workerPoolShard, handler JobHandler, id int) {
+    defer shard.wg.Done()
     for {
         select {
-        case <-ctx.Done():
+        case <-shard.ctx.Done():
             return
-        case job, ok := <-wp.jobChan:
+        case job, ok := <-shard.jobChan:
             if !ok {
                 return
             }
 
             // 🔴 BLOCKING DI SINI
-            // Worker TIDAK BISA mengambil job berikutnya
-            // sampai handler(job) selesai
-            if err := wp.handler(ctx, job); err != nil {
+            // Worker TIDAK BISA mengambil job berikutnya dari shard 
+            // sampai handler(job) selesai.
+            if err := handler(shard.ctx, job); err != nil {
                 // handle error
             }
 
-            // ♻️ OTOMATIS DI-RELEASE KE POOL
-            // Setelah handler selesai, objek job dibersihkan
-            // dan dikembalikan ke sync.Pool untuk dipakai lagi.
+            // ♻️ OTOMATIS DI-RELEASE
+            // Objek job dikembalikan ke pool untuk didaur ulang.
             job.Release()
         }
     }
@@ -61,33 +73,8 @@ func (wp *WorkerPool) worker(ctx context.Context, id int) {
 ```
 
 **Implikasi:**
-- **Worker 1** ambil `Job A` → proses (misal 10 detik) → selesai → **Release** → baru bisa ambil `Job B`
-- Sementara itu, **Worker 2-5** tetap memproses job mereka masing-masing secara paralel
-
----
-
-## 2. Flow: 100 Proses dengan 5 Workers
-
-```
-Waktu T=0:
-Queue: [J1][J2][J3]...[J100]
-
-Worker 1: ambil J1 (proses 10 detik)
-Worker 2: ambil J2 (proses 2 detik)  ← selesai duluan
-Worker 3: ambil J3 (proses 5 detik)
-Worker 4: ambil J4 (proses 3 detik)
-Worker 5: ambil J5 (proses 8 detik)
-
-Waktu T=2 detik:
-Worker 2 selesai J2 → langsung ambil J6 dari queue
-Queue sekarang: [J7][J8]...[J100]
-
-Waktu T=3 detik:
-Worker 4 selesai J4 → langsung ambil J7 dari queue
-Queue sekarang: [J8][J9]...[J100]
-
-... dan seterusnya
-```
+- Sebuah *worker* dalam *shard* hanya memproses satu *job* pada satu waktu.
+- *Worker* lain di *shard* yang sama, dan *worker* di *shard* berbeda, tetap beroperasi secara paralel.
 
 ---
 
@@ -95,42 +82,13 @@ Queue sekarang: [J8][J9]...[J100]
 
 | Aspek | Behavior |
 |-------|----------|
-| **Konkurensi** | 5 job diproses **secara paralel** (1 per worker) |
-| **Blocking** | Worker **tidak bisa** ambil job baru sebelum job sekarang selesai |
-| **Queue** | Job menunggu di queue (FIFO), bukan di worker |
-| **Non-blocking Submit** | `Submit()` langsung return, tidak menunggu job selesai |
+| **Konkurensi** | *Fan-out* ke beberapa *shard* paralel. |
+| **Blocking** | *Worker* sinkron per *job* (menunggu *handler* selesai). |
+| **Locking** | *Contention* sangat rendah berkat *sharding*. |
+| **Submit** | `Submit()` non-blocking, `SubmitBlocking()` blocking. |
 
 ---
 
-## 4. Ilustrasi dengan Produce yang Lama
+## 4. Kesimpulan
 
-Asumsikan **Worker 1** butuh **30 detik** untuk produce ke Kafka:
-
-```
-T=0:   Worker 1 ambil J1 (produce ke Kafka - 30 detik)
-T=5:   Worker 2,3,4,5 selesai job mereka dan ambil J6,J7,J8,J9
-T=10:  Worker 2,3,4,5 ambil J10,J11,J12,J13
-T=20:  Worker 2,3,4,5 ambil J14,J15,J16,J17
-T=25:  Queue hampir kosong, Worker 2-5 idle
-T=30:  Worker 1 selesai J1 → baru bisa ambil J18
-```
-
-**Dampak:** Worker 1 jadi bottleneck; 4 worker lain bisa nganggur kalau queue kosong.
-
----
-
-## 5. Ringkasan
-
-| Pertanyaan | Jawaban |
-|------------|---------|
-| Worker harus selesai job sekarang sebelum ambil job baru? | **YA** |
-| Apakah worker bekerja independen? | **YA** - setiap worker beroperasi independen |
-| Worker lambat bisa blocking worker lain? | **TIDAK** - tapi bisa menyebabkan penumpukan di queue |
-| Apakah pemrosesan job sinkron? | **YA** - blocking di dalam setiap worker |
-| Apakah submit job sinkron? | **TIDAK** - `Submit()` non-blocking |
-
----
-
-## Kesimpulan
-
-Desain worker pool ini **aman dan predictable**, tapi bisa jadi bottleneck kalau ada job yang memakan waktu jauh lebih lama daripada job lainnya. Worker **harus menyelesaikan job saat ini** sebelum bisa mengambil job berikutnya. Ini adalah desain yang mengutamakan keandalan (*reliability*) dan kemudahan pelacakan (*traceability*).
+Sistem ini menggabungkan keandalan mekanisme *worker pool* dengan skalabilitas yang tinggi melalui *sharding*. Desain ini mempertahankan prinsip *backpressure* untuk menjaga stabilitas aplikasi di bawah beban kerja tinggi.
