@@ -7,7 +7,7 @@
 //	   .WithDatabase()              ← optional (needs config)
 //	   .WithKafkaWriter()           ← optional (needs config)
 //	   .WithProducer()              ← optional (needs kafka writer)
-//	   .WithWorkerPool(n, queueSz)  ← optional
+//	   .WithWorkerPool(n, queueSz, shards)  ← optional
 //	   .WithPoller(cfg, fetcher)    ← optional (needs worker pool)
 //	   .Build()                     ← returns FrameworkComponents
 //
@@ -52,7 +52,7 @@ var (
 //	    WithDatabase().
 //	    WithKafkaWriter().
 //	    WithProducer().
-//	    WithWorkerPool(5, 100).
+//	    WithWorkerPool(5, 100, 3).
 //	    WithPoller(pollerConfig, dataFetcher).
 //	    Build()
 //
@@ -223,9 +223,9 @@ func (f *Framework) WithProducerFromInstance(producer *KafkaProducer) *Framework
 }
 
 // WithWorkerPool sets up the worker pool with the specified number of workers and queue size.
-// Example: WithWorkerPool(5, 100) creates 5 workers with a queue size of 100.
-func (f *Framework) WithWorkerPool(numWorkers, queueSize int) *Framework {
-	f.workerPool = NewWorkerPool(numWorkers, queueSize)
+// Example: WithWorkerPool(5, 100, 3) creates 5 workers with a queue size of 100 and 3 shards.
+func (f *Framework) WithWorkerPool(numWorkers, queueSize, numShards int) *Framework {
+	f.workerPool = NewWorkerPool(numWorkers, queueSize, numShards)
 	return f
 }
 
@@ -302,7 +302,7 @@ func (f *Framework) Build() *FrameworkComponents {
 //
 //	components, err := nanopony.NewFramework().
 //	    WithConfig(config).
-//	    WithWorkerPool(5, 100).
+//	    WithWorkerPool(5, 100, 3).
 //	    BuildSafe()
 //	if err != nil {
 //	    log.Fatal(err)

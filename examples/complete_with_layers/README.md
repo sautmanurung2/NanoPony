@@ -108,7 +108,7 @@ framework := nanopony.NewFramework().
     WithConfig(config).
     WithKafkaWriterFromInstance(kafkaWriter).
     WithProducerFromInstance(producer).
-    WithWorkerPool(5, 100).
+    WithWorkerPool(5, 100, 3).
     WithPoller(nanopony.DefaultPollerConfig(), &pendingOrderFetcher{orderRepo: orderRepo})
 
 components := framework.Build()

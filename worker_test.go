@@ -8,7 +8,7 @@ import (
 )
 
 func TestNewWorkerPool(t *testing.T) {
-	pool := NewWorkerPool(5, 100)
+	pool := NewWorkerPool(5, 100, 2)
 	if pool == nil {
 		t.Fatal("Expected worker pool to be created")
 	}
@@ -22,7 +22,7 @@ func TestNewWorkerPool(t *testing.T) {
 }
 
 func TestWorkerPoolStartStop(t *testing.T) {
-	pool := NewWorkerPool(2, 10)
+	pool := NewWorkerPool(2, 10, 2)
 	ctx := context.Background()
 
 	processed := int32(0)
@@ -57,7 +57,8 @@ func TestWorkerPoolStartStop(t *testing.T) {
 }
 
 func TestWorkerPoolSubmitQueueFull(t *testing.T) {
-	pool := NewWorkerPool(1, 1) // Small queue
+	// Small queue per shard. With 1 worker and 1 shard, queue size 1.
+	pool := NewWorkerPool(1, 1, 1)
 	ctx := context.Background()
 
 	// Block the worker
@@ -67,10 +68,12 @@ func TestWorkerPoolSubmitQueueFull(t *testing.T) {
 	})
 
 	// Fill the queue
+	// First job is picked by worker, but worker sleeps
 	job1 := AcquireJob()
 	job1.ID = "job1"
 	pool.Submit(ctx, job1)
 
+	// Second job fills the queue (size 1)
 	job2 := AcquireJob()
 	job2.ID = "job2"
 	pool.Submit(ctx, job2)
@@ -88,7 +91,7 @@ func TestWorkerPoolSubmitQueueFull(t *testing.T) {
 }
 
 func TestWorkerPoolContextCancellation(t *testing.T) {
-	pool := NewWorkerPool(2, 10)
+	pool := NewWorkerPool(2, 10, 2)
 	ctx, cancel := context.WithCancel(context.Background())
 
 	processed := int32(0)
@@ -108,7 +111,7 @@ func TestWorkerPoolContextCancellation(t *testing.T) {
 }
 
 func TestWorkerPoolSubmitBlocking(t *testing.T) {
-	pool := NewWorkerPool(1, 2)
+	pool := NewWorkerPool(1, 2, 1)
 	ctx := context.Background()
 
 	processed := int32(0)
@@ -151,7 +154,7 @@ func TestWorkerPoolSubmitBlocking(t *testing.T) {
 }
 
 func TestWorkerPoolSubmitBlockingContextCancellation(t *testing.T) {
-	pool := NewWorkerPool(1, 1) // Very small queue
+	pool := NewWorkerPool(1, 1, 1) // Very small queue
 	ctx := context.Background()
 
 	// Don't start the pool - no workers processing
@@ -188,7 +191,7 @@ func TestWorkerPoolSubmitBlockingContextCancellation(t *testing.T) {
 }
 
 func TestWorkerPoolSubmitBlockingNoJobLoss(t *testing.T) {
-	pool := NewWorkerPool(1, 3)
+	pool := NewWorkerPool(1, 3, 1)
 	ctx := context.Background()
 
 	processed := int32(0)

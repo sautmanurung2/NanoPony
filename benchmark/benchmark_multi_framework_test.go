@@ -28,7 +28,7 @@ func BenchmarkFrameworks_Setup(b *testing.B) {
 			config := nanopony.NewConfig()
 			fw := nanopony.NewFramework().
 				WithConfig(config).
-				WithWorkerPool(10, 100).
+				WithWorkerPool(10, 100, 2).
 				Build()
 			if fw == nil {
 				b.Fatal("failed to build NanoPony")
@@ -81,7 +81,7 @@ func BenchmarkFrameworks_Throughput(b *testing.B) {
 		config := nanopony.NewConfig()
 		fw := nanopony.NewFramework().
 			WithConfig(config).
-			WithWorkerPool(runtime.NumCPU(), b.N+1).
+			WithWorkerPool(runtime.NumCPU(), b.N+1, 2).
 			Build()
 
 		done := make(chan struct{}, b.N)
@@ -202,7 +202,7 @@ func TestFrameworks_MemoryUsage(t *testing.T) {
 		config := nanopony.NewConfig()
 		fw := nanopony.NewFramework().
 			WithConfig(config).
-			WithWorkerPool(10, 100).
+			WithWorkerPool(10, 100, 2).
 			Build()
 		fw.Start(context.Background(), func(ctx context.Context, job *nanopony.Job) error { return nil })
 	})

@@ -53,7 +53,7 @@ func TestFrameworkWithProducerFromInstance(t *testing.T) {
 }
 
 func TestFrameworkWithWorkerPoolFromInstance(t *testing.T) {
-	pool := NewWorkerPool(5, 100)
+	pool := NewWorkerPool(5, 100, 2)
 	framework := NewFramework().
 		WithWorkerPoolFromInstance(pool)
 
@@ -63,7 +63,7 @@ func TestFrameworkWithWorkerPoolFromInstance(t *testing.T) {
 }
 
 func TestFrameworkWithPollerFromInstance(t *testing.T) {
-	pool := NewWorkerPool(5, 100)
+	pool := NewWorkerPool(5, 100, 2)
 	fetcher := DataFetcherFunc(func() ([]interface{}, error) {
 		return []interface{}{}, nil
 	})
@@ -102,7 +102,7 @@ func TestFrameworkBuild(t *testing.T) {
 
 	framework := NewFramework().
 		WithConfig(config).
-		WithWorkerPool(5, 100)
+		WithWorkerPool(5, 100, 2)
 
 	components := framework.Build()
 
@@ -127,7 +127,7 @@ func TestFrameworkBuildPanic(t *testing.T) {
 }
 
 func TestFrameworkComponentsStartStop(t *testing.T) {
-	pool := NewWorkerPool(2, 10)
+	pool := NewWorkerPool(2, 10, 2)
 	fetcher := DataFetcherFunc(func() ([]interface{}, error) {
 		return []interface{}{}, nil
 	})
@@ -159,7 +159,7 @@ func TestFrameworkComponentsStartStop(t *testing.T) {
 func TestFrameworkComponentsGetters(t *testing.T) {
 	ResetConfig()
 	config := NewConfig()
-	pool := NewWorkerPool(5, 100)
+	pool := NewWorkerPool(5, 100, 2)
 	fetcher := DataFetcherFunc(func() ([]interface{}, error) {
 		return []interface{}{}, nil
 	})

@@ -13,7 +13,7 @@ import (
 func BenchmarkWorkerPoolCreation(b *testing.B) {
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		pool := NewWorkerPool(5, 100)
+		pool := NewWorkerPool(5, 100, 2)
 		if pool == nil {
 			b.Fatal("Expected worker pool to be created")
 		}
@@ -26,7 +26,7 @@ func BenchmarkWorkerPoolStartStop(b *testing.B) {
 	ctx := context.Background()
 
 	for i := 0; i < b.N; i++ {
-		pool := NewWorkerPool(5, 100)
+		pool := NewWorkerPool(5, 100, 2)
 		pool.Start(ctx, func(ctx context.Context, job *Job) error {
 			return nil
 		})
@@ -45,7 +45,7 @@ func BenchmarkWorkerPoolStartStop(b *testing.B) {
 
 // BenchmarkWorkerPoolSubmit tests memory allocation for job submission
 func BenchmarkWorkerPoolSubmit(b *testing.B) {
-	pool := NewWorkerPool(5, 1000)
+	pool := NewWorkerPool(5, 1000, 2)
 	ctx := context.Background()
 
 	pool.Start(ctx, func(ctx context.Context, job *Job) error {
@@ -67,7 +67,7 @@ func BenchmarkWorkerPoolSubmit(b *testing.B) {
 
 // BenchmarkWorkerPoolSubmitParallel tests concurrent job submission
 func BenchmarkWorkerPoolSubmitParallel(b *testing.B) {
-	pool := NewWorkerPool(10, 10000)
+	pool := NewWorkerPool(10, 10000, 2)
 	ctx := context.Background()
 
 	pool.Start(ctx, func(ctx context.Context, job *Job) error {
@@ -97,7 +97,7 @@ func TestWorkerPoolMemoryLeak(t *testing.T) {
 
 	// Run multiple start/stop cycles
 	for cycle := 0; cycle < 10; cycle++ {
-		pool := NewWorkerPool(5, 100)
+		pool := NewWorkerPool(5, 100, 2)
 
 		processed := 0
 		var mu sync.Mutex
@@ -128,7 +128,7 @@ func TestWorkerPoolMemoryLeak(t *testing.T) {
 
 // TestWorkerPoolLongRunning tests memory usage over extended period
 func TestWorkerPoolLongRunning(t *testing.T) {
-	pool := NewWorkerPool(5, 1000)
+	pool := NewWorkerPool(5, 1000, 2)
 	ctx := context.Background()
 
 	processed := make(chan int, 1000)

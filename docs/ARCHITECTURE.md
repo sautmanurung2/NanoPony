@@ -227,7 +227,7 @@ type KafkaWriterConfig struct {
 - `WorkerPool` - Mengelola `numWorkers`, `jobChan` buffered pointer `*Job`, `errChan`, `sync.WaitGroup`, context, flag `running` yang dilindungi mutex
 
 **Fungsi Utama:**
-- `NewWorkerPool(numWorkers, queueSize)` - Membuat channel buffered, context yang dapat dibatalkan
+- `NewWorkerPool(numWorkers, queueSize, numShards)` - Membuat channel buffered, context yang dapat dibatalkan
 - `Start(ctx, handler)` - Spawn N goroutine worker; dilindungi mutex terhadap double-start
 - `worker(ctx, id)` - Select loop: pembatalan context atau konsumsi job; error dikirim ke `errChan` secara non-blocking
 - `Submit(ctx, job)` - Submit non-blocking; mengembalikan `ErrQueueFull` jika channel penuh
@@ -290,7 +290,7 @@ type KafkaWriterConfig struct {
 | `WithKafkaWriterFromInstance(writer)` | Tidak ada | Menerima `*kafka.Writer` yang ada |
 | `WithProducer()` | KafkaWriter diperlukan | Membuat producer |
 | `WithProducerFromInstance(producer)` | Tidak ada | Menerima `*KafkaProducer` yang ada |
-| `WithWorkerPool(n, size)` | Tidak ada | Membuat worker pool |
+| `WithWorkerPool(n, size, shards)` | Tidak ada | Membuat worker pool |
 | `WithWorkerPoolFromInstance(pool)` | Tidak ada | Menerima pool yang ada |
 | `WithPoller(config, fetcher)` | WorkerPool diperlukan | Membuat poller |
 | `WithPollerFromInstance(poller)` | Tidak ada | Menerima poller yang ada |
@@ -497,7 +497,7 @@ framework := nanopony.NewFramework().
     WithDatabase().
     WithKafkaWriter().
     WithProducer().
-    WithWorkerPool(5, 100).
+    WithWorkerPool(5, 100, 3).
     WithPoller(nanopony.DefaultPollerConfig(), dataFetcher)
 
 components := framework.Build()
@@ -549,7 +549,7 @@ func main() {
         WithDatabase().
         WithKafkaWriter().
         WithProducer().
-        WithWorkerPool(5, 100).
+        WithWorkerPool(5, 100, 3).
         WithPoller(nanopony.DefaultPollerConfig(), dataFetcher).
         Build()
 

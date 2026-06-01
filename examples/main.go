@@ -34,7 +34,7 @@ func main() {
 		// WithDatabase().        // Uncomment if Oracle is available
 		// WithKafkaWriter().     // Uncomment if Kafka is available
 		// WithProducer().
-		WithWorkerPool(5, 100).
+		WithWorkerPool(5, 100, 3, 3).
 		WithPoller(nanopony.DefaultPollerConfig(), &exampleDataFetcher{})
 
 	// Build components

@@ -112,7 +112,7 @@ func TestDatabaseConnection(t *testing.T) {
 
 ```go
 func TestWorkerPoolConcurrency(t *testing.T) {
-    pool := NewWorkerPool(5, 100)
+    pool := NewWorkerPool(5, 100, 2)
     ctx := context.Background()
     
     var processed int32

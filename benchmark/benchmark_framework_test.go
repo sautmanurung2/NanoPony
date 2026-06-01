@@ -36,7 +36,7 @@ func BenchmarkFrameworkBuild(b *testing.B) {
 
 		framework := NewFramework().
 			WithConfig(config).
-			WithWorkerPool(5, 100)
+			WithWorkerPool(5, 100, 2)
 
 		components := framework.Build()
 		if components == nil {
@@ -100,7 +100,7 @@ func BenchmarkFrameworkWithProducerFromInstance(b *testing.B) {
 func BenchmarkFrameworkWithWorkerPoolFromInstance(b *testing.B) {
 	b.ReportAllocs()
 
-	pool := NewWorkerPool(5, 100)
+	pool := NewWorkerPool(5, 100, 2)
 
 	for i := 0; i < b.N; i++ {
 		framework := NewFramework().WithWorkerPoolFromInstance(pool)
@@ -132,7 +132,7 @@ func BenchmarkFrameworkCompleteSetup(b *testing.B) {
 
 		framework := NewFramework().
 			WithConfig(config).
-			WithWorkerPool(5, 100)
+			WithWorkerPool(5, 100, 2)
 
 		components := framework.Build()
 		if components == nil {
@@ -152,7 +152,7 @@ func BenchmarkFrameworkStartStop(b *testing.B) {
 
 		framework := NewFramework().
 			WithConfig(config).
-			WithWorkerPool(2, 50)
+			WithWorkerPool(2, 50, 2)
 
 		components := framework.Build()
 
@@ -181,7 +181,7 @@ func BenchmarkFrameworkShutdown(b *testing.B) {
 
 		framework := NewFramework().
 			WithConfig(config).
-			WithWorkerPool(2, 50).
+			WithWorkerPool(2, 50, 2).
 			AddCleanup(func() error { return nil })
 
 		components := framework.Build()
@@ -208,7 +208,7 @@ func BenchmarkFrameworkWithMultipleCleanup(b *testing.B) {
 
 		framework := NewFramework().
 			WithConfig(config).
-			WithWorkerPool(2, 50)
+			WithWorkerPool(2, 50, 2)
 
 		for j := 0; j < 5; j++ {
 			framework.AddCleanup(func() error { return nil })
@@ -232,7 +232,7 @@ func BenchmarkFrameworkGetters(b *testing.B) {
 	b.ReportAllocs()
 	ResetConfig()
 	config := NewConfig()
-	pool := NewWorkerPool(5, 100)
+	pool := NewWorkerPool(5, 100, 2)
 
 	components := &FrameworkComponents{
 		Config:     config,
@@ -263,7 +263,7 @@ func TestFrameworkMemoryLeak(t *testing.T) {
 
 		framework := NewFramework().
 			WithConfig(config).
-			WithWorkerPool(5, 100)
+			WithWorkerPool(5, 100, 2)
 
 		components := framework.Build()
 
@@ -302,7 +302,7 @@ func TestFrameworkMemoryLeakDetailed(t *testing.T) {
 
 		framework := NewFramework().
 			WithConfig(config).
-			WithWorkerPool(5, 200)
+			WithWorkerPool(5, 200, 2)
 
 		for i := 0; i < 3; i++ {
 			framework.AddCleanup(func() error { return nil })
@@ -365,7 +365,7 @@ func TestFrameworkWorkerPoolMemoryLeak(t *testing.T) {
 
 	framework := NewFramework().
 		WithConfig(config).
-		WithWorkerPool(10, 500)
+		WithWorkerPool(10, 500, 2)
 
 	components := framework.Build()
 
@@ -426,7 +426,7 @@ func TestFrameworkConcurrentMemoryLeak(t *testing.T) {
 
 			framework := NewFramework().
 				WithConfig(config).
-				WithWorkerPool(2, 100)
+				WithWorkerPool(2, 100, 2)
 
 			components := framework.Build()
 

@@ -31,7 +31,7 @@ func main() {
 	// Create framework with builder pattern
 	framework := nanopony.NewFramework().
 		WithConfig(config).
-		WithWorkerPool(5, 100).
+		WithWorkerPool(5, 100, 3, 3).
 		WithPoller(nanopony.DefaultPollerConfig(), &exampleDataFetcher{})
 
 	// Build components
