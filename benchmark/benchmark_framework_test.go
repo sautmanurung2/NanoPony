@@ -19,7 +19,7 @@ func BenchmarkFrameworkCreation(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		framework := nanopony.NewFramework()
+		framework := nanopony.NewFramework[any]()
 		if framework == nil {
 			b.Fatal("Expected framework to be created")
 		}
@@ -31,10 +31,10 @@ func BenchmarkFrameworkBuild(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		ResetConfig()
-		config := NewConfig()
+		nanopony.ResetConfig()
+		config := nanopony.NewConfig()
 
-		framework := NewFramework().
+		framework := nanopony.NewFramework[any]().
 			WithConfig(config).
 			WithWorkerPool(5, 100, 2)
 
@@ -50,11 +50,11 @@ func BenchmarkFrameworkWithConfig(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		ResetConfig()
-		config := NewConfig()
+		nanopony.ResetConfig()
+		config := nanopony.NewConfig()
 
-		framework := NewFramework().WithConfig(config)
-		if framework.config == nil {
+		framework := nanopony.NewFramework[any]().WithConfig(config)
+		if framework.GetConfig() == nil {
 			b.Fatal("Expected config to be set")
 		}
 	}
@@ -65,8 +65,8 @@ func BenchmarkFrameworkWithDatabaseFromInstance(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		framework := NewFramework().WithDatabaseFromInstance(nil)
-		if framework.db != nil {
+		framework := nanopony.NewFramework[any]().WithDatabaseFromInstance(nil)
+		if framework.GetDB() != nil {
 			b.Fatal("Expected db to be nil")
 		}
 	}
@@ -77,8 +77,8 @@ func BenchmarkFrameworkWithKafkaWriterFromInstance(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		framework := NewFramework().WithKafkaWriterFromInstance(nil)
-		if framework.kafkaWriter != nil {
+		framework := nanopony.NewFramework[any]().WithKafkaWriterFromInstance(nil)
+		if framework.GetKafkaWriter() != nil {
 			b.Fatal("Expected kafkaWriter to be nil")
 		}
 	}
@@ -89,8 +89,8 @@ func BenchmarkFrameworkWithProducerFromInstance(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		framework := NewFramework().WithProducerFromInstance(nil)
-		if framework.producer != nil {
+		framework := nanopony.NewFramework[any]().WithProducerFromInstance(nil)
+		if framework.GetProducer() != nil {
 			b.Fatal("Expected producer to be nil")
 		}
 	}
@@ -100,11 +100,11 @@ func BenchmarkFrameworkWithProducerFromInstance(b *testing.B) {
 func BenchmarkFrameworkWithWorkerPoolFromInstance(b *testing.B) {
 	b.ReportAllocs()
 
-	pool := NewWorkerPool(5, 100, 2)
+	pool := nanopony.NewWorkerPool[any](5, 100, 2)
 
 	for i := 0; i < b.N; i++ {
-		framework := NewFramework().WithWorkerPoolFromInstance(pool)
-		if framework.workerPool == nil {
+		framework := nanopony.NewFramework[any]().WithWorkerPoolFromInstance(pool)
+		if framework.GetWorkerPool() == nil {
 			b.Fatal("Expected workerPool to be set")
 		}
 	}
@@ -115,7 +115,7 @@ func BenchmarkFrameworkAddCleanup(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		framework := NewFramework()
+		framework := nanopony.NewFramework[any]()
 		for j := 0; j < 10; j++ {
 			framework.AddCleanup(func() error { return nil })
 		}
@@ -127,10 +127,10 @@ func BenchmarkFrameworkCompleteSetup(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		ResetConfig()
-		config := NewConfig()
+		nanopony.ResetConfig()
+		config := nanopony.NewConfig()
 
-		framework := NewFramework().
+		framework := nanopony.NewFramework[any]().
 			WithConfig(config).
 			WithWorkerPool(5, 100, 2)
 
@@ -147,17 +147,17 @@ func BenchmarkFrameworkStartStop(b *testing.B) {
 	ctx := context.Background()
 
 	for i := 0; i < b.N; i++ {
-		ResetConfig()
-		config := NewConfig()
+		nanopony.ResetConfig()
+		config := nanopony.NewConfig()
 
-		framework := NewFramework().
+		framework := nanopony.NewFramework[any]().
 			WithConfig(config).
 			WithWorkerPool(2, 50, 2)
 
 		components := framework.Build()
 
 		b.StartTimer()
-		components.Start(ctx, func(ctx context.Context, job *Job) error {
+		components.Start(ctx, func(ctx context.Context, job *nanopony.Job[any]) error {
 			return nil
 		})
 		b.StopTimer()
@@ -176,16 +176,16 @@ func BenchmarkFrameworkShutdown(b *testing.B) {
 	ctx := context.Background()
 
 	for i := 0; i < b.N; i++ {
-		ResetConfig()
-		config := NewConfig()
+		nanopony.ResetConfig()
+		config := nanopony.NewConfig()
 
-		framework := NewFramework().
+		framework := nanopony.NewFramework[any]().
 			WithConfig(config).
 			WithWorkerPool(2, 50, 2).
 			AddCleanup(func() error { return nil })
 
 		components := framework.Build()
-		components.Start(ctx, func(ctx context.Context, job *Job) error {
+		components.Start(ctx, func(ctx context.Context, job *nanopony.Job[any]) error {
 			return nil
 		})
 
@@ -203,10 +203,10 @@ func BenchmarkFrameworkWithMultipleCleanup(b *testing.B) {
 	ctx := context.Background()
 
 	for i := 0; i < b.N; i++ {
-		ResetConfig()
-		config := NewConfig()
+		nanopony.ResetConfig()
+		config := nanopony.NewConfig()
 
-		framework := NewFramework().
+		framework := nanopony.NewFramework[any]().
 			WithConfig(config).
 			WithWorkerPool(2, 50, 2)
 
@@ -215,7 +215,7 @@ func BenchmarkFrameworkWithMultipleCleanup(b *testing.B) {
 		}
 
 		components := framework.Build()
-		components.Start(ctx, func(ctx context.Context, job *Job) error {
+		components.Start(ctx, func(ctx context.Context, job *nanopony.Job[any]) error {
 			return nil
 		})
 
@@ -230,11 +230,11 @@ func BenchmarkFrameworkWithMultipleCleanup(b *testing.B) {
 // BenchmarkFrameworkGetters tests direct field access performance
 func BenchmarkFrameworkGetters(b *testing.B) {
 	b.ReportAllocs()
-	ResetConfig()
-	config := NewConfig()
-	pool := NewWorkerPool(5, 100, 2)
+	nanopony.ResetConfig()
+	config := nanopony.NewConfig()
+	pool := nanopony.NewWorkerPool[any](5, 100, 2)
 
-	components := &FrameworkComponents{
+	components := &nanopony.FrameworkComponents{
 		Config:     config,
 		DB:         nil,
 		WorkerPool: pool,
@@ -258,16 +258,16 @@ func TestFrameworkMemoryLeak(t *testing.T) {
 	ctx := context.Background()
 
 	for cycle := 0; cycle < 5; cycle++ {
-		ResetConfig()
-		config := NewConfig()
+		nanopony.ResetConfig()
+		config := nanopony.NewConfig()
 
-		framework := NewFramework().
+		framework := nanopony.NewFramework[any]().
 			WithConfig(config).
 			WithWorkerPool(5, 100, 2)
 
 		components := framework.Build()
 
-		components.Start(ctx, func(ctx context.Context, job *Job) error {
+		components.Start(ctx, func(ctx context.Context, job *nanopony.Job[any]) error {
 			return nil
 		})
 
@@ -297,10 +297,10 @@ func TestFrameworkMemoryLeakDetailed(t *testing.T) {
 	// Run multiple cycles to detect leaks
 	cycles := 50
 	for cycle := 0; cycle < cycles; cycle++ {
-		ResetConfig()
-		config := NewConfig()
+		nanopony.ResetConfig()
+		config := nanopony.NewConfig()
 
-		framework := NewFramework().
+		framework := nanopony.NewFramework[any]().
 			WithConfig(config).
 			WithWorkerPool(5, 200, 2)
 
@@ -310,7 +310,7 @@ func TestFrameworkMemoryLeakDetailed(t *testing.T) {
 
 		components := framework.Build()
 
-		components.Start(ctx, func(ctx context.Context, job *Job) error {
+		components.Start(ctx, func(ctx context.Context, job *nanopony.Job[any]) error {
 			time.Sleep(1 * time.Millisecond)
 			return nil
 		})
@@ -360,23 +360,23 @@ func TestFrameworkWorkerPoolMemoryLeak(t *testing.T) {
 	initialMem := m1.Alloc
 
 	// Submit many jobs through framework
-	ResetConfig()
-	config := NewConfig()
+	nanopony.ResetConfig()
+	config := nanopony.NewConfig()
 
-	framework := NewFramework().
+	framework := nanopony.NewFramework[any]().
 		WithConfig(config).
 		WithWorkerPool(10, 500, 2)
 
 	components := framework.Build()
 
-	components.Start(ctx, func(ctx context.Context, job *Job) error {
+	components.Start(ctx, func(ctx context.Context, job *nanopony.Job[any]) error {
 		time.Sleep(1 * time.Millisecond)
 		return nil
 	})
 
 	// Submit 1000 jobs
 	for i := 0; i < 1000; i++ {
-		job := AcquireJob()
+		job := nanopony.AcquireJob[any]()
 		job.ID = fmt.Sprintf("job-%d", i)
 		job.Data = map[string]interface{}{"index": i, "data": make([]byte, 100)}
 		components.WorkerPool.Submit(ctx, job)
@@ -415,22 +415,22 @@ func TestFrameworkConcurrentMemoryLeak(t *testing.T) {
 	initialMem := m1.Alloc
 
 	// Run multiple frameworks concurrently
-	// Use BuildConfig() to avoid race condition on config singleton
+	// Use nanopony.BuildConfig() to avoid race condition on config singleton
 	concurrent := 20
 	done := make(chan bool, concurrent)
 
 	for i := 0; i < concurrent; i++ {
 		go func(idx int) {
-			// Use BuildConfig() to create an isolated config (no singleton race)
-			config := BuildConfig()
+			// Use nanopony.BuildConfig() to create an isolated config (no singleton race)
+			config := nanopony.BuildConfig()
 
-			framework := NewFramework().
+			framework := nanopony.NewFramework[any]().
 				WithConfig(config).
 				WithWorkerPool(2, 100, 2)
 
 			components := framework.Build()
 
-			components.Start(ctx, func(ctx context.Context, job *Job) error {
+			components.Start(ctx, func(ctx context.Context, job *nanopony.Job[any]) error {
 				time.Sleep(1 * time.Millisecond)
 				return nil
 			})

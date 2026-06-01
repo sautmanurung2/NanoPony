@@ -69,18 +69,21 @@ import "github.com/sautmanurung2/nanopony"
 config := nanopony.NewConfig()
 
 // 2. Build framework
-components := nanopony.NewFramework().
+components := nanopony.NewFramework[any]().
     WithConfig(config).
     WithDatabase().
     WithKafkaWriter().
     WithProducer().
-    WithWorkerPool(5, 100, 3).
+    WithWorkerPool[any](5, 100, 3).
     WithPoller(nanopony.DefaultPollerConfig(), dataFetcher).
     Build()
 
 // 3. Start processing
 ctx := context.Background()
-components.Start(ctx, jobHandler)
+components.Start(ctx, func(ctx context.Context, job *nanopony.Job[any]) error {
+    log.Printf("Processing job: %+v", job)
+    return nil
+})
 
 // 4. Graceful shutdown
 defer components.Shutdown(ctx)

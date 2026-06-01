@@ -13,7 +13,7 @@ import (
 func BenchmarkWorkerPoolCreation(b *testing.B) {
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		pool := NewWorkerPool(5, 100, 2)
+		pool := nanopony.NewWorkerPool[any](5, 100, 2)
 		if pool == nil {
 			b.Fatal("Expected worker pool to be created")
 		}
@@ -26,14 +26,14 @@ func BenchmarkWorkerPoolStartStop(b *testing.B) {
 	ctx := context.Background()
 
 	for i := 0; i < b.N; i++ {
-		pool := NewWorkerPool(5, 100, 2)
-		pool.Start(ctx, func(ctx context.Context, job *Job) error {
+		pool := nanopony.NewWorkerPool[any](5, 100, 2)
+		pool.Start(ctx, func(ctx context.Context, job *nanopony.Job[any]) error {
 			return nil
 		})
 
 		// Submit some jobs
 		for j := 0; j < 10; j++ {
-			job := AcquireJob()
+			job := nanopony.AcquireJob[any]()
 			job.ID = "bench-job"
 			pool.Submit(ctx, job)
 		}
@@ -45,10 +45,10 @@ func BenchmarkWorkerPoolStartStop(b *testing.B) {
 
 // BenchmarkWorkerPoolSubmit tests memory allocation for job submission
 func BenchmarkWorkerPoolSubmit(b *testing.B) {
-	pool := NewWorkerPool(5, 1000, 2)
+	pool := nanopony.NewWorkerPool[any](5, 1000, 2)
 	ctx := context.Background()
 
-	pool.Start(ctx, func(ctx context.Context, job *Job) error {
+	pool.Start(ctx, func(ctx context.Context, job *nanopony.Job[any]) error {
 		time.Sleep(100 * time.Microsecond)
 		return nil
 	})
@@ -58,7 +58,7 @@ func BenchmarkWorkerPoolSubmit(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		job := AcquireJob()
+		job := nanopony.AcquireJob[any]()
 		job.ID = "bench-job"
 		job.Data = map[string]interface{}{"index": i}
 		pool.Submit(ctx, job)
@@ -67,10 +67,10 @@ func BenchmarkWorkerPoolSubmit(b *testing.B) {
 
 // BenchmarkWorkerPoolSubmitParallel tests concurrent job submission
 func BenchmarkWorkerPoolSubmitParallel(b *testing.B) {
-	pool := NewWorkerPool(10, 10000, 2)
+	pool := nanopony.NewWorkerPool[any](10, 10000, 2)
 	ctx := context.Background()
 
-	pool.Start(ctx, func(ctx context.Context, job *Job) error {
+	pool.Start(ctx, func(ctx context.Context, job *nanopony.Job[any]) error {
 		time.Sleep(50 * time.Microsecond)
 		return nil
 	})
@@ -82,7 +82,7 @@ func BenchmarkWorkerPoolSubmitParallel(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		i := 0
 		for pb.Next() {
-			job := AcquireJob()
+			job := nanopony.AcquireJob[any]()
 			job.ID = "parallel-job"
 			job.Data = i
 			pool.Submit(ctx, job)
@@ -97,12 +97,12 @@ func TestWorkerPoolMemoryLeak(t *testing.T) {
 
 	// Run multiple start/stop cycles
 	for cycle := 0; cycle < 10; cycle++ {
-		pool := NewWorkerPool(5, 100, 2)
+		pool := nanopony.NewWorkerPool[any](5, 100, 2)
 
 		processed := 0
 		var mu sync.Mutex
 
-		pool.Start(ctx, func(ctx context.Context, job *Job) error {
+		pool.Start(ctx, func(ctx context.Context, job *nanopony.Job[any]) error {
 			mu.Lock()
 			processed++
 			mu.Unlock()
@@ -111,7 +111,7 @@ func TestWorkerPoolMemoryLeak(t *testing.T) {
 
 		// Submit jobs
 		for i := 0; i < 50; i++ {
-			job := AcquireJob()
+			job := nanopony.AcquireJob[any]()
 			job.ID = "leak-test"
 			if err := pool.Submit(ctx, job); err != nil {
 				t.Logf("Submit error: %v", err)
@@ -128,12 +128,12 @@ func TestWorkerPoolMemoryLeak(t *testing.T) {
 
 // TestWorkerPoolLongRunning tests memory usage over extended period
 func TestWorkerPoolLongRunning(t *testing.T) {
-	pool := NewWorkerPool(5, 1000, 2)
+	pool := nanopony.NewWorkerPool[any](5, 1000, 2)
 	ctx := context.Background()
 
 	processed := make(chan int, 1000)
 
-	pool.Start(ctx, func(ctx context.Context, job *Job) error {
+	pool.Start(ctx, func(ctx context.Context, job *nanopony.Job[any]) error {
 		processed <- 1
 		return nil
 	})
@@ -142,7 +142,7 @@ func TestWorkerPoolLongRunning(t *testing.T) {
 	// Submit jobs over time
 	totalJobs := 1000
 	for i := 0; i < totalJobs; i++ {
-		job := AcquireJob()
+		job := nanopony.AcquireJob[any]()
 		job.ID = "long-running"
 		pool.Submit(ctx, job)
 		if i%100 == 0 {

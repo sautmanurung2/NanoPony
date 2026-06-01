@@ -6,7 +6,7 @@ import (
 )
 
 func TestNewFramework(t *testing.T) {
-	framework := NewFramework()
+	framework := NewFramework[any]()
 	if framework == nil {
 		t.Fatal("Expected framework to be created")
 	}
@@ -16,7 +16,7 @@ func TestFrameworkBuilder(t *testing.T) {
 	ResetConfig()
 	config := NewConfig()
 
-	framework := NewFramework().
+	framework := NewFramework[any]().
 		WithConfig(config)
 
 	if framework.config != config {
@@ -25,8 +25,7 @@ func TestFrameworkBuilder(t *testing.T) {
 }
 
 func TestFrameworkWithDatabaseFromInstance(t *testing.T) {
-	// Create a mock database connection (nil for testing)
-	framework := NewFramework().
+	framework := NewFramework[any]().
 		WithDatabaseFromInstance(nil)
 
 	if framework.db != nil {
@@ -35,7 +34,7 @@ func TestFrameworkWithDatabaseFromInstance(t *testing.T) {
 }
 
 func TestFrameworkWithKafkaWriterFromInstance(t *testing.T) {
-	framework := NewFramework().
+	framework := NewFramework[any]().
 		WithKafkaWriterFromInstance(nil)
 
 	if framework.kafkaWriter != nil {
@@ -44,7 +43,7 @@ func TestFrameworkWithKafkaWriterFromInstance(t *testing.T) {
 }
 
 func TestFrameworkWithProducerFromInstance(t *testing.T) {
-	framework := NewFramework().
+	framework := NewFramework[any]().
 		WithProducerFromInstance(nil)
 
 	if framework.producer != nil {
@@ -53,8 +52,8 @@ func TestFrameworkWithProducerFromInstance(t *testing.T) {
 }
 
 func TestFrameworkWithWorkerPoolFromInstance(t *testing.T) {
-	pool := NewWorkerPool(5, 100, 2)
-	framework := NewFramework().
+	pool := NewWorkerPool[any](5, 100, 2)
+	framework := NewFramework[any]().
 		WithWorkerPoolFromInstance(pool)
 
 	if framework.workerPool != pool {
@@ -63,13 +62,13 @@ func TestFrameworkWithWorkerPoolFromInstance(t *testing.T) {
 }
 
 func TestFrameworkWithPollerFromInstance(t *testing.T) {
-	pool := NewWorkerPool(5, 100, 2)
-	fetcher := DataFetcherFunc(func() ([]interface{}, error) {
-		return []interface{}{}, nil
+	pool := NewWorkerPool[any](5, 100, 2)
+	fetcher := DataFetcherFunc[any](func() ([]any, error) {
+		return []any{}, nil
 	})
-	poller := NewPoller(DefaultPollerConfig(), pool, fetcher)
+	poller := NewPoller[any](DefaultPollerConfig(), pool, fetcher)
 
-	framework := NewFramework().
+	framework := NewFramework[any]().
 		WithPollerFromInstance(poller)
 
 	if framework.poller != poller {
@@ -79,7 +78,7 @@ func TestFrameworkWithPollerFromInstance(t *testing.T) {
 
 func TestFrameworkAddCleanup(t *testing.T) {
 	cleanupCalled := false
-	framework := NewFramework().
+	framework := NewFramework[any]().
 		AddCleanup(func() error {
 			cleanupCalled = true
 			return nil
@@ -89,7 +88,6 @@ func TestFrameworkAddCleanup(t *testing.T) {
 		t.Errorf("Expected 1 cleanup function, got %d", len(framework.cleanupFuncs))
 	}
 
-	// Call cleanup
 	framework.cleanupFuncs[0]()
 	if !cleanupCalled {
 		t.Error("Expected cleanup function to be called")
@@ -100,7 +98,7 @@ func TestFrameworkBuild(t *testing.T) {
 	ResetConfig()
 	config := NewConfig()
 
-	framework := NewFramework().
+	framework := NewFramework[any]().
 		WithConfig(config).
 		WithWorkerPool(5, 100, 2)
 
@@ -121,25 +119,25 @@ func TestFrameworkBuildPanic(t *testing.T) {
 		}
 	}()
 
-	framework := NewFramework()
+	framework := NewFramework[any]()
 	framework.Build()
-	framework.Build() // Should panic
+	framework.Build()
 }
 
 func TestFrameworkComponentsStartStop(t *testing.T) {
-	pool := NewWorkerPool(2, 10, 2)
-	fetcher := DataFetcherFunc(func() ([]interface{}, error) {
-		return []interface{}{}, nil
+	pool := NewWorkerPool[any](2, 10, 2)
+	fetcher := DataFetcherFunc[any](func() ([]any, error) {
+		return []any{}, nil
 	})
-	poller := NewPoller(DefaultPollerConfig(), pool, fetcher)
+	poller := NewPoller[any](DefaultPollerConfig(), pool, fetcher)
 
-	components := &FrameworkComponents{
+	components := &FrameworkComponents[any]{
 		WorkerPool: pool,
 		Poller:     poller,
 	}
 
 	ctx := context.Background()
-	components.Start(ctx, func(ctx context.Context, job *Job) error {
+	components.Start(ctx, func(ctx context.Context, job *Job[any]) error {
 		return nil
 	})
 
@@ -159,13 +157,13 @@ func TestFrameworkComponentsStartStop(t *testing.T) {
 func TestFrameworkComponentsGetters(t *testing.T) {
 	ResetConfig()
 	config := NewConfig()
-	pool := NewWorkerPool(5, 100, 2)
-	fetcher := DataFetcherFunc(func() ([]interface{}, error) {
-		return []interface{}{}, nil
+	pool := NewWorkerPool[any](5, 100, 2)
+	fetcher := DataFetcherFunc[any](func() ([]any, error) {
+		return []any{}, nil
 	})
-	poller := NewPoller(DefaultPollerConfig(), pool, fetcher)
+	poller := NewPoller[any](DefaultPollerConfig(), pool, fetcher)
 
-	components := &FrameworkComponents{
+	components := &FrameworkComponents[any]{
 		Config:     config,
 		DB:         nil,
 		WorkerPool: pool,

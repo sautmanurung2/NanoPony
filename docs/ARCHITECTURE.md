@@ -215,16 +215,16 @@ type KafkaWriterConfig struct {
 **Tujuan:** Pemrosesan job konkuren dengan goroutine pool ukuran tetap dan queue bounded. Pemisahan tanggung jawab antara definisi job (`job.go`) dan eksekusi pool (`worker.go`).
 
 **Struct Utama:**
-- `Job`
+- `Job[T any]`
   ```go
-  type Job struct {
+  type Job[T any] struct {
       ID   string
-      Data any
+      Data T
       Meta map[string]any
   }
   ```
-- `JobHandler` - `func(ctx context.Context, job *Job) error`
-- `WorkerPool` - Mengelola `numWorkers`, `jobChan` buffered pointer `*Job`, `errChan`, `sync.WaitGroup`, context, flag `running` yang dilindungi mutex
+- `JobHandler[T any]` - `func(ctx context.Context, job *Job[T]) error`
+- `WorkerPool[T any]` - Mengelola `numWorkers`, `jobChan` buffered pointer `*Job[T]`, `errChan`, `sync.WaitGroup`, context, flag `running` yang dilindungi mutex
 
 **Fungsi Utama:**
 - `NewWorkerPool(numWorkers, queueSize, numShards)` - Membuat channel buffered, context yang dapat dibatalkan
@@ -256,7 +256,7 @@ type KafkaWriterConfig struct {
   }
   ```
 - `Poller` - Menampung config, job slots (channel semaphore), referensi worker pool, data fetcher, context
-- Interface `DataFetcher` - `Fetch() ([]any, error)`
+- Interface `DataFetcher[T any]` - `Fetch() ([]T, error)`
 - `DataFetcherFunc` - Function adapter yang mengimplementasikan `DataFetcher`
 
 **Fungsi Utama:**
@@ -507,7 +507,7 @@ components := framework.Build()
 
 ```go
 ctx := context.Background()
-components.Start(ctx, func(ctx context.Context, job *nanopony.Job) error {
+components.Start(ctx, func(ctx context.Context, job *nanopony.Job[any]) error {
     log.Printf("Memproses job: %+v", job)
     return nil
 })
@@ -539,17 +539,17 @@ func main() {
     config := nanopony.NewConfig()
 
     // Buat data fetcher
-    dataFetcher := nanopony.DataFetcherFunc(func() ([]interface{}, error) {
-        return []interface{}{"data1", "data2"}, nil
+    dataFetcher := nanopony.DataFetcherFunc[any](func() ([]any, error) {
+        return []any{"data1", "data2"}, nil
     })
 
     // Build framework
-    components := nanopony.NewFramework().
+    components := nanopony.NewFramework[any]().
         WithConfig(config).
         WithDatabase().
         WithKafkaWriter().
         WithProducer().
-        WithWorkerPool(5, 100, 3).
+        WithWorkerPool[any](5, 100, 3).
         WithPoller(nanopony.DefaultPollerConfig(), dataFetcher).
         Build()
 
@@ -557,7 +557,7 @@ func main() {
     defer cancel()
 
     // Mulai pemrosesan
-    components.Start(ctx, func(ctx context.Context, job *nanopony.Job) error {
+    components.Start(ctx, func(ctx context.Context, job *nanopony.Job[any]) error {
         log.Printf("Memproses job: %+v", job)
 
         // Kirim ke Kafka
@@ -577,8 +577,8 @@ func main() {
     components.Shutdown(ctx)
     log.Println("Shutdown selesai")
 }
-
 ```
+
 
 ---
 

@@ -1,18 +1,4 @@
 // framework.go — Builder pattern for wiring NanoPony components together.
-//
-// Builder flow:
-//
-//	NewFramework()
-//	   .WithConfig(config)          ← required
-//	   .WithDatabase()              ← optional (needs config)
-//	   .WithKafkaWriter()           ← optional (needs config)
-//	   .WithProducer()              ← optional (needs kafka writer)
-//	   .WithWorkerPool(n, queueSz, shards)  ← optional
-//	   .WithPoller(cfg, fetcher)    ← optional (needs worker pool)
-//	   .Build()                     ← returns FrameworkComponents
-//
-// Use Build() for quick prototyping (panics on error).
-// Use BuildSafe() for production code (returns error).
 package nanopony
 
 import (
@@ -27,69 +13,41 @@ import (
 
 // Framework errors
 var (
-	// ErrQueueFull is returned when the job queue is full and cannot accept new jobs
-	ErrQueueFull = errors.New("job queue is full")
-	// ErrConfigNotSet is returned when config is required but not set
-	ErrConfigNotSet = errors.New("config must be set before this operation")
-	// ErrDatabaseNotSet is returned when database is required but not set
-	ErrDatabaseNotSet = errors.New("database must be set before this operation")
-	// ErrKafkaNotSet is returned when kafka writer is required but not set
-	ErrKafkaNotSet = errors.New("kafka writer must be set before this operation")
-	// ErrWorkerPoolNotSet is returned when worker pool is required but not set
+	ErrQueueFull        = errors.New("job queue is full")
+	ErrConfigNotSet     = errors.New("config must be set before this operation")
+	ErrDatabaseNotSet   = errors.New("database must be set before this operation")
+	ErrKafkaNotSet      = errors.New("kafka writer must be set before this operation")
 	ErrWorkerPoolNotSet = errors.New("worker pool must be set before this operation")
-	// ErrAlreadyBuilt is returned when Build() is called more than once
-	ErrAlreadyBuilt = errors.New("framework has already been built")
+	ErrAlreadyBuilt     = errors.New("framework has already been built")
 )
 
 // Framework is the main builder for setting up the Kafka-Oracle framework.
-// It uses the builder pattern to configure and wire together components
-// such as database connections, Kafka producers, worker pools, and pollers.
-//
-// Example usage:
-//
-//	fw := nanopony.NewFramework().
-//	    WithConfig(config).
-//	    WithDatabase().
-//	    WithKafkaWriter().
-//	    WithProducer().
-//	    WithWorkerPool(5, 100, 3).
-//	    WithPoller(pollerConfig, dataFetcher).
-//	    Build()
-//
-//	fw.Start(ctx, jobHandler)
-//	defer fw.Shutdown(ctx)
-type Framework struct {
+type Framework[T any] struct {
 	config       *Config
 	db           *sql.DB
 	kafkaWriter  *kafka.Writer
 	producer     *KafkaProducer
-	workerPool   *ShardedWorkerPool
-	poller       *Poller
+	workerPool   *ShardedWorkerPool[T]
+	poller       *Poller[T]
 	cleanupFuncs []func() error
 	built        bool
 }
 
 // NewFramework creates a new framework builder with default values.
-// Use the With* methods to configure components before calling Build().
-func NewFramework() *Framework {
-	return &Framework{
+func NewFramework[T any]() *Framework[T] {
+	return &Framework[T]{
 		cleanupFuncs: make([]func() error, 0),
 	}
 }
 
 // WithConfig sets the configuration for the framework.
-// This should be called before other With* methods that depend on config.
-func (f *Framework) WithConfig(config *Config) *Framework {
+func (f *Framework[T]) WithConfig(config *Config) *Framework[T] {
 	f.config = config
 	return f
 }
 
-// WithDatabase sets up the Oracle database connection using the configured config.
-// Requires WithConfig to be called first.
-//
-// Panics if config is not set or connection fails.
-// For error-handling version, see WithDatabaseSafe.
-func (f *Framework) WithDatabase() *Framework {
+// WithDatabase sets up the Oracle database connection.
+func (f *Framework[T]) WithDatabase() *Framework[T] {
 	fw, err := f.WithDatabaseSafe()
 	if err != nil {
 		panic(err.Error())
@@ -98,9 +56,7 @@ func (f *Framework) WithDatabase() *Framework {
 }
 
 // WithDatabaseSafe sets up the Oracle database connection with error handling.
-// Unlike WithDatabase, this method returns an error instead of panicking.
-// This is recommended for production code.
-func (f *Framework) WithDatabaseSafe() (*Framework, error) {
+func (f *Framework[T]) WithDatabaseSafe() (*Framework[T], error) {
 	if f.config == nil {
 		return f, ErrConfigNotSet
 	}
@@ -118,19 +74,14 @@ func (f *Framework) WithDatabaseSafe() (*Framework, error) {
 	return f, nil
 }
 
-// WithDatabaseFromInstance allows using an existing database connection
-// instead of creating a new one from config.
-func (f *Framework) WithDatabaseFromInstance(db *sql.DB) *Framework {
+// WithDatabaseFromInstance allows using an existing database connection.
+func (f *Framework[T]) WithDatabaseFromInstance(db *sql.DB) *Framework[T] {
 	f.db = db
 	return f
 }
 
-// WithKafkaWriterRoundRobin sets up the Kafka writer using the configured config.
-// Requires WithConfig to be called first.
-//
-// Panics if config is not set.
-// For error-handling version, see WithKafkaWriterSafeRoundRobin.
-func (f *Framework) WithKafkaWriterRoundRobin() *Framework {
+// WithKafkaWriterRoundRobin sets up the Kafka writer.
+func (f *Framework[T]) WithKafkaWriterRoundRobin() *Framework[T] {
 	fw, err := f.WithKafkaWriterSafeRoundRobin()
 	if err != nil {
 		panic(err.Error())
@@ -138,12 +89,8 @@ func (f *Framework) WithKafkaWriterRoundRobin() *Framework {
 	return fw
 }
 
-// WithKafkaWriterHash sets up the Kafka writer with Hash balancer using the configured config.
-// Requires WithConfig to be called first.
-//
-// Panics if config is not set.
-// For error-handling version, see WithKafkaWriterSafeHash.
-func (f *Framework) WithKafkaWriterHash() *Framework {
+// WithKafkaWriterHash sets up the Kafka writer with Hash balancer.
+func (f *Framework[T]) WithKafkaWriterHash() *Framework[T] {
 	fw, err := f.WithKafkaWriterSafeHash()
 	if err != nil {
 		panic(err.Error())
@@ -152,9 +99,7 @@ func (f *Framework) WithKafkaWriterHash() *Framework {
 }
 
 // WithKafkaWriterSafeHash sets up the Kafka writer with Hash balancer with error handling.
-// Unlike WithKafkaWriterHash, this method returns an error instead of panicking.
-// This is recommended for production code.
-func (f *Framework) WithKafkaWriterSafeHash() (*Framework, error) {
+func (f *Framework[T]) WithKafkaWriterSafeHash() (*Framework[T], error) {
 	if f.config == nil {
 		return f, ErrConfigNotSet
 	}
@@ -168,9 +113,7 @@ func (f *Framework) WithKafkaWriterSafeHash() (*Framework, error) {
 }
 
 // WithKafkaWriterSafeRoundRobin sets up the Kafka writer with error handling.
-// Unlike WithKafkaWriterRoundRobin, this method returns an error instead of panicking.
-// This is recommended for production code.
-func (f *Framework) WithKafkaWriterSafeRoundRobin() (*Framework, error) {
+func (f *Framework[T]) WithKafkaWriterSafeRoundRobin() (*Framework[T], error) {
 	if f.config == nil {
 		return f, ErrConfigNotSet
 	}
@@ -183,19 +126,14 @@ func (f *Framework) WithKafkaWriterSafeRoundRobin() (*Framework, error) {
 	return f, nil
 }
 
-// WithKafkaWriterFromInstance allows using an existing Kafka writer
-// instead of creating a new one from config.
-func (f *Framework) WithKafkaWriterFromInstance(writer *kafka.Writer) *Framework {
+// WithKafkaWriterFromInstance allows using an existing Kafka writer.
+func (f *Framework[T]) WithKafkaWriterFromInstance(writer *kafka.Writer) *Framework[T] {
 	f.kafkaWriter = writer
 	return f
 }
 
-// WithProducer sets up the Kafka producer using the configured Kafka writer.
-// Requires WithKafkaWriter or WithKafkaWriterFromInstance to be called first.
-//
-// Panics if kafka writer is not set.
-// For error-handling version, see WithProducerSafe.
-func (f *Framework) WithProducer() *Framework {
+// WithProducer sets up the Kafka producer.
+func (f *Framework[T]) WithProducer() *Framework[T] {
 	fw, err := f.WithProducerSafe()
 	if err != nil {
 		panic(err.Error())
@@ -204,9 +142,7 @@ func (f *Framework) WithProducer() *Framework {
 }
 
 // WithProducerSafe sets up the Kafka producer with error handling.
-// Unlike WithProducer, this method returns an error instead of panicking.
-// This is recommended for production code.
-func (f *Framework) WithProducerSafe() (*Framework, error) {
+func (f *Framework[T]) WithProducerSafe() (*Framework[T], error) {
 	if f.kafkaWriter == nil {
 		return f, ErrKafkaNotSet
 	}
@@ -215,35 +151,26 @@ func (f *Framework) WithProducerSafe() (*Framework, error) {
 	return f, nil
 }
 
-// WithProducerFromInstance allows using an existing producer instance
-// instead of creating a new one.
-func (f *Framework) WithProducerFromInstance(producer *KafkaProducer) *Framework {
+// WithProducerFromInstance allows using an existing producer instance.
+func (f *Framework[T]) WithProducerFromInstance(producer *KafkaProducer) *Framework[T] {
 	f.producer = producer
 	return f
 }
 
-// WithWorkerPool sets up the worker pool with the specified number of workers and queue size.
-// Example: WithWorkerPool(5, 100, 3) creates 5 workers with a queue size of 100 and 3 shards.
-func (f *Framework) WithWorkerPool(numWorkers, queueSize, numShards int) *Framework {
-	f.workerPool = NewWorkerPool(numWorkers, queueSize, numShards)
+// WithWorkerPool sets up the worker pool.
+func (f *Framework[T]) WithWorkerPool(numWorkers, queueSize, numShards int) *Framework[T] {
+	f.workerPool = NewWorkerPool[T](numWorkers, queueSize, numShards)
 	return f
 }
 
-// WithWorkerPoolFromInstance allows using an existing worker pool
-// instead of creating a new one.
-func (f *Framework) WithWorkerPoolFromInstance(pool *ShardedWorkerPool) *Framework {
+// WithWorkerPoolFromInstance allows using an existing worker pool.
+func (f *Framework[T]) WithWorkerPoolFromInstance(pool *ShardedWorkerPool[T]) *Framework[T] {
 	f.workerPool = pool
 	return f
 }
 
-// WithPoller sets up the poller with the given configuration and data fetcher.
-// Requires WithWorkerPool to be called first.
-//
-// The poller periodically fetches data and submits it as jobs to the worker pool.
-//
-// Panics if worker pool is not set.
-// For error-handling version, see WithPollerSafe.
-func (f *Framework) WithPoller(config PollerConfig, dataFetcher DataFetcher) *Framework {
+// WithPoller sets up the poller.
+func (f *Framework[T]) WithPoller(config PollerConfig, dataFetcher DataFetcher[T]) *Framework[T] {
 	fw, err := f.WithPollerSafe(config, dataFetcher)
 	if err != nil {
 		panic(err.Error())
@@ -252,41 +179,29 @@ func (f *Framework) WithPoller(config PollerConfig, dataFetcher DataFetcher) *Fr
 }
 
 // WithPollerSafe sets up the poller with error handling.
-// Unlike WithPoller, this method returns an error instead of panicking.
-// This is recommended for production code.
-func (f *Framework) WithPollerSafe(config PollerConfig, dataFetcher DataFetcher) (*Framework, error) {
+func (f *Framework[T]) WithPollerSafe(config PollerConfig, dataFetcher DataFetcher[T]) (*Framework[T], error) {
 	if f.workerPool == nil {
 		return f, ErrWorkerPoolNotSet
 	}
 
-	f.poller = NewPoller(config, f.workerPool, dataFetcher)
+	f.poller = NewPoller[T](config, f.workerPool, dataFetcher)
 	return f, nil
 }
 
-// WithPollerFromInstance allows using an existing poller instance
-// instead of creating a new one.
-func (f *Framework) WithPollerFromInstance(poller *Poller) *Framework {
+// WithPollerFromInstance allows using an existing poller instance.
+func (f *Framework[T]) WithPollerFromInstance(poller *Poller[T]) *Framework[T] {
 	f.poller = poller
 	return f
 }
 
 // AddCleanup adds a cleanup function to be called during shutdown.
-// Cleanup functions are executed concurrently.
-func (f *Framework) AddCleanup(fn func() error) *Framework {
+func (f *Framework[T]) AddCleanup(fn func() error) *Framework[T] {
 	f.cleanupFuncs = append(f.cleanupFuncs, fn)
 	return f
 }
 
 // Build finalizes the configuration and returns FrameworkComponents.
-// This method should be called after all With* methods.
-//
-// Panics:
-//   - if Build() is called more than once
-//   - if Config is missing (WithConfig was not called)
-//   - if Config validation fails (e.g., missing environment variables)
-//
-// For a non-panicking version, see BuildSafe.
-func (f *Framework) Build() *FrameworkComponents {
+func (f *Framework[T]) Build() *FrameworkComponents[T] {
 	components, err := f.BuildSafe()
 	if err != nil {
 		panic(err.Error())
@@ -295,19 +210,7 @@ func (f *Framework) Build() *FrameworkComponents {
 }
 
 // BuildSafe finalizes the configuration and returns FrameworkComponents.
-// Unlike Build(), this method returns an error instead of panicking.
-// This is recommended for production code.
-//
-// Example:
-//
-//	components, err := nanopony.NewFramework().
-//	    WithConfig(config).
-//	    WithWorkerPool(5, 100, 3).
-//	    BuildSafe()
-//	if err != nil {
-//	    log.Fatal(err)
-//	}
-func (f *Framework) BuildSafe() (*FrameworkComponents, error) {
+func (f *Framework[T]) BuildSafe() (*FrameworkComponents[T], error) {
 	if f.built {
 		return nil, ErrAlreadyBuilt
 	}
@@ -322,12 +225,11 @@ func (f *Framework) BuildSafe() (*FrameworkComponents, error) {
 
 	f.built = true
 
-	// Dynamically adjust Kafka BatchSize based on worker pool size
 	if f.kafkaWriter != nil && f.workerPool != nil {
 		f.kafkaWriter.BatchSize = f.workerPool.NumWorkers()
 	}
 
-	return &FrameworkComponents{
+	return &FrameworkComponents[T]{
 		Config:       f.config,
 		DB:           f.db,
 		KafkaWriter:  f.kafkaWriter,
@@ -339,57 +241,33 @@ func (f *Framework) BuildSafe() (*FrameworkComponents, error) {
 }
 
 // FrameworkComponents holds all initialized framework components.
-// Use this struct to access components like DB, Producer, WorkerPool, etc.
-type FrameworkComponents struct {
-	// Config holds the application configuration
-	Config *Config
-	// DB is the Oracle database connection
-	DB *sql.DB
-	// KafkaWriter is the Kafka writer for producing messages
-	KafkaWriter *kafka.Writer
-	// Producer is the Kafka producer wrapper
-	Producer *KafkaProducer
-	// WorkerPool manages the concurrent job processing
-	WorkerPool *ShardedWorkerPool
-	// Poller periodically fetches data and submits jobs
-	Poller *Poller
-
+type FrameworkComponents[T any] struct {
+	Config       *Config
+	DB           *sql.DB
+	KafkaWriter  *kafka.Writer
+	Producer     *KafkaProducer
+	WorkerPool   *ShardedWorkerPool[T]
+	Poller       *Poller[T]
 	cleanupFuncs []func() error
 }
 
 // Start starts all framework components.
-// It starts the worker pool with the given handler, starts the poller,
-// and initializes all services.
-//
-// Note: Service initialization errors are logged but do not prevent
-// the framework from starting. This is intentional to allow partial failures.
-func (fc *FrameworkComponents) Start(ctx context.Context, handler JobHandler) {
-	// Start worker pool
+func (fc *FrameworkComponents[T]) Start(ctx context.Context, handler JobHandler[T]) {
 	if fc.WorkerPool != nil {
 		fc.WorkerPool.Start(ctx, handler)
 	}
 
-	// Start poller
 	if fc.Poller != nil {
 		fc.Poller.Start()
 	}
 }
 
-// Shutdown gracefully shuts down all framework components in the following order:
-// 1. Stop poller
-// 2. Stop worker pool
-// 3. Shutdown all services
-// 4. Close all repositories
-// 5. Run all cleanup functions concurrently
-//
-// If multiple errors occur, they are all collected and returned as an aggregated error.
-// Returns nil if all shutdowns succeeded.
-func (fc *FrameworkComponents) Shutdown(ctx context.Context) error {
+// Shutdown gracefully shuts down all framework components.
+func (fc *FrameworkComponents[T]) Shutdown(ctx context.Context) error {
 	var wg sync.WaitGroup
 	var errMu sync.Mutex
 	var allErrors []error
 
-	// Helper function to collect errors safely
 	collectErr := func(err error) {
 		if err != nil {
 			errMu.Lock()
@@ -398,17 +276,14 @@ func (fc *FrameworkComponents) Shutdown(ctx context.Context) error {
 		}
 	}
 
-	// Stop poller first
 	if fc.Poller != nil {
 		fc.Poller.Stop()
 	}
 
-	// Stop worker pool
 	if fc.WorkerPool != nil {
 		fc.WorkerPool.Stop()
 	}
 
-	// Run cleanup functions concurrently
 	for _, cleanup := range fc.cleanupFuncs {
 		wg.Add(1)
 		go func(fn func() error) {
@@ -421,6 +296,5 @@ func (fc *FrameworkComponents) Shutdown(ctx context.Context) error {
 
 	wg.Wait()
 
-	// Return aggregated errors or nil
 	return errors.Join(allErrors...)
 }

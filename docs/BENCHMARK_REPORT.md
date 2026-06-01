@@ -50,7 +50,7 @@ Penggantian siklus JSON `Marshal/Unmarshal` dengan rekursi manual untuk *deep-co
 - **Manfaat**: Pengurangan drastis penggunaan CPU dan alokasi memori pada sistem logging terstruktur.
 
 ### 4. Job Lifecycle Management
-Perubahan strategi pembersihan map pada `Job.Release` dengan pembuatan ulang map (`make`).
+Perubahan strategi pembersihan map pada `Job[T].Release` dengan pembuatan ulang map (`make`).
 - **Manfaat**: Lebih efisien untuk *Garbage Collector* dibandingkan menghapus kunci satu per satu (*key-by-key deletion*).
 
 ---

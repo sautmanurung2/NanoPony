@@ -195,7 +195,10 @@ components := framework.Build()
 
 ```go
 ctx := context.Background()
-components.Start(ctx, jobHandler)
+components.Start(ctx, func(ctx context.Context, job *nanopony.Job[any]) error {
+    log.Printf("Memproses job: %+v", job)
+    return nil
+})
 ```
 
 ### 5. Graceful Shutdown
@@ -351,17 +354,17 @@ success, err := producer.Produce("topic-name", map[string]interface{}{
 ### Worker Pool
 
 ```go
-pool := nanopony.NewWorkerPool(5, 100, 3)
-pool.Start(ctx, func(ctx context.Context, job *nanopony.Job) error {
+pool := nanopony.NewWorkerPool[any](5, 100, 3)
+pool.Start(ctx, func(ctx context.Context, job *nanopony.Job[any]) error {
     // proses job
     fmt.Printf("Memproses: %+v\n", job.Data)
     return nil
 })
 
 // Submit job
-job := nanopony.AcquireJob()
+job := nanopony.AcquireJob[any]()
 job.ID = "job-1"
-job.Data = map[string]interface{}{"key": "value"}
+job.Data = map[string]any{"key": "value"}
 pool.Submit(ctx, job)
 
 // Hentikan pool

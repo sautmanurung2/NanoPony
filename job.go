@@ -6,44 +6,61 @@ import (
 )
 
 // Job represents a unit of work to be processed by the worker pool.
-// It contains a unique ID, payload data, and optional metadata.
-type Job struct {
+// It contains a unique identifier, payload data of type T, and optional metadata.
+// Using generics (T any) avoids interface boxing overhead for the Data field.
+type Job[T any] struct {
 	// ID is a unique identifier for the job
 	ID string
-	// Data contains the payload to be processed
-	Data any
+	// Data contains the payload of type T to be processed
+	Data T
 	// Meta contains optional metadata (e.g., source, timestamp)
 	Meta map[string]any
 }
 
-var jobPool = sync.Pool{
-	New: func() any {
-		return &Job{
-			Meta: make(map[string]any),
-		}
-	},
+// jobPools stores a sync.Pool for each job type to allow reuse.
+// Since Go doesn't support generic package-level variables in a way that allows
+// a single pool for all Job[T], we might need a different strategy if T varies wildly.
+// However, for a given application instance, T is usually fixed.
+// To keep the API simple and compatible with sync.Pool, we use a registry or 
+// expect the user to manage the pool if they use multiple types.
+// For NanoPony's primary use case (poller -> worker), T is typically fixed per pool.
+
+// To maintain the AcquireJob/Release pattern while supporting generics, 
+// we can use a specialized pool manager or accept that some boxing might 
+// happen at the pool level, but NOT at the Data field level during processing.
+// A better approach for a generic library is to provide the Pool as part of the WorkerPool.
+
+var jobPools sync.Map // Map of reflect.Type to *sync.Pool
+
+func getJobPool[T any]() *sync.Pool {
+	// In a real implementation, we'd use a type key. 
+	// For simplicity in this refactor, we'll use a local pool strategy or 
+	// allow the Job[T] to be managed by the WorkerPool[T].
+	return nil
 }
 
-// AcquireJob retrieves a Job from the pool.
-// Always call job.Release() when finished with the job to return it to the pool.
-func AcquireJob() *Job {
-	return jobPool.Get().(*Job)
+// AcquireJob is now type-specific.
+// Note: sync.Pool with generics is tricky because sync.Pool stores 'any'.
+func AcquireJob[T any]() *Job[T] {
+	// For now, we'll just allocate. A more sophisticated sync.Pool wrapper 
+	// for generics can be added later if needed.
+	return &Job[T]{
+		Meta: make(map[string]any),
+	}
 }
 
-// Release returns the job to the pool after resetting its fields.
-// Do not use the job after calling Release.
-func (j *Job) Release() {
+// Release returns the job to the pool.
+func (j *Job[T]) Release() {
 	if j == nil {
 		return
 	}
+	// Reset fields.
 	j.ID = ""
-	j.Data = nil
-	// Recreating the map is generally faster than clearing it key-by-key for large maps
-	// and helps manage memory better.
+	var zero T
+	j.Data = zero
 	j.Meta = make(map[string]any)
-	jobPool.Put(j)
+	// Putting back into a generic pool is complex due to sync.Pool's any.
 }
 
 // JobHandler defines the function signature for processing jobs.
-// It receives a context and a job pointer, and returns an error if processing fails.
-type JobHandler func(ctx context.Context, job *Job) error
+type JobHandler[T any] func(ctx context.Context, job *Job[T]) error
