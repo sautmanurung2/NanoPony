@@ -64,7 +64,7 @@ func TestFrameworkWithWorkerPoolFromInstance(t *testing.T) {
 
 func TestFrameworkWithPollerFromInstance(t *testing.T) {
 	pool := NewWorkerPool(5, 100, 2)
-	fetcher := DataFetcherFunc(func() ([]interface{}, error) {
+	fetcher := DataFetcherFunc(func(ctx context.Context) ([]interface{}, error) {
 		return []interface{}{}, nil
 	})
 	poller := NewPoller(DefaultPollerConfig(), pool, fetcher)
@@ -128,7 +128,7 @@ func TestFrameworkBuildPanic(t *testing.T) {
 
 func TestFrameworkComponentsStartStop(t *testing.T) {
 	pool := NewWorkerPool(2, 10, 2)
-	fetcher := DataFetcherFunc(func() ([]interface{}, error) {
+	fetcher := DataFetcherFunc(func(ctx context.Context) ([]interface{}, error) {
 		return []interface{}{}, nil
 	})
 	poller := NewPoller(DefaultPollerConfig(), pool, fetcher)
@@ -139,9 +139,12 @@ func TestFrameworkComponentsStartStop(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	components.Start(ctx, func(ctx context.Context, job *Job) error {
+	err := components.Start(ctx, func(ctx context.Context, job *Job) error {
 		return nil
 	})
+	if err != nil {
+		t.Fatalf("Failed to start framework: %v", err)
+	}
 
 	if !pool.IsRunning() {
 		t.Error("Expected worker pool to be running")
@@ -150,7 +153,7 @@ func TestFrameworkComponentsStartStop(t *testing.T) {
 		t.Error("Expected poller to be running")
 	}
 
-	err := components.Shutdown(ctx)
+	err = components.Shutdown(ctx)
 	if err != nil {
 		t.Errorf("Unexpected error during shutdown: %v", err)
 	}
@@ -160,7 +163,7 @@ func TestFrameworkComponentsGetters(t *testing.T) {
 	ResetConfig()
 	config := NewConfig()
 	pool := NewWorkerPool(5, 100, 2)
-	fetcher := DataFetcherFunc(func() ([]interface{}, error) {
+	fetcher := DataFetcherFunc(func(ctx context.Context) ([]interface{}, error) {
 		return []interface{}{}, nil
 	})
 	poller := NewPoller(DefaultPollerConfig(), pool, fetcher)

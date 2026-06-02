@@ -143,7 +143,7 @@ func (le *LoggerEntry) finalize(level string, response ResponseLog) {
 func (le *LoggerEntry) sendLog(level, mode string, payload any, response ResponseLog) {
 	// Pre-process payload (Deep Copy) in the caller's goroutine to avoid data races
 	// if the caller modifies the payload map/struct immediately after this call.
-	processedPayload, _ := processPayload(payload)
+	processedPayload := processPayload(payload)
 
 	// Hold the lock while mutating AND cloning to prevent races when the same
 	// LoggerEntry is reused across multiple LoggingData calls.

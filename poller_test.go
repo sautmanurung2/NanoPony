@@ -16,7 +16,7 @@ func TestPollerStartStop(t *testing.T) {
 	defer pool.Stop()
 
 	fetchCount := 0
-	fetcher := DataFetcherFunc(func() ([]interface{}, error) {
+	fetcher := DataFetcherFunc(func(ctx context.Context) ([]interface{}, error) {
 		fetchCount++
 		if fetchCount >= 3 {
 			return []interface{}{}, nil
@@ -45,11 +45,11 @@ func TestPollerStartStop(t *testing.T) {
 
 func TestDataFetcherFunc(t *testing.T) {
 	expected := []interface{}{"test1", "test2"}
-	fetcher := DataFetcherFunc(func() ([]interface{}, error) {
+	fetcher := DataFetcherFunc(func(ctx context.Context) ([]interface{}, error) {
 		return expected, nil
 	})
 
-	result, err := fetcher.Fetch()
+	result, err := fetcher.Fetch(context.Background())
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
@@ -84,7 +84,7 @@ func TestPollerBatchSizeLimit(t *testing.T) {
 
 	// Create fetcher that returns more data than batch size
 	var fetchCount atomic.Int64
-	fetcher := DataFetcherFunc(func() ([]any, error) {
+	fetcher := DataFetcherFunc(func(ctx context.Context) ([]any, error) {
 		count := fetchCount.Add(1)
 		if count >= 3 {
 			return []any{}, nil
@@ -130,7 +130,7 @@ func TestPollerBlockingSubmitPreventsJobLoss(t *testing.T) {
 
 	// Create fetcher that returns 10 items
 	var fetchCount atomic.Int64
-	fetcher := DataFetcherFunc(func() ([]any, error) {
+	fetcher := DataFetcherFunc(func(ctx context.Context) ([]any, error) {
 		count := fetchCount.Add(1)
 		if count >= 2 {
 			return []any{}, nil

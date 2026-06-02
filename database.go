@@ -179,6 +179,11 @@ func CloseDB(db *sql.DB) error {
 //	)
 //	// Result: "SELECT * FROM users WHERE id = 123 AND name = 'John'"
 func InterpolateQuery(query string, args ...any) string {
+	if len(args) == 0 {
+		return query
+	}
+
+	replacePairs := make([]string, 0, len(args)*2)
 	for _, arg := range args {
 		namedArg, ok := arg.(sql.NamedArg)
 		if !ok {
@@ -186,9 +191,15 @@ func InterpolateQuery(query string, args ...any) string {
 		}
 
 		value := formatValue(namedArg.Value)
-		query = strings.ReplaceAll(query, ":"+namedArg.Name, value)
+		replacePairs = append(replacePairs, ":"+namedArg.Name, value)
 	}
-	return query
+
+	if len(replacePairs) == 0 {
+		return query
+	}
+
+	replacer := strings.NewReplacer(replacePairs...)
+	return replacer.Replace(query)
 }
 
 // formatValue formats a value for SQL query interpolation (for logging purposes).

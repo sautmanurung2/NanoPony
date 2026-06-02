@@ -49,16 +49,17 @@ func DefaultPollerConfig() PollerConfig {
 // Implement this interface to provide custom data sources (e.g., Database, API).
 type DataFetcher interface {
 	// Fetch retrieves a slice of items to be processed as jobs.
-	Fetch() ([]any, error)
+	// It accepts a context for cancellation support during long-running fetches.
+	Fetch(ctx context.Context) ([]any, error)
 }
 
 // DataFetcherFunc is a function adapter that allows regular functions
 // to implement the DataFetcher interface.
-type DataFetcherFunc func() ([]any, error)
+type DataFetcherFunc func(ctx context.Context) ([]any, error)
 
 // Fetch implements the DataFetcher interface by calling the adapter function.
-func (f DataFetcherFunc) Fetch() ([]any, error) {
-	return f()
+func (f DataFetcherFunc) Fetch(ctx context.Context) ([]any, error) {
+	return f(ctx)
 }
 
 // Poller manages periodic data fetching and submission of jobs to a WorkerPool.
@@ -157,7 +158,7 @@ func (p *Poller) pollOnce() {
 	// Always release slot when done
 	defer p.releaseSlot()
 
-	data, err := p.dataFetcher.Fetch()
+	data, err := p.dataFetcher.Fetch(p.ctx)
 	if err != nil {
 		LogFramework("ERROR", "Poller", fmt.Sprintf("failed to fetch data: %v", err))
 		return
@@ -177,12 +178,18 @@ func (p *Poller) pollOnce() {
 		jobID := atomic.AddInt64(&p.jobCounter, 1)
 		job := AcquireJob()
 
-		// Use strings.Builder for efficient string concatenation
+		// Use strings.Builder with strconv.AppendInt for zero-allocation ID construction
 		var sb strings.Builder
+		sb.Grow(len("poll-") + len(p.sessionID) + 1 + 20) // 20 is max digits for int64
 		sb.WriteString("poll-")
 		sb.WriteString(p.sessionID)
-		sb.WriteString("-")
-		sb.WriteString(strconv.FormatInt(jobID, 10))
+		sb.WriteByte('-')
+
+		// Directly append integer to builder buffer to avoid intermediate string allocation
+		buf := make([]byte, 0, 20)
+		buf = strconv.AppendInt(buf, jobID, 10)
+		sb.Write(buf)
+
 		job.ID = sb.String()
 
 		job.Data = item

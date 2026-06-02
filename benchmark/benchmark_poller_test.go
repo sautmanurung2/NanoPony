@@ -7,21 +7,23 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/sautmanurung2/nanopony"
 )
 
 // BenchmarkPollerCreation tests memory allocation for poller creation
 func BenchmarkPollerCreation(b *testing.B) {
 	b.ReportAllocs()
 
-	pool := NewWorkerPool(5, 100, 2)
+	pool := nanopony.NewWorkerPool(5, 100, 2)
 	defer pool.Stop()
 
-	fetcher := DataFetcherFunc(func() ([]interface{}, error) {
-		return []interface{}{"data"}, nil
+	fetcher := nanopony.DataFetcherFunc(func(ctx context.Context) ([]any, error) {
+		return []any{"data"}, nil
 	})
 
 	for i := 0; i < b.N; i++ {
-		poller := NewPoller(DefaultPollerConfig(), pool, fetcher)
+		poller := nanopony.NewPoller(nanopony.DefaultPollerConfig(), pool, fetcher)
 		if poller == nil {
 			b.Fatal("Expected poller to be created")
 		}
@@ -32,19 +34,19 @@ func BenchmarkPollerCreation(b *testing.B) {
 func BenchmarkPollerStartStop(b *testing.B) {
 	b.ReportAllocs()
 
-	pool := NewWorkerPool(5, 100, 2)
+	pool := nanopony.NewWorkerPool(5, 100, 2)
 	ctx := context.Background()
-	pool.Start(ctx, func(ctx context.Context, job *Job) error {
+	pool.Start(ctx, func(ctx context.Context, job *nanopony.Job) error {
 		return nil
 	})
 	defer pool.Stop()
 
-	fetcher := DataFetcherFunc(func() ([]interface{}, error) {
-		return []interface{}{"data"}, nil
+	fetcher := nanopony.DataFetcherFunc(func(ctx context.Context) ([]any, error) {
+		return []any{"data"}, nil
 	})
 
 	for i := 0; i < b.N; i++ {
-		poller := NewPoller(DefaultPollerConfig(), pool, fetcher)
+		poller := nanopony.NewPoller(nanopony.DefaultPollerConfig(), pool, fetcher)
 		poller.Start()
 		time.Sleep(10 * time.Millisecond)
 		poller.Stop()
@@ -53,26 +55,26 @@ func BenchmarkPollerStartStop(b *testing.B) {
 
 // BenchmarkPollerFetch tests memory allocation during polling
 func BenchmarkPollerFetch(b *testing.B) {
-	pool := NewWorkerPool(5, 1000, 2)
+	pool := nanopony.NewWorkerPool(5, 1000, 2)
 	ctx := context.Background()
-	pool.Start(ctx, func(ctx context.Context, job *Job) error {
+	pool.Start(ctx, func(ctx context.Context, job *nanopony.Job) error {
 		return nil
 	})
 	defer pool.Stop()
 
 	fetchCount := 0
-	fetcher := DataFetcherFunc(func() ([]interface{}, error) {
+	fetcher := nanopony.DataFetcherFunc(func(ctx context.Context) ([]any, error) {
 		fetchCount++
-		return []interface{}{map[string]interface{}{"count": fetchCount}}, nil
+		return []any{map[string]any{"count": fetchCount}}, nil
 	})
 
-	config := DefaultPollerConfig()
+	config := nanopony.DefaultPollerConfig()
 	config.Interval = 1 * time.Millisecond
 
 	b.ReportAllocs()
 	b.ResetTimer()
 
-	poller := NewPoller(config, pool, fetcher)
+	poller := nanopony.NewPoller(config, pool, fetcher)
 	poller.Start()
 	time.Sleep(100 * time.Millisecond)
 	poller.Stop()
@@ -80,9 +82,9 @@ func BenchmarkPollerFetch(b *testing.B) {
 
 // TestPollerMemoryLeak detects memory leaks in poller
 func TestPollerMemoryLeak(t *testing.T) {
-	pool := NewWorkerPool(5, 100, 2)
+	pool := nanopony.NewWorkerPool(5, 100, 2)
 	ctx := context.Background()
-	pool.Start(ctx, func(ctx context.Context, job *Job) error {
+	pool.Start(ctx, func(ctx context.Context, job *nanopony.Job) error {
 		time.Sleep(1 * time.Millisecond)
 		return nil
 	})
@@ -90,11 +92,11 @@ func TestPollerMemoryLeak(t *testing.T) {
 
 	// Run multiple start/stop cycles
 	for cycle := 0; cycle < 10; cycle++ {
-		fetcher := DataFetcherFunc(func() ([]interface{}, error) {
-			return []interface{}{"data"}, nil
+		fetcher := nanopony.DataFetcherFunc(func(ctx context.Context) ([]any, error) {
+			return []any{"data"}, nil
 		})
 
-		poller := NewPoller(DefaultPollerConfig(), pool, fetcher)
+		poller := nanopony.NewPoller(nanopony.DefaultPollerConfig(), pool, fetcher)
 		poller.Start()
 		time.Sleep(50 * time.Millisecond)
 		poller.Stop()
@@ -105,29 +107,29 @@ func TestPollerMemoryLeak(t *testing.T) {
 
 // TestPollerLongRunning tests memory usage over extended polling period
 func TestPollerLongRunning(t *testing.T) {
-	pool := NewWorkerPool(5, 1000, 2)
+	pool := nanopony.NewWorkerPool(5, 1000, 2)
 	ctx := context.Background()
 
 	var processed atomic.Int64
-	pool.Start(ctx, func(ctx context.Context, job *Job) error {
+	pool.Start(ctx, func(ctx context.Context, job *nanopony.Job) error {
 		processed.Add(1)
 		return nil
 	})
 	defer pool.Stop()
 
 	var fetchCount atomic.Int64
-	fetcher := DataFetcherFunc(func() ([]interface{}, error) {
+	fetcher := nanopony.DataFetcherFunc(func(ctx context.Context) ([]any, error) {
 		count := fetchCount.Add(1)
 		if count > 100 {
-			return []interface{}{}, nil
+			return []any{}, nil
 		}
-		return []interface{}{"data"}, nil
+		return []any{"data"}, nil
 	})
 
-	config := DefaultPollerConfig()
+	config := nanopony.DefaultPollerConfig()
 	config.Interval = 10 * time.Millisecond
 
-	poller := NewPoller(config, pool, fetcher)
+	poller := nanopony.NewPoller(config, pool, fetcher)
 	poller.Start()
 
 	// Run for 2 seconds

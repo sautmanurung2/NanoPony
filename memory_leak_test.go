@@ -83,7 +83,7 @@ func TestPollerNoMemoryLeak(t *testing.T) {
 	// Run multiple poller cycles
 	for cycle := 0; cycle < 20; cycle++ {
 		fetchCount := 0
-		fetcher := DataFetcherFunc(func() ([]interface{}, error) {
+		fetcher := DataFetcherFunc(func(ctx context.Context) ([]interface{}, error) {
 			fetchCount++
 			if fetchCount > 50 {
 				return []interface{}{}, nil

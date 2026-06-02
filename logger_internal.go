@@ -168,19 +168,31 @@ func initLoggerFile() {
 // writeToLogFile serializes the entry to JSON and appends it to the rolling log file.
 func (le *LoggerEntry) writeToLogFile() {
 	le.mu.RLock()
-	logMessage, _ := json.Marshal(le)
+	logMessage, err := json.Marshal(le)
 	le.mu.RUnlock()
 
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[NanoPony-Logger] Failed to marshal log for file: %v\n", err)
+		return
+	}
+
 	if logFileWriter != nil {
-		_, _ = fmt.Fprintf(logFileWriter, "%s\n", string(logMessage))
+		if _, err := fmt.Fprintf(logFileWriter, "%s\n", string(logMessage)); err != nil {
+			fmt.Fprintf(os.Stderr, "[NanoPony-Logger] Failed to write to log file: %v\n", err)
+		}
 	}
 }
 
 // writeToConsole prints the entry as JSON to stdout.
 func (le *LoggerEntry) writeToConsole() {
 	le.mu.RLock()
-	data, _ := json.Marshal(le)
+	data, err := json.Marshal(le)
 	le.mu.RUnlock()
+
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[NanoPony-Logger] Failed to marshal log for console: %v\n", err)
+		return
+	}
 
 	fmt.Println(string(data))
 }
@@ -197,52 +209,66 @@ func (le *LoggerEntry) writeToElasticsearch(payload any) {
 		return
 	}
 
-	payloadMap, _ := processPayload(payload)
+	payloadMap := processPayload(payload)
 
 	le.mu.Lock()
 	le.Request.Payload = payloadMap
-	data, _ := json.Marshal(le)
+	data, err := json.Marshal(le)
 	le.mu.Unlock()
+
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[NanoPony-Logger] Failed to marshal log for Elasticsearch: %v\n", err)
+		return
+	}
 
 	esIndexWithDate := conf.ElasticSearch.ElasticPrefixIndex + time.Now().Format("20060102")
 	res, err := esClient.Index(esIndexWithDate, bytes.NewReader(data))
-	if err == nil {
-		_ = res.Body.Close()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[NanoPony-Logger] Failed to send log to Elasticsearch: %v\n", err)
+		return
 	}
+	_ = res.Body.Close()
 }
 
 // processPayload normalizes various payload types into a map[string]any for JSON logging.
-func processPayload(payload any) (map[string]any, error) {
+func processPayload(payload any) map[string]any {
 	if payload == nil {
-		return nil, nil
+		return nil
 	}
 
 	// Direct check if it's already a map
 	if m, ok := payload.(map[string]any); ok {
-		return deepCopyMap(m), nil
+		return deepCopyMap(m, 0)
 	}
 
 	// Fallback to JSON marshalling for other types
 	dataBytes, err := json.Marshal(payload)
 	if err != nil {
-		return map[string]any{"error": "failed_to_marshal", "raw": fmt.Sprintf("%v", payload)}, nil
+		return map[string]any{"error": "failed_to_marshal", "raw": fmt.Sprintf("%v", payload)}
 	}
 
 	var payloadMap map[string]any
 	if err := json.Unmarshal(dataBytes, &payloadMap); err != nil {
 		// If it's a string or simple type, it might fail unmarshal to map
-		return map[string]any{"raw": string(dataBytes)}, nil
+		return map[string]any{"raw": string(dataBytes)}
 	}
-	return payloadMap, nil
+	return payloadMap
 }
+
+const maxCopyDepth = 10
 
 // deepCopyMap performs a shallow copy of a map, and recursively copies nested maps.
 // This is faster than json.Marshal/Unmarshal for map deep copying.
-func deepCopyMap(m map[string]any) map[string]any {
+// depth parameter prevents stack overflow from circular references.
+func deepCopyMap(m map[string]any, depth int) map[string]any {
+	if depth > maxCopyDepth {
+		return map[string]any{"error": "max_copy_depth_reached"}
+	}
+
 	cp := make(map[string]any, len(m))
 	for k, v := range m {
 		if vm, ok := v.(map[string]any); ok {
-			cp[k] = deepCopyMap(vm)
+			cp[k] = deepCopyMap(vm, depth+1)
 		} else {
 			cp[k] = v
 		}

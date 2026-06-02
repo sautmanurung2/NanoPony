@@ -2,38 +2,38 @@
 
 # NanoPony: Benchmark & Performance Report
 
-*This document presents the performance analysis, memory efficiency, and comparison of the latest NanoPony framework (May 2026).*
+*This document presents the performance analysis, memory efficiency, and comparison of the latest NanoPony framework (June 2026).*
 
 ---
 
-## 🚀 Performance Summary (Update May 2026)
+## 🚀 Performance Summary (Update June 2026)
 
-Following a series of optimizations on system *hot paths*, NanoPony now achieves even higher efficiency:
+Following a series of optimizations on system *hot paths*, NanoPony achieves extremely high efficiency for internal job processing:
 
 | Metric | Value | Note |
 | :--- | :--- | :--- |
-| **Throughput** | **~390.2 ns/op** | Improved efficiency via sharding optimization |
-| **Memory Allocation** | **3 allocs/op** | Highly stable for high-volume processing |
-| **Memory Leak Status** | **✅ PASSED** | No leaks detected after 40+ cycles |
+| **Throughput (Worker Pool)** | **~438.5 ns/op** | High performance thanks to sharded worker pool architecture |
+| **Memory Allocation** | **2 allocs/op** | Highly efficient heap usage (16 B/op) |
+| **Memory Leak Status** | **✅ PASSED** | Negative memory growth (-58 KB) after 50 cycles |
 
 ---
 
 ## 📊 Benchmark Results (vs Other Frameworks)
 
-NanoPony is designed to process *jobs* (background tasks) efficiently. Here is a comparison with other popular Go frameworks:
+NanoPony is designed to process *jobs* (background tasks) efficiently without the overhead of an HTTP stack. Here is a comparison with popular web frameworks:
 
 | Framework | Throughput (Job Processing) | Status |
 | :--- | :--- | :--- |
-| **NanoPony** | **~390 ns/op** | 🚀 **Overall Champion** |
-| **Echo** | ~2.502 ns/op | 🥈 Fast |
-| **Iris** | ~2.827 ns/op | 🥉 Fast |
-| **Fiber** | ~10.769 ns/op | 🐢 Slow (in this scenario) |
+| **NanoPony** | **~1.48 µs/op** | 🚀 **Overall Champion** |
+| **Iris** | ~3.10 µs/op | 🥈 Fast |
+| **Echo** | ~3.17 µs/op | 🥉 Fast |
+| **Fiber** | ~19.87 µs/op | 🐢 Slow (in this scenario) |
 
-> **Analysis:** NanoPony excels by avoiding heavy HTTP stack overhead. Our *sharded worker pool* architecture drastically reduces *lock contention*, which typically hampers scalability.
+> **Analysis:** NanoPony excels by focusing on *internal job processing*. Our *sharded worker pool* architecture drastically reduces *lock contention* compared to frameworks designed for HTTP request-response cycles.
 
 ---
 
-## ⚙️ Optimization Details (Updated May 2026)
+## ⚙️ Optimization Details (Updated June 2026)
 
 To achieve current throughput, we implemented the following optimizations:
 
@@ -42,16 +42,15 @@ We split the single `WorkerPool` into multiple independent *shards*.
 - **Benefit**: Drastically reduces *lock contention* on the pool mutex, especially under high load with many goroutines.
 
 ### 2. Hot Path Efficiency (Poller ID)
-Replaced `fmt.Sprintf` with `strings.Builder` and `strconv.FormatInt`.
-- **Benefit**: Eliminates unnecessary *heap* allocations during job ID creation.
+Replaced `fmt.Sprintf` with `strings.Builder` and `strconv.AppendInt`.
+- **Benefit**: Eliminates unnecessary *heap* allocations during job ID creation in the Poller.
 
-### 3. Logging System (Manual Deep-Copy)
-Replaced JSON `Marshal`/`Unmarshal` cycles with manual recursion for deep-copying `map[string]any` payloads.
-- **Benefit**: Drastically reduces CPU usage and memory allocation in the structured logging system.
+### 3. Job Lifecycle Management (sync.Pool)
+Utilized `sync.Pool` to recycle `Job` objects.
+- **Benefit**: Significantly reduces *Garbage Collector* load by reusing existing memory allocations.
 
-### 4. Job Lifecycle Management
-Changed the strategy for clearing map metadata in `Job.Release` by recreating the map (`make`).
-- **Benefit**: More efficient for the *Garbage Collector* compared to removing keys one-by-one (*key-by-key deletion*).
+### 4. Zero-Allocation Field Access
+Field access within `FrameworkComponents` is optimized for zero allocations (0 allocs/op).
 
 ---
 
@@ -59,15 +58,15 @@ Changed the strategy for clearing map metadata in `Job.Release` by recreating th
 
 | Component | Explanation | Status |
 | :--- | :--- | :--- |
-| **Core Lifecycle** | 40 full setup-shutdown cycles | ✅ Stable (+19 KB) |
-| **WorkerPool** | Stress test 1,000+ jobs | ✅ Stable (+6 KB) |
-| **Poller** | 10 polling cycles | ✅ Stable (+2 KB) |
-| **Concurrent** | 20 simultaneous instances | ✅ Stable (+50 KB) |
+| **Core Lifecycle** | 50 full setup-shutdown cycles | ✅ Stable (-58 KB growth) |
+| **WorkerPool** | Stress test 1,000 jobs | ✅ Stable (+66 KB growth) |
+| **Concurrent** | 20 simultaneous instances | ✅ Stable (+42 KB growth) |
+| **Poller** | Long running (2 seconds) | ✅ Stable (100% processed) |
 
 ---
 
 ## 🎯 Final Conclusion
 
-The NanoPony framework is a *high-performance* solution for Kafka-Oracle integration. With its modular architecture and advanced optimizations, NanoPony delivers excellent efficiency for background processing systems requiring high throughput with a minimal memory footprint.
+The NanoPony framework is a *high-performance* solution for Kafka-Oracle integration. With its modular architecture and advanced job lifecycle management optimizations, NanoPony delivers excellent efficiency for background processing systems requiring high throughput with a minimal memory footprint.
 
-*Report generated on May 29, 2026. Data valid for v0.0.59.*
+*Report generated on June 3, 2026. Data valid for v0.0.59.*

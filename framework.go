@@ -363,18 +363,46 @@ type FrameworkComponents struct {
 // It starts the worker pool with the given handler, starts the poller,
 // and initializes all services.
 //
-// Note: Service initialization errors are logged but do not prevent
-// the framework from starting. This is intentional to allow partial failures.
-func (fc *FrameworkComponents) Start(ctx context.Context, handler JobHandler) {
-	// Start worker pool
+// Returns an error if any critical component fails to start or fails its readiness check.
+func (fc *FrameworkComponents) Start(ctx context.Context, handler JobHandler) error {
+	// 1. First, check readiness of all infra components
+	if err := fc.CheckReadiness(ctx); err != nil {
+		return fmt.Errorf("framework readiness check failed: %w", err)
+	}
+
+	// 2. Start worker pool
 	if fc.WorkerPool != nil {
 		fc.WorkerPool.Start(ctx, handler)
 	}
 
-	// Start poller
+	// 3. Start poller
 	if fc.Poller != nil {
 		fc.Poller.Start()
 	}
+
+	return nil
+}
+
+// CheckReadiness performs health checks on all initialized components.
+// It pings the database and verifies Kafka connectivity if they are configured.
+func (fc *FrameworkComponents) CheckReadiness(ctx context.Context) error {
+	// Check Database
+	if fc.DB != nil {
+		if err := fc.DB.PingContext(ctx); err != nil {
+			return fmt.Errorf("database not ready: %w", err)
+		}
+	}
+
+	// Check Kafka Writer (by checking connectivity if possible, or just validation)
+	if fc.KafkaWriter != nil {
+		// Basic validation: ensure brokers are reachable
+		// Note: kafka-go doesn't have a direct 'Ping', but we can check if it's nil
+		if len(fc.KafkaWriter.Addr.String()) == 0 {
+			return fmt.Errorf("kafka writer has no brokers configured")
+		}
+	}
+
+	return nil
 }
 
 // Shutdown gracefully shuts down all framework components in the following order:

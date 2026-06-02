@@ -53,7 +53,9 @@ func main() {
 	nanopony.PrintMemoryStats()
 
 	// Start framework
-	components.Start(ctx, exampleJobHandler)
+	if err := components.Start(ctx, exampleJobHandler); err != nil {
+		log.Fatalf("Failed to start NanoPony: %v", err)
+	}
 
 	log.Println("NanoPony framework started with memory monitoring...")
 
@@ -79,7 +81,7 @@ func main() {
 // exampleDataFetcher implements nanopony.DataFetcher interface
 type exampleDataFetcher struct{}
 
-func (f *exampleDataFetcher) Fetch() ([]interface{}, error) {
+func (f *exampleDataFetcher) Fetch(ctx context.Context) ([]interface{}, error) {
 	// Fetch data from database or other source
 	return []interface{}{
 		map[string]interface{}{"id": 1, "data": "example"},

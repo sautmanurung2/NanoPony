@@ -85,11 +85,8 @@ func TestProcessPayload(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := processPayload(tt.payload)
-			if tt.wantErr && err == nil {
-				t.Error("Expected error, got nil")
-			}
-			// For nil payload, result can be nil or a map with error key
+			result := processPayload(tt.payload)
+			// For nil payload, result can be nil
 			if !tt.wantErr && tt.payload != nil && result == nil {
 				t.Error("Expected result map, got nil")
 			}

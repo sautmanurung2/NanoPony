@@ -50,19 +50,19 @@ func FuzzProcessPayload(f *testing.F) {
 
 	f.Fuzz(func(t *testing.T, data []byte) {
 		// Test with []byte
-		_, _ = processPayload(data)
+		_ = processPayload(data)
 
 		// Test with string
-		_, _ = processPayload(string(data))
+		_ = processPayload(string(data))
 
 		// Test with map
 		m := make(map[string]any)
 		_ = json.Unmarshal(data, &m)
-		_, _ = processPayload(m)
+		_ = processPayload(m)
 
 		// Test with struct-like map
 		s := struct{ Data string }{Data: string(data)}
-		_, _ = processPayload(s)
+		_ = processPayload(s)
 	})
 }
 
@@ -180,7 +180,7 @@ func FuzzStressFrameworkLifecycle(f *testing.F) {
 				c.App.KafkaModels = "kafka-localhost"
 			})).
 			WithWorkerPool(workers, queueSize, shards).
-			WithPoller(DefaultPollerConfig(), DataFetcherFunc(func() ([]any, error) {
+			WithPoller(DefaultPollerConfig(), DataFetcherFunc(func(ctx context.Context) ([]any, error) {
 				return []any{"fuzz-item"}, nil
 			}))
 
@@ -272,7 +272,7 @@ func FuzzStressPollerParams(f *testing.F) {
 		}
 
 		wp := NewWorkerPool(1, 10, 1)
-		fetcher := DataFetcherFunc(func() ([]any, error) {
+		fetcher := DataFetcherFunc(func(ctx context.Context) ([]any, error) {
 			return []any{1, 2, 3}, nil
 		})
 
