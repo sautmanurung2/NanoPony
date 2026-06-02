@@ -81,9 +81,12 @@ func NewWorkerPool(
 	shards := make([]*workerPoolShard, numShards)
 
 	for i := 0; i < numShards; i++ {
+		ctx, cancel := context.WithCancel(context.Background())
 		shards[i] = &workerPoolShard{
 			jobChan: make(chan *Job, shardQueue),
 			errChan: make(chan error, shardQueue),
+			ctx:     ctx,
+			cancel:  cancel,
 		}
 	}
 
@@ -129,9 +132,6 @@ func (swp *ShardedWorkerPool) worker(
 
 	for {
 		select {
-		case <-shard.ctx.Done():
-			return
-
 		case job, ok := <-shard.jobChan:
 			if !ok {
 				return
@@ -140,26 +140,46 @@ func (swp *ShardedWorkerPool) worker(
 			if err := handler(shard.ctx, job); err != nil {
 				swp.reportError(
 					shard,
-					fmt.Errorf(
-						"shard worker %d: job %s failed: %w",
-						id,
-						job.ID,
-						err,
-					),
+					job.ID,
+					id,
+					err,
 				)
 			}
 
 			job.Release()
+
+		case <-shard.ctx.Done():
+			// Context canceled, drain remaining jobs in the channel to prevent sync.Pool leaks.
+			for {
+				select {
+				case job, ok := <-shard.jobChan:
+					if !ok {
+						return
+					}
+					// Still call handler so it can see the canceled context and potentially
+					// perform fast cleanup/skip, then release the job.
+					_ = handler(shard.ctx, job)
+					job.Release()
+				default:
+					return
+				}
+			}
 		}
 	}
 }
 
 func (swp *ShardedWorkerPool) reportError(
 	shard *workerPoolShard,
+	jobID string,
+	workerID int,
 	err error,
 ) {
+	// Wrapped error construction is moved here to keep the worker loop clean.
+	// We use a simple wrap to minimize overhead.
+	wrappedErr := fmt.Errorf("shard worker %d: job %s: %w", workerID, jobID, err)
+
 	select {
-	case shard.errChan <- err:
+	case shard.errChan <- wrappedErr:
 	default:
 		LogFramework(
 			"WARNING",
@@ -184,6 +204,9 @@ func (swp *ShardedWorkerPool) Submit(
 	case <-ctx.Done():
 		return ctx.Err()
 
+	case <-shard.ctx.Done():
+		return ErrPoolStopped
+
 	case shard.jobChan <- job:
 		return nil
 
@@ -201,6 +224,9 @@ func (swp *ShardedWorkerPool) SubmitBlocking(
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
+
+	case <-shard.ctx.Done():
+		return ErrPoolStopped
 
 	case shard.jobChan <- job:
 		return nil
@@ -222,12 +248,14 @@ func (swp *ShardedWorkerPool) Stop() {
 			shard.cancel()
 		}
 
-		close(shard.jobChan)
-
 		shard.mu.Unlock()
 
+		// Wait for workers to finish current jobs and drain the queue.
 		shard.wg.Wait()
 
+		// Now it's safe to close channels as no more jobs will be submitted
+		// and all workers have exited.
+		close(shard.jobChan)
 		close(shard.errChan)
 	}
 }

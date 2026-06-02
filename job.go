@@ -38,9 +38,15 @@ func (j *Job) Release() {
 	}
 	j.ID = ""
 	j.Data = nil
-	// Recreating the map is generally faster than clearing it key-by-key for large maps
-	// and helps manage memory better.
-	j.Meta = make(map[string]any)
+
+	// Go 1.21+ clear(m) is more efficient than re-allocating.
+	// We only re-allocate if the map has grown too large to prevent memory bloat.
+	if len(j.Meta) > 128 {
+		j.Meta = make(map[string]any)
+	} else {
+		clear(j.Meta)
+	}
+
 	jobPool.Put(j)
 }
 

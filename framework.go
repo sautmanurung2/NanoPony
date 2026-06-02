@@ -37,6 +37,8 @@ var (
 	ErrKafkaNotSet = errors.New("kafka writer must be set before this operation")
 	// ErrWorkerPoolNotSet is returned when worker pool is required but not set
 	ErrWorkerPoolNotSet = errors.New("worker pool must be set before this operation")
+	// ErrPoolStopped is returned when submitting a job to a stopped worker pool
+	ErrPoolStopped = errors.New("worker pool is stopped")
 	// ErrAlreadyBuilt is returned when Build() is called more than once
 	ErrAlreadyBuilt = errors.New("framework has already been built")
 )
