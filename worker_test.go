@@ -2,6 +2,7 @@ package nanopony
 
 import (
 	"context"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -61,8 +62,14 @@ func TestWorkerPoolSubmitQueueFull(t *testing.T) {
 	pool := NewWorkerPool(1, 1, 1)
 	ctx := context.Background()
 
+	workerStarted := make(chan struct{})
+	var once sync.Once
+
 	// Block the worker
 	pool.Start(ctx, func(ctx context.Context, job *Job) error {
+		once.Do(func() {
+			close(workerStarted)
+		})
 		time.Sleep(1 * time.Second)
 		return nil
 	})
@@ -71,12 +78,25 @@ func TestWorkerPoolSubmitQueueFull(t *testing.T) {
 	// First job is picked by worker, but worker sleeps
 	job1 := AcquireJob()
 	job1.ID = "job1"
-	pool.Submit(ctx, job1)
+	if err := pool.Submit(ctx, job1); err != nil {
+		t.Fatalf("Failed to submit job1: %v", err)
+	}
+
+	// Wait for worker to actually pick up job1
+	select {
+	case <-workerStarted:
+		// Worker started processing job1
+	case <-time.After(2 * time.Second):
+		t.Fatal("Worker never started processing job1")
+	}
 
 	// Second job fills the queue (size 1)
 	job2 := AcquireJob()
 	job2.ID = "job2"
-	pool.Submit(ctx, job2)
+	if err := pool.Submit(ctx, job2); err != nil {
+		t.Errorf("Expected job2 to be submitted, got %v", err)
+		job2.Release()
+	}
 
 	// This should fail with queue full
 	job3 := AcquireJob()
@@ -84,8 +104,8 @@ func TestWorkerPoolSubmitQueueFull(t *testing.T) {
 	err := pool.Submit(ctx, job3)
 	if err != ErrQueueFull {
 		t.Errorf("Expected ErrQueueFull, got %v", err)
-		job3.Release()
 	}
+	job3.Release()
 
 	pool.Stop()
 }
