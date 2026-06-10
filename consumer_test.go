@@ -1,13 +1,62 @@
 package nanopony
 
 import (
+	"context"
 	"testing"
+	"time"
+
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-func TestKafkaConsumer(t *testing.T) {
-	// Note: This test requires a running Kafka instance
-	t.Skip("Skipping test - requires Kafka instance")
+func TestKafkaConsumerMethods(t *testing.T) {
+	config := KafkaConsumerConfig{
+		Brokers:     []string{"localhost:1"}, // Invalid addr
+		Topic:       "test-topic",
+		GroupID:     "test-group",
+		RetryDelay:  1 * time.Millisecond,
+	}
+
+	consumer := NewKafkaConsumer(config)
+	defer consumer.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	// Test ConsumeWithContext - should exit on context timeout or read error
+	err := consumer.ConsumeWithContext(ctx, func(message []byte) error {
+		return nil
+	})
+	if err == nil {
+		t.Error("Expected error from ConsumeWithContext with invalid Kafka address")
+	}
+
+	// Test Close
+	if err := consumer.Close(); err != nil {
+		t.Errorf("Unexpected error closing consumer: %v", err)
+	}
 }
+
+func TestKafkaConsumerProto(t *testing.T) {
+	config := KafkaConsumerConfig{
+		Brokers: []string{"localhost:1"},
+		Topic:   "test",
+	}
+	consumer := NewKafkaConsumer(config)
+	defer consumer.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	err := consumer.ConsumeWithContextProto(ctx, 
+		func() proto.Message { return &emptypb.Empty{} },
+		func(msg proto.Message) error { return nil },
+	)
+	if err == nil {
+		t.Error("Expected error")
+	}
+}
+
 
 func TestMessageHandler(t *testing.T) {
 	handler := MessageHandler(func(message []byte) error {

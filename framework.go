@@ -397,7 +397,7 @@ func (fc *FrameworkComponents) CheckReadiness(ctx context.Context) error {
 	if fc.KafkaWriter != nil {
 		// Basic validation: ensure brokers are reachable
 		// Note: kafka-go doesn't have a direct 'Ping', but we can check if it's nil
-		if len(fc.KafkaWriter.Addr.String()) == 0 {
+		if fc.KafkaWriter.Addr == nil || len(fc.KafkaWriter.Addr.String()) == 0 {
 			return fmt.Errorf("kafka writer has no brokers configured")
 		}
 	}

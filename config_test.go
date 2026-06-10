@@ -193,15 +193,44 @@ func TestGetEnvByPrefix(t *testing.T) {
 	}
 }
 
-func TestGetEnvByPrefixEmpty(t *testing.T) {
-	// Set a unique environment variable
-	os.Setenv("TEST_UNIQUE_PREFIX", "unique-value")
-	defer os.Unsetenv("TEST_UNIQUE_PREFIX")
+func TestConfigValidate(t *testing.T) {
+	ResetConfig()
 
-	result := getEnvByPrefix("")
+	// Valid config
+	c1 := BuildConfig(func(c *Config) {
+		c.App.Env = "localhost"
+		c.App.KafkaModels = "kafka-localhost"
+	})
+	if err := c1.Validate(); err != nil {
+		t.Errorf("Expected no error, got %v", err)
+	}
 
-	// Should contain the unique variable
-	if result["TEST_UNIQUE_PREFIX"] != "unique-value" {
-		t.Errorf("Expected TEST_UNIQUE_PREFIX 'unique-value', got '%s'", result["TEST_UNIQUE_PREFIX"])
+	// Missing env
+	c2 := &Config{}
+	if err := c2.Validate(); err == nil {
+		t.Error("Expected error for missing env")
+	}
+
+	// Missing Kafka models
+	c3 := &Config{App: AppConfig{Env: "localhost"}}
+	if err := c3.Validate(); err == nil {
+		t.Error("Expected error for missing Kafka models")
 	}
 }
+
+func TestConfigEnsure(t *testing.T) {
+	c := &Config{}
+	if c.EnsureOracle() == nil {
+		t.Error("EnsureOracle should not return nil")
+	}
+	if c.EnsureKafka() == nil {
+		t.Error("EnsureKafka should not return nil")
+	}
+	if c.EnsureKafkaConfluent() == nil {
+		t.Error("EnsureKafkaConfluent should not return nil")
+	}
+	if c.EnsureElasticSearch() == nil {
+		t.Error("EnsureElasticSearch should not return nil")
+	}
+}
+

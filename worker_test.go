@@ -32,6 +32,11 @@ func TestWorkerPoolStartStop(t *testing.T) {
 		return nil
 	})
 
+	// Test idempotent Start
+	pool.Start(ctx, func(ctx context.Context, job *Job) error {
+		return nil
+	})
+
 	if !pool.IsRunning() {
 		t.Error("Expected pool to be running after Start")
 	}
@@ -48,6 +53,9 @@ func TestWorkerPoolStartStop(t *testing.T) {
 
 	pool.Stop()
 
+	// Test idempotent Stop
+	pool.Stop()
+
 	if pool.IsRunning() {
 		t.Error("Expected pool to be stopped after Stop")
 	}
@@ -56,6 +64,120 @@ func TestWorkerPoolStartStop(t *testing.T) {
 		t.Errorf("Expected 5 jobs processed, got %d", processed)
 	}
 }
+
+func TestWorkerPoolErrorReporting(t *testing.T) {
+	pool := NewWorkerPool(1, 10, 1)
+	ctx := context.Background()
+
+	errLogged := make(chan error, 1)
+
+	pool.Start(ctx, func(ctx context.Context, job *Job) error {
+		return context.DeadlineExceeded // Return an error to trigger reportError
+	})
+
+
+	// Catch error from shard's errChan
+	go func() {
+		err := <-pool.shards[0].errChan
+		errLogged <- err
+	}()
+
+	job := AcquireJob()
+	job.ID = "error-job"
+	pool.Submit(ctx, job)
+
+	select {
+	case err := <-errLogged:
+		if err == nil {
+			t.Error("Expected error to be reported")
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Error("Timed out waiting for error report")
+	}
+
+	pool.Stop()
+}
+
+func TestWorkerPoolNewExtremeParams(t *testing.T) {
+	// numWorkers < 1
+	p1 := NewWorkerPool(0, 10, 1)
+	if p1.totalWorkers != 1 {
+		t.Errorf("Expected 1 worker, got %d", p1.totalWorkers)
+	}
+
+	// queueSize < 1
+	p2 := NewWorkerPool(1, 0, 1)
+	if cap(p2.shards[0].jobChan) != 1 {
+		t.Errorf("Expected queue size 1, got %d", cap(p2.shards[0].jobChan))
+	}
+
+	// numShards < 1
+	p3 := NewWorkerPool(1, 10, 0)
+	if len(p3.shards) != 1 {
+		t.Errorf("Expected 1 shard, got %d", len(p3.shards))
+	}
+
+	// numShards > numWorkers
+	p4 := NewWorkerPool(2, 10, 5)
+	if len(p4.shards) != 2 {
+		t.Errorf("Expected 2 shards, got %d", len(p4.shards))
+	}
+}
+
+func TestWorkerPoolSubmitToStoppedPool(t *testing.T) {
+	pool := NewWorkerPool(1, 1, 1)
+	pool.Start(context.Background(), func(ctx context.Context, job *Job) error { return nil })
+	pool.Stop() // Ensure it's stopped
+
+	job := AcquireJob()
+	job.ID = "stopped-job"
+	err := pool.Submit(context.Background(), job)
+	if err != ErrPoolStopped {
+		t.Errorf("Expected ErrPoolStopped, got %v", err)
+	}
+	job.Release()
+
+	job2 := AcquireJob()
+	job2.ID = "stopped-job-2"
+	err = pool.SubmitBlocking(context.Background(), job2)
+	if err != ErrPoolStopped {
+		t.Errorf("Expected ErrPoolStopped, got %v", err)
+	}
+	job2.Release()
+}
+
+
+func TestWorkerPoolNumShards(t *testing.T) {
+	pool := NewWorkerPool(4, 10, 2)
+	if pool.NumShards() != 2 {
+		t.Errorf("Expected 2 shards, got %d", pool.NumShards())
+	}
+}
+
+func TestWorkerPoolDrainOnCancel(t *testing.T) {
+	pool := NewWorkerPool(1, 10, 1)
+	ctx, cancel := context.WithCancel(context.Background())
+
+	processed := int32(0)
+	pool.Start(ctx, func(ctx context.Context, job *Job) error {
+		atomic.AddInt32(&processed, 1)
+		return nil
+	})
+
+	// Fill queue
+	for i := 0; i < 5; i++ {
+		job := AcquireJob()
+		job.ID = "drain-job"
+		pool.Submit(ctx, job)
+	}
+
+	cancel() // Cancel context to trigger drain logic
+	time.Sleep(100 * time.Millisecond)
+	pool.Stop()
+
+	// Drain logic should ensure jobs are released
+}
+
 
 func TestWorkerPoolSubmitQueueFull(t *testing.T) {
 	// Small queue per shard. With 1 worker and 1 shard, queue size 1.

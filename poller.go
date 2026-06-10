@@ -186,9 +186,9 @@ func (p *Poller) pollOnce() {
 		sb.WriteByte('-')
 
 		// Directly append integer to builder buffer to avoid intermediate string allocation
-		buf := make([]byte, 0, 20)
-		buf = strconv.AppendInt(buf, jobID, 10)
-		sb.Write(buf)
+		var buf [20]byte
+		b := strconv.AppendInt(buf[:0], jobID, 10)
+		sb.Write(b)
 
 		job.ID = sb.String()
 

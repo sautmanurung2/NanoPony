@@ -28,8 +28,19 @@ jobs:
       - name: Run go vet
         run: go vet ./...
 
-      - name: Run tests
-        run: go test ./... -v -count=1
+      - name: Run tests with coverage
+        run: |
+          go test -coverprofile=coverage.out ./...
+          COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
+          echo "Total Coverage: $COVERAGE%"
+          if (( $(echo "$COVERAGE < 40.0" | bc -l) )); then
+            echo "Coverage too low (< 40%)"
+            exit 1
+          elif (( $(echo "$COVERAGE > 60.0" | bc -l) )); then
+            echo "Coverage is good (> 60%)"
+          else
+            echo "Coverage is acceptable (40%-60%)"
+          fi
 
       - name: Run tests with race detector
         run: go test -race ./... -count=1

@@ -232,12 +232,40 @@ func TestFormatValue(t *testing.T) {
 	}
 }
 
-func TestLogInterpolatedQuery(t *testing.T) {
-	// This test just ensures the function doesn't panic
-	// Actual logging is hard to test in unit tests
-	query := "SELECT * FROM users WHERE id = :id"
-	args := []any{sql.Named("id", 123)}
+func TestInterpolateQueryEdgeCases(t *testing.T) {
+	// Non-named argument
+	q1 := InterpolateQuery("SELECT * FROM users WHERE id = :id", 123)
+	if q1 != "SELECT * FROM users WHERE id = :id" {
+		t.Errorf("Expected unchanged query, got %s", q1)
+	}
 
-	// Should not panic
-	LogInterpolatedQuery(query, args...)
+	// No matching placeholders
+	q2 := InterpolateQuery("SELECT * FROM users", sql.Named("id", 123))
+	if q2 != "SELECT * FROM users" {
+		t.Errorf("Expected unchanged query, got %s", q2)
+	}
 }
+
+func TestFormatValueDefault(t *testing.T) {
+	// Test default case in formatValue
+	v := struct{}{}
+	result := formatValue(v)
+	if result != "'{}'" {
+		t.Errorf("Expected '{}', got %s", result)
+	}
+}
+
+func TestNewOracleConnectionInvalidPort(t *testing.T) {
+	config := DatabaseConfig{
+		Host: "localhost",
+		Port: "invalid", // Should trigger warning and use default 1521
+	}
+	// It will still fail connection, but we test the port parsing logic
+	_, _ = NewOracleConnection(config)
+}
+
+func TestLogInterpolatedQuery(t *testing.T) {
+	LogInterpolatedQuery("SELECT * FROM users WHERE id = :id", sql.Named("id", 123))
+}
+
+

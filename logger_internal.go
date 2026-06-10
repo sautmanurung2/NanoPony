@@ -236,24 +236,36 @@ func processPayload(payload any) map[string]any {
 		return nil
 	}
 
-	// Direct check if it's already a map
-	if m, ok := payload.(map[string]any); ok {
-		return deepCopyMap(m, 0)
-	}
+	switch p := payload.(type) {
+	case map[string]any:
+		return deepCopyMap(p, 0)
+	case string:
+		var m map[string]any
+		if err := json.Unmarshal([]byte(p), &m); err != nil {
+			return map[string]any{"raw": p}
+		}
+		return m
+	case []byte:
+		var m map[string]any
+		if err := json.Unmarshal(p, &m); err != nil {
+			return map[string]any{"raw": string(p)}
+		}
+		return m
+	default:
+		// Fallback to JSON marshalling for other types (structs, etc.)
+		dataBytes, err := json.Marshal(payload)
+		if err != nil {
+			return map[string]any{"error": "failed_to_marshal", "raw": fmt.Sprintf("%v", payload)}
+		}
 
-	// Fallback to JSON marshalling for other types
-	dataBytes, err := json.Marshal(payload)
-	if err != nil {
-		return map[string]any{"error": "failed_to_marshal", "raw": fmt.Sprintf("%v", payload)}
+		var payloadMap map[string]any
+		if err := json.Unmarshal(dataBytes, &payloadMap); err != nil {
+			return map[string]any{"raw": string(dataBytes)}
+		}
+		return payloadMap
 	}
-
-	var payloadMap map[string]any
-	if err := json.Unmarshal(dataBytes, &payloadMap); err != nil {
-		// If it's a string or simple type, it might fail unmarshal to map
-		return map[string]any{"raw": string(dataBytes)}
-	}
-	return payloadMap
 }
+
 
 const maxCopyDepth = 10
 

@@ -200,6 +200,13 @@ func (swp *ShardedWorkerPool) Submit(
 ) error {
 	shard := swp.getShard()
 
+	// Check if pool is stopped before attempting to send
+	select {
+	case <-shard.ctx.Done():
+		return ErrPoolStopped
+	default:
+	}
+
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -221,6 +228,13 @@ func (swp *ShardedWorkerPool) SubmitBlocking(
 ) error {
 	shard := swp.getShard()
 
+	// Check if pool is stopped before attempting to send
+	select {
+	case <-shard.ctx.Done():
+		return ErrPoolStopped
+	default:
+	}
+
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -232,6 +246,7 @@ func (swp *ShardedWorkerPool) SubmitBlocking(
 		return nil
 	}
 }
+
 
 func (swp *ShardedWorkerPool) Stop() {
 	for _, shard := range swp.shards {

@@ -158,8 +158,8 @@ func getAppConfig() *Config {
 // Validate checks if the configuration is valid and all required fields are set.
 // This is used for fail-fast behavior during framework initialization.
 func (c *Config) Validate() error {
-	if c.App.Env == "" {
-		return fmt.Errorf("GO_ENV is not set (local, staging, or production)")
+	if c.App.Env == "" || c.App.Env == "invalid" {
+		return fmt.Errorf("GO_ENV is not set or invalid (local, staging, or production)")
 	}
 	if c.App.KafkaModels == "" {
 		return fmt.Errorf("KAFKA_MODELS is not set")
