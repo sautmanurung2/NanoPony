@@ -36,6 +36,8 @@ type Config struct {
 	// --- Infrastructure Configs (lazy-initialized via Ensure* methods) ---
 
 	// Oracle holds Oracle database connection details
+	// PostgreSQL holds PostgreSQL database connection details
+	PostgreSQL PostgreSQLConfig
 	Oracle OracleConfig
 	// Kafka holds standard Kafka broker configuration
 	Kafka KafkaConfig
@@ -62,6 +64,7 @@ type Config struct {
 	confluentOnce sync.Once
 	elasticOnce   sync.Once
 	httpOnce      sync.Once
+	pgOnce       sync.Once
 }
 
 // AppConfig holds application-level configuration
@@ -77,6 +80,8 @@ type AppConfig struct {
 	LogFilePrefix string
 	// LogOutputMode determines where logs are sent: console, file, elasticsearch, hybrid
 	LogOutputMode string
+// DBType determines which database to use: "oracle" or "postgresql"
+	DBType string
 }
 
 // OracleConfig holds Oracle database configuration
@@ -87,6 +92,16 @@ type OracleConfig struct {
 	Port         string
 	DatabaseName string
 }
+
+// PostgreSQLConfig holds PostgreSQL database configuration
+type PostgreSQLConfig struct {
+	Username     string
+	Password     string
+	Host         string
+	Port         string
+	DatabaseName string
+}
+
 
 // ElasticSearchConfig holds Elasticsearch connection configuration
 type ElasticSearchConfig struct {
@@ -198,6 +213,11 @@ func (c *Config) EnsureKafkaConfluent() *KafkaConfluentConfig {
 
 // EnsureElasticSearch loads Elasticsearch config from env vars exactly once.
 // Safe to call from multiple goroutines.
+func (c *Config) EnsureElasticSearch() *ElasticSearchConfig {
+	c.elasticOnce.Do(func() { initElasticSearch(c) })
+	return &c.ElasticSearch
+}
+
 // EnsureHttp loads HTTP server config from env vars exactly once.
 // Safe to call from multiple goroutines.
 func (c *Config) EnsureHttp() *HttpConfig {
@@ -205,9 +225,11 @@ func (c *Config) EnsureHttp() *HttpConfig {
 	return &c.Http
 }
 
-func (c *Config) EnsureElasticSearch() *ElasticSearchConfig {
-	c.elasticOnce.Do(func() { initElasticSearch(c) })
-	return &c.ElasticSearch
+// EnsurePostgreSQL loads PostgreSQL config from env vars exactly once.
+// Safe to call from multiple goroutines.
+func (c *Config) EnsurePostgreSQL() *PostgreSQLConfig {
+	c.pgOnce.Do(func() { initPostgreSQL(c) })
+	return &c.PostgreSQL
 }
 
 // ResetConfig resets the configuration singleton.

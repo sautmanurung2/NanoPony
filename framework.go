@@ -27,6 +27,7 @@ var (
 type Framework struct {
 	config          *Config
 	db              *sql.DB
+	pgDB            *sql.DB
 	kafkaWriter     *kafka.Writer
 	producer        *KafkaProducer
 	workerPool      *ShardedWorkerPool
@@ -59,20 +60,58 @@ func (f *Framework) WithDatabase() *Framework {
 	return fw
 }
 
-// WithDatabaseSafe sets up the Oracle database connection with error handling.
+// WithDatabaseSafe sets up the database connection (Oracle or PostgreSQL) based on config.
 func (f *Framework) WithDatabaseSafe() (*Framework, error) {
 	if f.config == nil {
 		return f, ErrConfigNotSet
 	}
 
-	db, err := NewOracleFromConfig(f.config)
-	if err != nil {
-		return f, fmt.Errorf("failed to create database connection: %w", err)
+	dbType := f.config.App.DBType
+	switch dbType {
+	case "", "oracle":
+		db, err := NewOracleFromConfig(f.config)
+		if err != nil {
+			return f, fmt.Errorf("failed to create Oracle connection: %w", err)
+		}
+		f.db = db
+		f.AddCleanup(func() error { return CloseDB(f.db) })
+	case "postgresql":
+		db, err := NewPostgreSQLFromConfig(f.config)
+		if err != nil {
+			return f, fmt.Errorf("failed to create PostgreSQL connection: %w", err)
+		}
+		f.pgDB = db
+		f.AddCleanup(func() error { return CloseDB(f.pgDB) })
+	default:
+		return f, fmt.Errorf("unsupported database type: %s", dbType)
 	}
 
-	f.db = db
+	return f, nil
+}
+
+// WithPostgreSQL sets up the PostgreSQL database connection.
+func (f *Framework) WithPostgreSQL() *Framework {
+	fw, err := f.WithPostgreSQLSafe()
+	if err != nil {
+		panic(err.Error())
+	}
+	return fw
+}
+
+// WithPostgreSQLSafe sets up the PostgreSQL database connection with error handling.
+func (f *Framework) WithPostgreSQLSafe() (*Framework, error) {
+	if f.config == nil {
+		return f, ErrConfigNotSet
+	}
+
+	db, err := NewPostgreSQLFromConfig(f.config)
+	if err != nil {
+		return f, fmt.Errorf("failed to create PostgreSQL database connection: %w", err)
+	}
+
+	f.pgDB = db
 	f.AddCleanup(func() error {
-		return CloseDB(f.db)
+		return CloseDB(f.pgDB)
 	})
 
 	return f, nil
@@ -283,6 +322,7 @@ func (f *Framework) BuildSafe() (*FrameworkComponents, error) {
 	return &FrameworkComponents{
 		Config:          f.config,
 		DB:              f.db,
+		PostgreSQL:      f.pgDB,
 		KafkaWriter:     f.kafkaWriter,
 		Producer:        f.producer,
 		WorkerPool:      f.workerPool,
@@ -298,6 +338,7 @@ func (f *Framework) BuildSafe() (*FrameworkComponents, error) {
 type FrameworkComponents struct {
 	Config          *Config
 	DB              *sql.DB
+	PostgreSQL      *sql.DB
 	KafkaWriter     *kafka.Writer
 	Producer        *KafkaProducer
 	WorkerPool      *ShardedWorkerPool
@@ -343,6 +384,12 @@ func (fc *FrameworkComponents) Start(ctx context.Context, handler JobHandler) er
 
 // CheckReadiness performs health checks on all initialized components.
 func (fc *FrameworkComponents) CheckReadiness(ctx context.Context) error {
+	if fc.PostgreSQL != nil {
+		if err := fc.PostgreSQL.PingContext(ctx); err != nil {
+			return fmt.Errorf("postgresql not ready: %w", err)
+		}
+	}
+
 	if fc.DB != nil {
 		if err := fc.DB.PingContext(ctx); err != nil {
 			return fmt.Errorf("database not ready: %w", err)

@@ -63,6 +63,15 @@ var (
 		validValues: []string{"console", "file", "elasticsearch", "hybrid"},
 		defaultVal:  "hybrid",
 	}
+
+	// dbTypeEnvConfig defines validation for DB_TYPE.
+	// Valid values: oracle, postgresql. Default: oracle.
+	dbTypeEnvConfig = envConfig{
+		name:        "DB_TYPE",
+		validValues: []string{"oracle", "postgresql"},
+		defaultVal:  "oracle",
+	}
+
 )
 
 // getEnvValue retrieves an environment variable value with validation.
@@ -144,10 +153,13 @@ func initKafkaModels(conf *Config) string {
 }
 
 // initApp initializes global application settings like environment, log prefix, and log mode.
+
+
 func initApp(conf *Config) {
 	conf.App.Env = getEnvValue(appEnvConfig)
 	conf.App.LogFilePrefix = getEnvValue(logFilePrefixEnvConfig)
 	conf.App.LogOutputMode = getEnvValue(logOutputModeEnvConfig)
+	conf.App.DBType = getEnvValue(dbTypeEnvConfig)
 }
 
 // initKafka initializes the Kafka brokers or Confluent Cloud configuration based on the selected model.
@@ -256,4 +268,45 @@ func initHttp(conf *Config) {
 		appName = "NanoPony"
 	}
 	conf.Http.AppName = appName
+}
+
+// pgEnv holds the environment variable names for PostgreSQL connection
+type pgEnv struct {
+	host     string
+	port     string
+	database string
+	username string
+	password string
+}
+
+// getPostgreSQLEnv returns PostgreSQL environment variable names based on the environment string.
+func getPostgreSQLEnv(env string) pgEnv {
+	switch env {
+	case "staging", "localhost", "local":
+		return pgEnv{
+			host:     "HOST_STAGING",
+			port:     "PORT_STAGING",
+			database: "DATABASE_STAGING",
+			username: "USERNAME_STAGING",
+			password: "PASSWORD_STAGING",
+		}
+	default:
+		return pgEnv{
+			host:     "HOST_PRODUCTION",
+			port:     "PORT_PRODUCTION",
+			database: "DATABASE_PRODUCTION",
+			username: "USERNAME_PRODUCTION",
+			password: "PASSWORD_PRODUCTION", // The user might want PG_ prefix here too, but I'll stick to their request "sama saja" but diff db
+		}
+	}
+}
+
+// initPostgreSQL initializes the PostgreSQL database connection details from environment variables.
+func initPostgreSQL(conf *Config) {
+	env := getPostgreSQLEnv(conf.App.Env)
+	conf.PostgreSQL.Username = os.Getenv(env.username)
+	conf.PostgreSQL.Password = os.Getenv(env.password)
+	conf.PostgreSQL.Host = os.Getenv(env.host)
+	conf.PostgreSQL.Port = os.Getenv(env.port)
+	conf.PostgreSQL.DatabaseName = os.Getenv(env.database)
 }

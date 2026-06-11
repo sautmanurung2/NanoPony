@@ -193,7 +193,7 @@ func TestFrameworkBuildSafe(t *testing.T) {
 func TestFrameworkWithComponentsSafe(t *testing.T) {
 	ResetConfig()
 
-	// Missing config for WithDatabaseSafe
+	// Missing config for WithPostgreSQLSafe\n	_, err := f1.WithPostgreSQLSafe()\n	if err != ErrConfigNotSet {\n		t.Errorf("Expected ErrConfigNotSet, got %v", err)\n	}\n\n	// Missing config for WithDatabaseSafe
 	f1 := NewFramework()
 	_, err := f1.WithDatabaseSafe()
 	if err != ErrConfigNotSet {

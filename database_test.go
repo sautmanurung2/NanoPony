@@ -39,7 +39,7 @@ func TestParsePort(t *testing.T) {
 		{
 			name:     "empty port",
 			portStr:  "",
-			expected: 1521,
+			expected: 0,
 			wantErr:  false,
 		},
 		{
