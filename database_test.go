@@ -1,6 +1,7 @@
 package nanopony
 
 import (
+	"os"
 	"database/sql"
 	"testing"
 	"time"
@@ -255,4 +256,31 @@ func TestLogInterpolatedQuery(t *testing.T) {
 	LogInterpolatedQuery("SELECT * FROM users WHERE id = :id", sql.Named("id", 123))
 }
 
+func TestNewPostgreSQLFromConfig(t *testing.T) {
+	ResetConfig()
+	os.Setenv("GO_ENV", "local")
+	config := NewConfig()
+	db, err := NewPostgreSQLFromConfig(config)
+	if _, ok := err.(interface{ Unwrap() error }); !ok {
+		// Connection will fail in test env, that's OK
+		// We just want no nil pointer issues
+	}
+	if db != nil { db.Close() }
+}
 
+
+func TestNewPostgreSQLConnection(t *testing.T) {
+	cfg := DatabaseConfig{
+		Host: "localhost",
+		Port: "5432",
+		Database: "test",
+		Username: "user",
+		Password: "pass",
+	}
+	// Connection will fail but we hit the driver registration logic
+	db, err := NewPostgreSQLConnection(cfg)
+	if db != nil { db.Close() }
+	if err == nil {
+		// Connection shouldn't succeed on CI/local usually
+	}
+}

@@ -234,3 +234,17 @@ func TestConfigEnsure(t *testing.T) {
 	}
 }
 
+func TestEnsurePostgreSQL(t *testing.T) {
+	ResetConfig()
+	config := NewConfig()
+	pg := config.EnsurePostgreSQL()
+	if pg == nil { t.Errorf("EnsurePostgreSQL returned nil") }
+}
+
+func TestEnsureHttp(t *testing.T) {
+	ResetConfig()
+	config := NewConfig()
+	httpCfg := config.EnsureHttp()
+	if httpCfg == nil { t.Errorf("EnsureHttp returned nil") }
+}
+

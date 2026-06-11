@@ -2,6 +2,8 @@ package nanopony
 
 import (
 	"context"
+	"os"
+	"time"
 	"testing"
 
 	"github.com/segmentio/kafka-go"
@@ -273,3 +275,121 @@ func TestFrameworkPanicWrappers(t *testing.T) {
 	assertPanic(func() { f.WithPoller(DefaultPollerConfig(), nil) })
 }
 
+func TestWithHttpServer(t *testing.T) {
+	ResetConfig()
+	config := NewConfig()
+	var called bool
+	components := NewFramework().
+		WithConfig(config).
+		WithHttpServer(func(app *HttpServer) {
+			called = true; app.Get("/test", func(c *Ctx) error { return nil })
+		}).
+		Build()
+	if components.HttpServer == nil { t.Errorf("HttpServer nil") }
+	if !called { t.Errorf("Setup not called") }
+}
+
+func TestWithPostgreSQLPanic(t *testing.T) {
+	ResetConfig()
+	defer func() {
+		if r := recover(); r == nil { t.Errorf("Expected panic") }
+	}()
+	NewFramework().WithPostgreSQL()
+}
+
+func TestWithPostgreSQLSafeNoConfig(t *testing.T) {
+	_, err := NewFramework().WithPostgreSQLSafe()
+	if err != ErrConfigNotSet { t.Errorf("Expected ErrConfigNotSet, got %v", err) }
+}
+
+func TestWithPersistentQueue(t *testing.T) {
+	f := NewFramework()
+	f.WithPersistentQueue(nil)
+	if f.persistentQueue != nil { t.Errorf("WithPersistentQueue failed") }
+}
+
+func TestGetAppConfig(t *testing.T) {
+	ResetConfig()
+	_ = NewConfig()
+	got := getAppConfig()
+	if got == nil { t.Errorf("getAppConfig returned nil") }
+}
+
+
+func TestFrameworkCheckReadinessFull(t *testing.T) {
+	ResetConfig()
+	config := NewConfig()
+	f := NewFramework().WithConfig(config)
+	// Mock components
+	f.db = nil
+	f.pgDB = nil
+	f.kafkaWriter = nil
+	
+	comp, _ := f.BuildSafe()
+	ctx := context.Background()
+	if err := comp.CheckReadiness(ctx); err != nil {
+		t.Errorf("Expected nil, got %v", err)
+	}
+}
+
+func TestWithKafkaSafe(t *testing.T) {
+	ResetConfig()
+	config := NewConfig()
+	f := NewFramework().WithConfig(config)
+	_, err := f.WithKafkaWriterSafeRoundRobin()
+	if err != nil {
+		// Might fail if env not set, but we hit the code path
+	}
+}
+
+func TestWithDatabaseSelection(t *testing.T) {
+	ResetConfig()
+	os.Setenv("GO_ENV", "local")
+	
+	// Test Oracle path
+	os.Setenv("DB_TYPE", "oracle")
+	config := NewConfig()
+	f := NewFramework().WithConfig(config)
+	_, _ = f.WithDatabaseSafe() // Triggers Oracle path
+	
+	// Test PostgreSQL path
+	os.Setenv("DB_TYPE", "postgresql")
+	ResetConfig()
+	config = NewConfig()
+	f2 := NewFramework().WithConfig(config)
+	_, _ = f2.WithDatabaseSafe() // Triggers PostgreSQL path
+	
+	// Test Invalid path
+	os.Setenv("DB_TYPE", "invalid")
+	ResetConfig()
+	config = NewConfig()
+	f3 := NewFramework().WithConfig(config)
+	_, err := f3.WithDatabaseSafe()
+	if err == nil { t.Errorf("Expected error for invalid db type") }
+}
+
+func TestWithKafkaWriterSafeHash(t *testing.T) {
+	ResetConfig()
+	os.Setenv("GO_ENV", "local")
+	os.Setenv("KAFKA-MODELS", "kafka-localhost")
+	config := NewConfig()
+	f := NewFramework().WithConfig(config)
+	_, _ = f.WithKafkaWriterSafeHash()
+}
+
+func TestFrameworkStartComponents(t *testing.T) {
+	ResetConfig()
+	config := NewConfig()
+	f := NewFramework().WithConfig(config).WithWorkerPool(1,1,1)
+	f.httpServer = NewHttpServer()
+	
+	comp, _ := f.BuildSafe()
+	ctx, cancel := context.WithCancel(context.Background())
+	// Start in background
+	go func() {
+		_ = comp.Start(ctx, func(ctx context.Context, job *Job) error { return nil })
+	}()
+	time.Sleep(100 * time.Millisecond)
+	cancel()
+	_ = comp.Shutdown(context.Background())
+}

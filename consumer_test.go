@@ -86,3 +86,17 @@ func TestKafkaConsumerConfig(t *testing.T) {
 	}
 	defer consumer.Close()
 }
+
+func TestConsumerWithLogger(t *testing.T) {
+	config := NewConfig()
+	logger := NewLogManager(config)
+	c := &KafkaConsumer{}
+	c.WithLogger(logger)
+	if c.logger == nil { t.Errorf("WithLogger failed") }
+}
+
+func TestConsumerClose(t *testing.T) {
+	c := &KafkaConsumer{}
+	// Calling close on uninitialized reader
+	c.Close()
+}

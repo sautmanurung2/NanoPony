@@ -4,9 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
-	"fmt"
 	"sync"
 )
 
@@ -27,6 +27,12 @@ type SQLiteQueue struct {
 
 // NewSQLiteQueue creates a new SQLite-backed persistent queue.
 func NewSQLiteQueue(dbPath string, tableName string) (*SQLiteQueue, error) {
+	if dbPath == "" {
+		dbPath = "/app/src/data/jobs.db"
+	}
+	if tableName == "" {
+		tableName = "pending_jobs"
+	}
 	// Auto-create directory for the database file if it does not exist
 	// This allows Kubernetes PVC mounts to work without extra init containers
 	if dir := filepath.Dir(dbPath); dir != "." && dir != "" {
@@ -111,7 +117,7 @@ func (q *SQLiteQueue) FetchPending(ctx context.Context) ([]*Job, error) {
 
 		job := AcquireJob()
 		job.ID = id
-		
+
 		var data any
 		if err := json.Unmarshal(dataBytes, &data); err != nil {
 			job.Release()
@@ -133,5 +139,8 @@ func (q *SQLiteQueue) FetchPending(ctx context.Context) ([]*Job, error) {
 }
 
 func (q *SQLiteQueue) Close() error {
-	return q.db.Close()
+	if q.db != nil {
+		return q.db.Close()
+	}
+	return nil
 }

@@ -208,7 +208,7 @@ func (app *HttpServer) Group(prefix string, handlers ...Handler) *Group {
 }
 
 func (app *HttpServer) Static(prefix, root string) *HttpServer {
-	app.Get(prefix+"*", func(c *Ctx) error {
+	app.Get(strings.TrimSuffix(prefix, "/")+"/*", func(c *Ctx) error {
 		path := c.Params("*")
 		if path == "" {
 			path = "index.html"
