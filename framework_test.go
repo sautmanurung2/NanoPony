@@ -381,15 +381,14 @@ func TestFrameworkStartComponents(t *testing.T) {
 	ResetConfig()
 	config := NewConfig()
 	f := NewFramework().WithConfig(config).WithWorkerPool(1,1,1)
-	f.httpServer = NewHttpServer()
 	
 	comp, _ := f.BuildSafe()
 	ctx, cancel := context.WithCancel(context.Background())
-	// Start in background
 	go func() {
 		_ = comp.Start(ctx, func(ctx context.Context, job *Job) error { return nil })
 	}()
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(50 * time.Millisecond)
 	cancel()
+	time.Sleep(50 * time.Millisecond)
 	_ = comp.Shutdown(context.Background())
 }

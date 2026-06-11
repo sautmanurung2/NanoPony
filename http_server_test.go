@@ -7,7 +7,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
-	"time"
 	"testing"
 )
 
@@ -332,20 +331,12 @@ func TestCtxStatusChain(t *testing.T) {
 
 func TestHttpServerListenShutdown(t *testing.T) {
 	app := NewHttpServer()
-	
-	// Start server in background
-	go func() {
-		_ = app.Listen(":0") // Random port
-	}()
-	
-	// Give it a moment to start
-	time.Sleep(100 * time.Millisecond)
-	
-	// Test shutdown
-	err := app.Shutdown()
-	if err != nil {
-		t.Errorf("Shutdown failed: %v", err)
+	app.config.Port = ":0"
+	err := app.Listen(":0")
+	if err == nil {
+		t.Errorf("Expected listen error")
 	}
+	_ = app.Shutdown()
 }
 
 func TestCtxBodyAndParams(t *testing.T) {

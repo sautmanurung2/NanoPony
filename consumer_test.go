@@ -100,3 +100,4 @@ func TestConsumerClose(t *testing.T) {
 	// Calling close on uninitialized reader
 	c.Close()
 }
+

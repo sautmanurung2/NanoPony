@@ -224,7 +224,7 @@ func (app *HttpServer) Listen(addr string) error {
 		addr = ":" + addr
 	}
 
-	app.server = &http.Server{
+	srv := &http.Server{
 		Addr:         addr,
 		Handler:      app,
 		ReadTimeout:  app.config.ReadTimeout,
@@ -236,14 +236,21 @@ func (app *HttpServer) Listen(addr string) error {
 		app.logger.LogFramework("INFO", "HttpServer", fmt.Sprintf("Server starting on %s", addr))
 	}
 
-	return app.server.ListenAndServe()
+	app.mu.Lock()
+	app.server = srv
+	app.mu.Unlock()
+
+	return srv.ListenAndServe()
 }
 
 func (app *HttpServer) Shutdown() error {
-	if app.server != nil {
+	app.mu.Lock()
+	srv := app.server
+	app.mu.Unlock()
+	if srv != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		return app.server.Shutdown(ctx)
+		return srv.Shutdown(ctx)
 	}
 	return nil
 }
