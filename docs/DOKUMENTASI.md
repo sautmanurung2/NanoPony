@@ -199,6 +199,27 @@ NanoPony kini dilengkapi dengan module HTTP server internal yang dirancang untuk
 
 json:"data"
 
+
+### Middleware Bawaan (Built-in)
+NanoPony menyediakan middleware esensial yang siap digunakan (identik dengan Fiber):
+
+- ****: Mencatat log setiap request (Method, Path, Status, Latency).
+- ****: Memulihkan server dari panic agar tidak crash.
+- ****: Mengatur Cross-Origin Resource Sharing.
+- ****: Menambahkan ID unik ke setiap request headers.
+- ****: Mengompres response menggunakan Gzip.
+- ****: Menambahkan berbagai security headers untuk keamanan.
+- ****: Melindungi rute dengan HTTP Basic Authentication.
+- ****: Membatasi jumlah request (rate limiting) untuk mencegah spam.
+- ****: Menyediakan dashboard metrik dan status server ala Fiber.
+- **`nanopony.BasicAuth()`**: Melindungi rute dengan HTTP Basic Authentication.
+- **`nanopony.RateLimiter()`**: Membatasi jumlah request (rate limiting) untuk mencegah spam.
+- **`nanopony.Monitor()`**: Menyediakan dashboard metrik dan status server ala Fiber.
+- **`nanopony.Favicon()`**: Menyajikan ikon favicon.ico.
+- ****: Menyajikan ikon favicon.ico.
+
+#### Contoh Penggunaan Middleware:
+
 ### Penjelasan Ctx (Context) Methods
  adalah jantung dari setiap request HTTP di NanoPony. Berikut adalah method-method utamanya:
 

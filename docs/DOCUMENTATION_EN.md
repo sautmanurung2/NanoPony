@@ -199,6 +199,27 @@ NanoPony now includes an internal HTTP server module designed to provide a devel
 
 json:"data"
 
+
+### Built-in Middleware
+NanoPony provides essential middleware ready to use (identical to Fiber):
+
+- ****: Logs each request (Method, Path, Status, Latency).
+- ****: Recovers the server from panics to prevent crashes.
+- ****: Configures Cross-Origin Resource Sharing.
+- ****: Adds a unique ID to each request header.
+- ****: Compresses responses using Gzip.
+- ****: Adds various security headers for protection.
+- ****: Protects routes with HTTP Basic Authentication.
+- ****: Limits request rate to prevent spam/abuse.
+- ****: Provides a server metrics dashboard similar to Fiber's monitor.
+- **`nanopony.BasicAuth()`**: Protects routes with HTTP Basic Authentication.
+- **`nanopony.RateLimiter()`**: Limits request rate to prevent spam/abuse.
+- **`nanopony.Monitor()`**: Provides a server metrics dashboard similar to Fiber.
+- **`nanopony.Favicon()`**: Serves a favicon.ico icon.
+- ****: Serves a favicon.ico icon.
+
+#### Middleware Usage Example:
+
 ### Context (Ctx) Methods Explained
  is the heart of every HTTP request in NanoPony. Here are its main methods:
 
