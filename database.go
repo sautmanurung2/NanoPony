@@ -6,28 +6,17 @@ import (
 	"log"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	go_ora "github.com/sijms/go-ora/v2"
 )
 
-// oracleDB holds the global database connection.
-//
-// Deprecated: This global singleton exists for backward compatibility.
-// New code should use Framework.WithDatabase() and access db via FrameworkComponents.DB.
-var oracleDB *sql.DB
-var dbMutex sync.RWMutex
-
 // DatabaseConfig holds Oracle database connection configuration.
 // Use DefaultDatabaseConfig() to get sensible defaults.
 //
-// Example:
-//
-//	config := DefaultDatabaseConfig()
-//	config.Host = "localhost"
-//	config.Port = "1521"
-//	db, err := NewOracleConnection(config)
+// Refactoring Note: Global state (like a global DB connection) is avoided in clean
+// Go architecture because it makes testing difficult (side effects) and prevents
+// running multiple independent instances of the framework in a single process.
 type DatabaseConfig struct {
 	Host            string
 	Port            string
@@ -41,8 +30,6 @@ type DatabaseConfig struct {
 }
 
 // DefaultDatabaseConfig returns default database configuration with sensible pool settings.
-// Default pool settings: MaxIdleConns=2, MaxOpenConns=20,
-// ConnIdleTime=5min, ConnMaxLifetime=60min
 func DefaultDatabaseConfig() DatabaseConfig {
 	return DatabaseConfig{
 		MaxIdleConns:    2,
@@ -59,7 +46,6 @@ func DefaultDatabaseConfig() DatabaseConfig {
 // 2. Opens the database connection
 // 3. Configures connection pool settings
 // 4. Pings the database to verify the connection
-// 5. Sets the global oracleDB variable (for backward compatibility)
 //
 // Example:
 //
@@ -144,16 +130,6 @@ func NewOracleFromConfig(conf *Config) (*sql.DB, error) {
 	return NewOracleConnection(dbConfig)
 }
 
-// GetOracleDB returns the global database connection.
-// Returns nil if no connection has been established.
-//
-// Deprecated: For new code, use Framework.WithDatabase() and access db
-// via FrameworkComponents.DB instead of this global accessor.
-func GetOracleDB() *sql.DB {
-	dbMutex.RLock()
-	defer dbMutex.RUnlock()
-	return oracleDB
-}
 
 // CloseDB safely closes a database connection.
 // Returns nil if db is nil (safe to call with nil).

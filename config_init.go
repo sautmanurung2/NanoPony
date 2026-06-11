@@ -242,3 +242,18 @@ func getEnvByPrefix(prefix string) map[string]string {
 
 	return result
 }
+
+// initHttp initializes the HTTP server configuration
+func initHttp(conf *Config) {
+	port := os.Getenv("HTTP_PORT")
+	if port == "" {
+		port = "3000"
+	}
+	conf.Http.Port = port
+	
+	appName := os.Getenv("HTTP_APP_NAME")
+	if appName == "" {
+		appName = "NanoPony"
+	}
+	conf.Http.AppName = appName
+}

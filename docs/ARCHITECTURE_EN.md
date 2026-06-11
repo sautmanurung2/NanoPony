@@ -33,6 +33,7 @@
 - ✅ **Oracle Database**: Connection management using `go-ora` with connection pooling.
 - ✅ **Worker Pool**: Concurrent job processing with bounded queues.
 - ✅ **Poller**: Periodic data fetching with configurable intervals.
+- ✅ **HTTP Server (Fiber-Compatible)** - Internal HTTP Server with routing, middleware, groups, and context API identical to the Fiber framework.
 - ✅ **Builder Pattern**: Clean and fluent API.
 - ✅ **Graceful Shutdown**: Safe teardown for all components.
 - ✅ **Environment-based Configuration**: Settings via environment variables.

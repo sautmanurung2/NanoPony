@@ -49,7 +49,12 @@ func TestKafkaProducerMarshaling(t *testing.T) {
 	}
 	producer := NewKafkaProducer(writer)
 
-	logger := NewLoggerFromOptions(LoggerOptions{ServiceName: "test"})
+	// Create a log manager for testing
+	ResetConfig()
+	lm := NewLogManager(NewConfig())
+	defer lm.Shutdown()
+
+	logger := NewLoggerFromOptions(lm, LoggerOptions{ServiceName: "test"})
 
 	// Test Produce (JSON)
 	_, err := producer.Produce("test-topic", map[string]string{"key": "value"}, logger)

@@ -6,39 +6,16 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"sync"
 	"time"
 
 	"github.com/elastic/go-elasticsearch/v8"
 	"github.com/natefinch/lumberjack"
 )
 
-// Global logging state
-var (
-	// esClient is protected by esClientMutex for thread safety.
-	esClient      *elasticsearch.Client
-	esClientMutex sync.RWMutex
-
-	logFileWriter *lumberjack.Logger
-	onceLogger    sync.Once
-
-	logChan     chan logRequest
-	consoleChan chan logRequest
-	fileChan    chan logRequest
-	esChan      chan logRequest
-	onceWorker  sync.Once
-
-	cachedWd     string
-	onceCachedWd sync.Once
-
-	onceDirChecked sync.Once
-)
-
 // logRequest represents an internal request to process a log entry.
 type logRequest struct {
-	entry   *LoggerEntry
-	payload any // Payload for Elasticsearch processing
-	mode    string
+	entry *LoggerEntry
+	mode  string
 }
 
 // clone creates a safe copy of the LoggerEntry metadata without copying the mutex.
@@ -53,6 +30,7 @@ func (le *LoggerEntry) clone() *LoggerEntry {
 // The caller MUST hold le.mu (either RLock or Lock) before calling.
 func (le *LoggerEntry) cloneUnlocked() *LoggerEntry {
 	return &LoggerEntry{
+		manager:         le.manager,
 		StartTimestamp:  le.StartTimestamp,
 		EndTimestamp:    le.EndTimestamp,
 		ReferenceId:     le.ReferenceId,
@@ -72,114 +50,114 @@ func (le *LoggerEntry) cloneUnlocked() *LoggerEntry {
 	}
 }
 
-// initLogWorker initializes the background log processing goroutines exactly once.
-func initLogWorker() {
-	onceWorker.Do(func() {
-		logChan = make(chan logRequest, 1000)
-		consoleChan = make(chan logRequest, 1000)
-		fileChan = make(chan logRequest, 1000)
-		esChan = make(chan logRequest, 1000)
+// initWorkers initializes the background log processing goroutines for a LogManager instance.
+func (lm *LogManager) initWorkers() {
+	// 1. Main Dispatcher Worker
+	lm.wg.Add(1)
+	go func() {
+		defer lm.wg.Done()
+		for req := range lm.logChan {
+			lm.dispatchLogRequest(req)
+		}
+		// When logChan is closed, close all sink channels
+		close(lm.consoleChan)
+		close(lm.fileChan)
+		close(lm.esChan)
+	}()
 
-		// Main Dispatcher Worker
-		go func() {
-			for req := range logChan {
-				dispatchLogRequest(req)
-			}
-		}()
+	// 2. Dedicated Console Worker
+	lm.wg.Add(1)
+	go func() {
+		defer lm.wg.Done()
+		for req := range lm.consoleChan {
+			req.entry.writeToConsole()
+		}
+	}()
 
-		// Dedicated Console Worker (Realtime)
-		go func() {
-			for req := range consoleChan {
-				req.entry.writeToConsole()
-			}
-		}()
+	// 3. Dedicated File Worker
+	lm.wg.Add(1)
+	go func() {
+		defer lm.wg.Done()
+		for req := range lm.fileChan {
+			req.entry.writeToLogFile(lm)
+		}
+	}()
 
-		// Dedicated File Worker (Can be slow)
-		go func() {
-			for req := range fileChan {
-				req.entry.writeToLogFile()
-			}
-		}()
-
-		// Dedicated Elasticsearch Worker (Realtime/Network dependent)
-		go func() {
-			for req := range esChan {
-				// Use the payload already inside req.entry
-				req.entry.writeToElasticsearch(nil)
-			}
-		}()
-	})
+	// 4. Dedicated Elasticsearch Worker
+	lm.wg.Add(1)
+	go func() {
+		defer lm.wg.Done()
+		for req := range lm.esChan {
+			req.entry.writeToElasticsearch(lm)
+		}
+	}()
 }
 
 // dispatchLogRequest routes a log request to the appropriate sink workers.
-func dispatchLogRequest(req logRequest) {
+func (lm *LogManager) dispatchLogRequest(req logRequest) {
 	switch req.mode {
 	case "console":
-		sendToSink(consoleChan, req)
+		lm.sendToSink(lm.consoleChan, req)
 	case "file":
-		sendToSink(fileChan, req)
+		lm.sendToSink(lm.fileChan, req)
 	case "elasticsearch":
-		sendToSink(esChan, req)
+		lm.sendToSink(lm.esChan, req)
 	case "hybrid":
-		// Create clones for parallel processing.
-		// Each clone gets its own LoggerEntry metadata but shares the same
-		// processed (read-only) payload map.
 		ce1 := req.entry.clone()
 		ce2 := req.entry.clone()
 
-		sendToSink(consoleChan, logRequest{entry: ce1, mode: req.mode})
-		sendToSink(fileChan, logRequest{entry: ce2, mode: req.mode})
-		sendToSink(esChan, logRequest{entry: req.entry, mode: req.mode})
+		lm.sendToSink(lm.consoleChan, logRequest{entry: ce1, mode: req.mode})
+		lm.sendToSink(lm.fileChan, logRequest{entry: ce2, mode: req.mode})
+		lm.sendToSink(lm.esChan, logRequest{entry: req.entry, mode: req.mode})
 	}
 }
 
 // sendToSink attempts to send a request to a sink channel without blocking the dispatcher.
-func sendToSink(ch chan logRequest, req logRequest) {
+func (lm *LogManager) sendToSink(ch chan logRequest, req logRequest) {
 	if ch == nil {
 		return
 	}
 	select {
 	case ch <- req:
+	case <-lm.ctx.Done():
+		return
 	default:
-		// If a specific sink is full, we drop the log for THAT sink only.
+		// Drop if sink is full
 	}
 }
 
-// initLoggerFile sets up the rolling file writer exactly once.
-func initLoggerFile() {
-	onceLogger.Do(func() {
-		onceDirChecked.Do(func() {
-			_ = ensureLogDirectoryExists()
-		})
-
-		logFileName := generateLogFileName()
-		logFilePath := path.Join(LogDir, logFileName)
-
-		logFileWriter = &lumberjack.Logger{
-			Filename:   logFilePath,
-			MaxSize:    100,
-			MaxBackups: 3,
-			MaxAge:     28,
-			Compress:   false,
-		}
-	})
-}
-
 // writeToLogFile serializes the entry to JSON and appends it to the rolling log file.
-func (le *LoggerEntry) writeToLogFile() {
+func (le *LoggerEntry) writeToLogFile(lm *LogManager) {
+	if lm.logFileWriter == nil {
+		lm.initLoggerFile()
+	}
+
 	le.mu.RLock()
 	logMessage, err := json.Marshal(le)
 	le.mu.RUnlock()
 
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "[NanoPony-Logger] Failed to marshal log for file: %v\n", err)
 		return
 	}
 
-	if logFileWriter != nil {
-		if _, err := fmt.Fprintf(logFileWriter, "%s\n", string(logMessage)); err != nil {
-			fmt.Fprintf(os.Stderr, "[NanoPony-Logger] Failed to write to log file: %v\n", err)
-		}
+	if lm.logFileWriter != nil {
+		_, _ = fmt.Fprintf(lm.logFileWriter, "%s\n", string(logMessage))
+	}
+}
+
+// initLoggerFile sets up the rolling file writer for a LogManager.
+func (lm *LogManager) initLoggerFile() {
+	_ = os.MkdirAll(LogDir, 0755)
+
+	logFileName := lm.generateLogFileName()
+	logFilePath := path.Join(LogDir, logFileName)
+
+	lm.logFileWriter = &lumberjack.Logger{
+		Filename:   logFilePath,
+		MaxSize:    100,
+		MaxBackups: 3,
+		MaxAge:     28,
+		Compress:   false,
 	}
 }
 
@@ -189,45 +167,54 @@ func (le *LoggerEntry) writeToConsole() {
 	data, err := json.Marshal(le)
 	le.mu.RUnlock()
 
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "[NanoPony-Logger] Failed to marshal log for console: %v\n", err)
-		return
+	if err == nil {
+		fmt.Println(string(data))
 	}
-
-	fmt.Println(string(data))
 }
 
 // writeToElasticsearch sends the entry and its payload to an Elasticsearch index.
-// The index name follows the pattern: <ELASTIC_PREFIX_INDEX><YYYYMMDD>
-func (le *LoggerEntry) writeToElasticsearch(payload any) {
-	if err := ensureElasticsearchClient(); err != nil {
-		return
+func (le *LoggerEntry) writeToElasticsearch(lm *LogManager) {
+	if lm.esClient == nil {
+		if err := lm.initElasticsearchClient(); err != nil {
+			return
+		}
 	}
 
-	conf := getAppConfig()
-	if conf == nil {
-		return
-	}
-
-	payloadMap := processPayload(payload)
-
-	le.mu.Lock()
-	le.Request.Payload = payloadMap
+	le.mu.RLock()
 	data, err := json.Marshal(le)
-	le.mu.Unlock()
+	le.mu.RUnlock()
 
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "[NanoPony-Logger] Failed to marshal log for Elasticsearch: %v\n", err)
 		return
 	}
 
-	esIndexWithDate := conf.ElasticSearch.ElasticPrefixIndex + time.Now().Format("20060102")
-	res, err := esClient.Index(esIndexWithDate, bytes.NewReader(data))
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "[NanoPony-Logger] Failed to send log to Elasticsearch: %v\n", err)
-		return
+	esIndexWithDate := lm.config.ElasticSearch.ElasticPrefixIndex + time.Now().Format("20060102")
+	res, err := lm.esClient.Index(esIndexWithDate, bytes.NewReader(data))
+	if err == nil {
+		_ = res.Body.Close()
 	}
-	_ = res.Body.Close()
+}
+
+// initElasticsearchClient initializes the ES client for a LogManager.
+func (lm *LogManager) initElasticsearchClient() error {
+	if lm.config == nil {
+		return fmt.Errorf("config not set")
+	}
+
+	es := lm.config.EnsureElasticSearch()
+	cfg := elasticsearch.Config{
+		Addresses: []string{es.ElasticHost},
+		Username:  es.ElasticUsername,
+		Password:  es.ElasticPassword,
+		APIKey:    es.ElasticApiKey,
+	}
+
+	client, err := elasticsearch.NewClient(cfg)
+	if err != nil {
+		return err
+	}
+	lm.esClient = client
+	return nil
 }
 
 // processPayload normalizes various payload types into a map[string]any for JSON logging.
@@ -252,7 +239,6 @@ func processPayload(payload any) map[string]any {
 		}
 		return m
 	default:
-		// Fallback to JSON marshalling for other types (structs, etc.)
 		dataBytes, err := json.Marshal(payload)
 		if err != nil {
 			return map[string]any{"error": "failed_to_marshal", "raw": fmt.Sprintf("%v", payload)}
@@ -266,12 +252,9 @@ func processPayload(payload any) map[string]any {
 	}
 }
 
-
 const maxCopyDepth = 10
 
 // deepCopyMap performs a shallow copy of a map, and recursively copies nested maps.
-// This is faster than json.Marshal/Unmarshal for map deep copying.
-// depth parameter prevents stack overflow from circular references.
 func deepCopyMap(m map[string]any, depth int) map[string]any {
 	if depth > maxCopyDepth {
 		return map[string]any{"error": "max_copy_depth_reached"}
@@ -289,31 +272,11 @@ func deepCopyMap(m map[string]any, depth int) map[string]any {
 }
 
 // generateLogFileName creates a daily log file name with an optional prefix from config.
-func generateLogFileName() string {
+func (lm *LogManager) generateLogFileName() string {
 	now := time.Now()
 	prefix := "nanopony"
-	if conf := getAppConfig(); conf != nil && conf.App.LogFilePrefix != "" {
-		prefix = conf.App.LogFilePrefix
+	if lm.config != nil && lm.config.App.LogFilePrefix != "" {
+		prefix = lm.config.App.LogFilePrefix
 	}
 	return fmt.Sprintf("%s-%d-%02d-%02d.log", prefix, now.Year(), int(now.Month()), now.Day())
-}
-
-// ensureLogDirectoryExists creates the log directory if it doesn't already exist.
-func ensureLogDirectoryExists() error {
-	return os.MkdirAll(LogDir, 0755)
-}
-
-// ensureElasticsearchClient initializes the ES client if it hasn't been initialized yet.
-func ensureElasticsearchClient() error {
-	esClientMutex.Lock()
-	defer esClientMutex.Unlock()
-	if esClient != nil {
-		return nil
-	}
-	client, err := InitElasticsearch()
-	if err != nil {
-		return err
-	}
-	esClient = client
-	return nil
 }

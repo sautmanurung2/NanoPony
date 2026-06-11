@@ -100,14 +100,9 @@ func TestNewOracleFromConfig(t *testing.T) {
 	}
 }
 
-func TestGetOracleDB(t *testing.T) {
-	// Initially should be nil
-	db := GetOracleDB()
-	if db != nil {
-		t.Log("Oracle DB already initialized")
-	}
-
-	// New way via Framework
+func TestDatabaseConnectionViaFramework(t *testing.T) {
+	// New way via Framework (Recommended)
+	// We no longer use GetOracleDB() global accessor.
 	ResetConfig()
 	conf := NewConfig()
 	// Mock database connection for testing
@@ -120,18 +115,10 @@ func TestGetOracleDB(t *testing.T) {
 }
 
 func TestCloseDB(t *testing.T) {
-	// Test closing nil
+	// Test closing nil (safe)
 	err := CloseDB(nil)
 	if err != nil {
 		t.Errorf("Expected no error when closing nil db, got %v", err)
-	}
-
-	// Test closing actual connection (if exists)
-	if oracleDB != nil {
-		err = CloseDB(oracleDB)
-		if err != nil {
-			t.Errorf("Unexpected error: %v", err)
-		}
 	}
 }
 

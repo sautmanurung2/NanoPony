@@ -43,6 +43,8 @@ type Config struct {
 	KafkaConfluent KafkaConfluentConfig
 	// ElasticSearch holds Elasticsearch connection details
 	ElasticSearch ElasticSearchConfig
+	// Http holds HTTP server configuration
+	Http HttpConfig
 
 	// --- Dynamic Config ---
 
@@ -59,6 +61,7 @@ type Config struct {
 	kafkaOnce     sync.Once
 	confluentOnce sync.Once
 	elasticOnce   sync.Once
+	httpOnce      sync.Once
 }
 
 // AppConfig holds application-level configuration
@@ -195,6 +198,13 @@ func (c *Config) EnsureKafkaConfluent() *KafkaConfluentConfig {
 
 // EnsureElasticSearch loads Elasticsearch config from env vars exactly once.
 // Safe to call from multiple goroutines.
+// EnsureHttp loads HTTP server config from env vars exactly once.
+// Safe to call from multiple goroutines.
+func (c *Config) EnsureHttp() *HttpConfig {
+	c.httpOnce.Do(func() { initHttp(c) })
+	return &c.Http
+}
+
 func (c *Config) EnsureElasticSearch() *ElasticSearchConfig {
 	c.elasticOnce.Do(func() { initElasticSearch(c) })
 	return &c.ElasticSearch

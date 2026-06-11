@@ -33,6 +33,7 @@
 - ✅ **Oracle Database** - Koneksi menggunakan `go-ora` dengan connection pooling
 - ✅ **Worker Pool** - Pemrosesan job konkuren dengan queue bounded
 - ✅ **Poller** - Pengambilan data periodik dengan interval yang dapat dikonfigurasi
+- ✅ **HTTP Server (Fiber-Compatible)** - Server HTTP internal dengan routing, middleware, group, dan context API yang identik dengan framework Fiber, memungkinkan pembangunan REST API langsung dalam satu proses NanoPony tanpa dependensi eksternal.
 - ✅ **Builder Pattern** - API yang clean dan fluent
 - ✅ **Graceful Shutdown** - Teardown yang aman untuk semua komponen
 - ✅ **Konfigurasi Berbasis Environment** - Konfigurasi melalui environment variables

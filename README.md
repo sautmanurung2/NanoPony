@@ -89,6 +89,8 @@
 - ✅ **DataFetcher Interface** - Interface untuk custom data sources
 - ✅ **Function Adapter** - DataFetcherFunc untuk kemudahan penggunaan
 - ✅ **Empty Data Handling** - Graceful handling jika tidak ada data
+- ✅ **HTTP Server (Fiber-Compatible)** - REST API dengan routing, middleware, dan context identik Fiber
+- ✅ **Fiber-compatible HTTP Server** - API surface identik dengan Fiber (Get, Post, Use, Group, dll)
 
 ### 📨 Kafka Producer
 
@@ -464,6 +466,7 @@ go run main.go
 ├── job.go                 # Definisi unit kerja (Job) & Handler
 ├── worker.go              # Logic Worker Pool & Concurrency
 ├── poller.go              # Logic Data Poller & Rate Limiting
+├── http_server.go         # Framework HTTP komplementer (Fiber-API)
 ├── database.go            # Koneksi Oracle DB & pooling
 ├── kafka.go               # Wrapper kafka-go reader/writer
 ├── producer.go            # Logic Kafka producer & consumer

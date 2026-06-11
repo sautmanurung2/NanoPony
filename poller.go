@@ -69,6 +69,7 @@ type Poller struct {
 	jobSlots    chan struct{}
 	workerPool  *ShardedWorkerPool
 	dataFetcher DataFetcher
+	logger      *LogManager
 	ctx         context.Context
 	cancel      context.CancelFunc
 	wg          sync.WaitGroup
@@ -80,10 +81,8 @@ type Poller struct {
 
 // NewPoller creates a new Poller instance.
 //
-// Parameters:
-//   - config: Configuration settings for timing and batching
-//   - workerPool: The pool where fetched items will be submitted as jobs
-//   - dataFetcher: The source of data items
+// Beginner Note: The poller works like a "heartbeat". Every Interval, it
+// wakes up, fetches data, and hands it off to the WorkerPool.
 func NewPoller(config PollerConfig, workerPool *ShardedWorkerPool, dataFetcher DataFetcher) *Poller {
 	ctx, cancel := context.WithCancel(context.Background())
 	// Use timestamp for session ID to ensure unique job IDs across restarts
@@ -100,11 +99,18 @@ func NewPoller(config PollerConfig, workerPool *ShardedWorkerPool, dataFetcher D
 	}
 
 	// Pre-fill job slots (acts as semaphore for rate limiting)
+	// Why? This limits how many fetch operations happen at the same time.
 	for i := 0; i < config.JobSlotSize; i++ {
 		poller.jobSlots <- struct{}{}
 	}
 
 	return poller
+}
+
+// WithLogger sets the logger for the poller.
+func (p *Poller) WithLogger(lm *LogManager) *Poller {
+	p.logger = lm
+	return p
 }
 
 // Start initiates the polling loop in a separate goroutine.
@@ -160,7 +166,9 @@ func (p *Poller) pollOnce() {
 
 	data, err := p.dataFetcher.Fetch(p.ctx)
 	if err != nil {
-		LogFramework("ERROR", "Poller", fmt.Sprintf("failed to fetch data: %v", err))
+		if p.logger != nil {
+			p.logger.LogFramework("ERROR", "Poller", fmt.Sprintf("failed to fetch data: %v", err))
+		}
 		return
 	}
 
@@ -170,7 +178,9 @@ func (p *Poller) pollOnce() {
 
 	// Limit batch size if configured
 	if p.config.BatchSize > 0 && len(data) > p.config.BatchSize {
-		LogFramework("WARNING", "Poller", fmt.Sprintf("limiting batch size from %d to %d", len(data), p.config.BatchSize))
+		if p.logger != nil {
+			p.logger.LogFramework("WARNING", "Poller", fmt.Sprintf("limiting batch size from %d to %d", len(data), p.config.BatchSize))
+		}
 		data = data[:p.config.BatchSize]
 	}
 
@@ -198,8 +208,8 @@ func (p *Poller) pollOnce() {
 
 		// Use SubmitBlocking to provide backpressure
 		if err := p.workerPool.SubmitBlocking(p.ctx, job); err != nil {
-			if p.ctx.Err() == nil {
-				LogFramework("ERROR", "Poller", fmt.Sprintf("failed to submit job: %v", err))
+			if p.ctx.Err() == nil && p.logger != nil {
+				p.logger.LogFramework("ERROR", "Poller", fmt.Sprintf("failed to submit job: %v", err))
 			}
 			// If submission fails, we should release the job as it won't be processed
 			job.Release()
