@@ -109,6 +109,7 @@ func TestFrameworkBuild(t *testing.T) {
 		WithWorkerPool(5, 100, 2)
 
 	components := framework.Build()
+	defer components.Shutdown(context.Background())
 
 	if components.Config != config {
 		t.Error("Expected config to be set in components")
@@ -119,14 +120,19 @@ func TestFrameworkBuild(t *testing.T) {
 }
 
 func TestFrameworkBuildPanic(t *testing.T) {
+	ResetConfig()
+	config := NewConfig()
+
 	defer func() {
 		if r := recover(); r == nil {
 			t.Error("Expected panic for double build")
 		}
 	}()
 
-	framework := NewFramework()
-	framework.Build()
+	framework := NewFramework().WithConfig(config)
+	components := framework.Build()
+	defer components.Shutdown(context.Background())
+
 	framework.Build() // Should panic
 }
 
@@ -185,7 +191,8 @@ func TestFrameworkBuildSafe(t *testing.T) {
 
 	// Double build
 	f3 := NewFramework().WithConfig(config)
-	f3.BuildSafe()
+	c3, _ := f3.BuildSafe()
+	defer c3.Shutdown(context.Background())
 	_, err = f3.BuildSafe()
 	if err != ErrAlreadyBuilt {
 		t.Errorf("Expected ErrAlreadyBuilt, got %v", err)
@@ -285,6 +292,7 @@ func TestWithHttpServer(t *testing.T) {
 			called = true; app.Get("/test", func(c *Ctx) error { return nil })
 		}).
 		Build()
+	defer components.Shutdown(context.Background())
 	if components.HttpServer == nil { t.Errorf("HttpServer nil") }
 	if !called { t.Errorf("Setup not called") }
 }
@@ -326,6 +334,7 @@ func TestFrameworkCheckReadinessFull(t *testing.T) {
 	f.kafkaWriter = nil
 	
 	comp, _ := f.BuildSafe()
+	defer comp.Shutdown(context.Background())
 	ctx := context.Background()
 	if err := comp.CheckReadiness(ctx); err != nil {
 		t.Errorf("Expected nil, got %v", err)
@@ -343,6 +352,9 @@ func TestWithKafkaSafe(t *testing.T) {
 }
 
 func TestWithDatabaseSelection(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping database connection test in short mode")
+	}
 	ResetConfig()
 	os.Setenv("GO_ENV", "local")
 	

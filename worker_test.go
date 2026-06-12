@@ -192,7 +192,7 @@ func TestWorkerPoolSubmitQueueFull(t *testing.T) {
 		once.Do(func() {
 			close(workerStarted)
 		})
-		time.Sleep(1 * time.Second)
+		time.Sleep(100 * time.Millisecond)
 		return nil
 	})
 

@@ -90,6 +90,7 @@ func TestKafkaConsumerConfig(t *testing.T) {
 func TestConsumerWithLogger(t *testing.T) {
 	config := NewConfig()
 	logger := NewLogManager(config)
+	defer logger.Shutdown()
 	c := &KafkaConsumer{}
 	c.WithLogger(logger)
 	if c.logger == nil { t.Errorf("WithLogger failed") }

@@ -1,6 +1,7 @@
 package nanopony
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log"
@@ -23,6 +24,7 @@ type DatabaseConfig struct {
 	MaxOpenConns    int
 	ConnIdleTime    time.Duration
 	ConnMaxLifetime time.Duration
+	ConnTimeout     time.Duration
 }
 
 // DefaultDatabaseConfig returns default database configuration with sensible pool settings.
@@ -32,6 +34,7 @@ func DefaultDatabaseConfig() DatabaseConfig {
 		MaxOpenConns:    20,
 		ConnIdleTime:    5 * time.Minute,
 		ConnMaxLifetime: 60 * time.Minute,
+		ConnTimeout:     2 * time.Second,
 	}
 }
 
@@ -51,7 +54,13 @@ func NewOracleConnection(config DatabaseConfig) (*sql.DB, error) {
 
 	applyPoolSettings(db, config)
 
-	if err := db.Ping(); err != nil {
+	// Use timeout for ping to avoid hanging
+	timeout := GetOrDefault(config.ConnTimeout, 2*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	if err := db.PingContext(ctx); err != nil {
+		db.Close()
 		return nil, fmt.Errorf("failed to ping oracle database: %w", err)
 	}
 
@@ -77,7 +86,13 @@ func NewPostgreSQLConnection(config DatabaseConfig) (*sql.DB, error) {
 
 	applyPoolSettings(db, config)
 
-	if err := db.Ping(); err != nil {
+	// Use timeout for ping to avoid hanging
+	timeout := GetOrDefault(config.ConnTimeout, 2*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	if err := db.PingContext(ctx); err != nil {
+		db.Close()
 		return nil, fmt.Errorf("failed to ping postgresql database: %w", err)
 	}
 

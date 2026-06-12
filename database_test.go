@@ -1,6 +1,7 @@
 package nanopony
 
 import (
+	"context"
 	"os"
 	"database/sql"
 	"testing"
@@ -74,6 +75,9 @@ func TestParsePort(t *testing.T) {
 }
 
 func TestNewOracleConnection(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping database connection test in short mode")
+	}
 	// Test with invalid connection - should fail gracefully
 	config := DatabaseConfig{
 		Host:     "invalid-host",
@@ -91,6 +95,9 @@ func TestNewOracleConnection(t *testing.T) {
 }
 
 func TestNewOracleFromConfig(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping database connection test in short mode")
+	}
 	ResetConfig()
 	conf := NewConfig()
 
@@ -109,6 +116,7 @@ func TestDatabaseConnectionViaFramework(t *testing.T) {
 	// Mock database connection for testing
 	fw := NewFramework().WithConfig(conf).WithDatabaseFromInstance(nil)
 	components := fw.Build()
+	defer components.Shutdown(context.Background())
 
 	if components.DB != nil {
 		t.Error("Expected components.DB to be nil (mocked as nil)")
@@ -244,6 +252,9 @@ func TestFormatValueDefault(t *testing.T) {
 }
 
 func TestNewOracleConnectionInvalidPort(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping database connection test in short mode")
+	}
 	config := DatabaseConfig{
 		Host: "localhost",
 		Port: "invalid", // Should trigger warning and use default 1521
@@ -257,6 +268,9 @@ func TestLogInterpolatedQuery(t *testing.T) {
 }
 
 func TestNewPostgreSQLFromConfig(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping database connection test in short mode")
+	}
 	ResetConfig()
 	os.Setenv("GO_ENV", "local")
 	config := NewConfig()
@@ -270,6 +284,9 @@ func TestNewPostgreSQLFromConfig(t *testing.T) {
 
 
 func TestNewPostgreSQLConnection(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping database connection test in short mode")
+	}
 	cfg := DatabaseConfig{
 		Host: "localhost",
 		Port: "5432",

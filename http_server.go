@@ -49,6 +49,7 @@ type HttpServer struct {
 	logger      *LogManager
 	mu          sync.RWMutex
 	startupTime time.Time
+	shutdown    bool
 }
 
 // HttpConfig holds server configuration.
@@ -224,6 +225,11 @@ func (app *HttpServer) Listen(addr string) error {
 		addr = ":" + addr
 	}
 
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return err
+	}
+
 	srv := &http.Server{
 		Addr:         addr,
 		Handler:      app,
@@ -237,16 +243,23 @@ func (app *HttpServer) Listen(addr string) error {
 	}
 
 	app.mu.Lock()
+	if app.shutdown {
+		app.mu.Unlock()
+		_ = ln.Close()
+		return http.ErrServerClosed
+	}
 	app.server = srv
 	app.mu.Unlock()
 
-	return srv.ListenAndServe()
+	return srv.Serve(ln)
 }
 
 func (app *HttpServer) Shutdown() error {
 	app.mu.Lock()
+	app.shutdown = true
 	srv := app.server
 	app.mu.Unlock()
+
 	if srv != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
