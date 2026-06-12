@@ -15,3 +15,4 @@ logger_*_test.go
 examples/*.log
 examples/LOGGING_OPTIMIZATION_REPORT.txt
 coverage.out
+vendor/

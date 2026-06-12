@@ -179,6 +179,61 @@ Untuk menghindari *heap allocation* yang berlebihan, ID kini dikonstruksi menggu
 
 ---
 
+
+## 7. HTTP Server (Fiber-Compatible)
+
+**File**: 
+
+### Deskripsi
+NanoPony kini dilengkapi dengan module HTTP server internal yang dirancang untuk memberikan pengalaman pengembangan yang sama persis dengan Fiber. Module ini memungkinkan Anda membangun API kontrol, dashboard monitoring, atau integrasi webhook langsung di dalam satu lifecycle framework NanoPony tanpa perlu dependensi framework web eksternal.
+
+### Fitur Utama
+- **Routing Ekspresif**: , , , , dll.
+- **Path Parameters**: Mendukung , , dll.
+- **Wildcard Support**: Mendukung  untuk penanganan rute sisa atau static files.
+- **Middleware Chain**: Mendukung  untuk alur kerja middleware yang berurutan dan terorganisir.
+- **Group Routing**: Mengorganisir rute dengan prefix yang sama untuk modularitas kode.
+- **Context API**: Abstraksi request/response yang bersih (identik dengan Fiber).
+
+### Contoh Penggunaan Lengkap
+
+json:"data"
+
+
+### Middleware Bawaan (Built-in)
+NanoPony menyediakan middleware esensial yang siap digunakan (identik dengan Fiber):
+
+- ****: Mencatat log setiap request (Method, Path, Status, Latency).
+- ****: Memulihkan server dari panic agar tidak crash.
+- ****: Mengatur Cross-Origin Resource Sharing.
+- ****: Menambahkan ID unik ke setiap request headers.
+- ****: Mengompres response menggunakan Gzip.
+- ****: Menambahkan berbagai security headers untuk keamanan.
+- ****: Melindungi rute dengan HTTP Basic Authentication.
+- ****: Membatasi jumlah request (rate limiting) untuk mencegah spam.
+- ****: Menyediakan dashboard metrik dan status server ala Fiber.
+- **`nanopony.BasicAuth()`**: Melindungi rute dengan HTTP Basic Authentication.
+- **`nanopony.RateLimiter()`**: Membatasi jumlah request (rate limiting) untuk mencegah spam.
+- **`nanopony.Monitor()`**: Menyediakan dashboard metrik dan status server ala Fiber.
+- **`nanopony.Favicon()`**: Menyajikan ikon favicon.ico.
+- ****: Menyajikan ikon favicon.ico.
+
+#### Contoh Penggunaan Middleware:
+
+### Penjelasan Ctx (Context) Methods
+ adalah jantung dari setiap request HTTP di NanoPony. Berikut adalah method-method utamanya:
+
+- ****: Mengirim response JSON dan secara otomatis menetapkan header .
+- ****: Mengirim response teks biasa.
+- ****: Menetapkan kode status HTTP (misal: 200, 404, 500).
+- ****: Mem-parsing body request JSON langsung ke struct atau map.
+- ****: Mengambil nilai dari parameter rute (misal: ).
+- ****: Mengambil nilai dari query string (misal: ).
+- ****: Sangat penting untuk middleware; memanggil handler berikutnya dalam rantai.
+- ****: Menyimpan data yang bisa diakses oleh middleware atau handler berikutnya dalam satu request cycle.
+
+---
+
 ## 6. Logging System (Optimized)
 
 **File**: `logger.go`, `logger_internal.go`

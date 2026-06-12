@@ -179,6 +179,61 @@ To avoid excessive heap allocation, the ID is now constructed using `strings.Bui
 
 ---
 
+
+## 7. HTTP Server (Fiber-Compatible)
+
+**File**: 
+
+### Description
+NanoPony now includes an internal HTTP server module designed to provide a development experience identical to the Fiber framework. This module allows you to build control APIs, monitoring dashboards, or webhook integrations directly within the NanoPony framework lifecycle without needing external web framework dependencies.
+
+### Key Features
+- **Expressive Routing**: , , , , etc.
+- **Path Parameters**: Supports , , etc.
+- **Wildcard Support**: Supports  for catch-all routes or static files.
+- **Middleware Chain**: Supports  for sequential and organized middleware workflows.
+- **Group Routing**: Organize routes with shared prefixes for code modularity.
+- **Context API**: Clean request/response abstraction (identical to Fiber).
+
+### Complete Usage Example
+
+json:"data"
+
+
+### Built-in Middleware
+NanoPony provides essential middleware ready to use (identical to Fiber):
+
+- ****: Logs each request (Method, Path, Status, Latency).
+- ****: Recovers the server from panics to prevent crashes.
+- ****: Configures Cross-Origin Resource Sharing.
+- ****: Adds a unique ID to each request header.
+- ****: Compresses responses using Gzip.
+- ****: Adds various security headers for protection.
+- ****: Protects routes with HTTP Basic Authentication.
+- ****: Limits request rate to prevent spam/abuse.
+- ****: Provides a server metrics dashboard similar to Fiber's monitor.
+- **`nanopony.BasicAuth()`**: Protects routes with HTTP Basic Authentication.
+- **`nanopony.RateLimiter()`**: Limits request rate to prevent spam/abuse.
+- **`nanopony.Monitor()`**: Provides a server metrics dashboard similar to Fiber.
+- **`nanopony.Favicon()`**: Serves a favicon.ico icon.
+- ****: Serves a favicon.ico icon.
+
+#### Middleware Usage Example:
+
+### Context (Ctx) Methods Explained
+ is the heart of every HTTP request in NanoPony. Here are its main methods:
+
+- ****: Sends a JSON response and automatically sets the  header.
+- ****: Sends a plain text response.
+- ****: Sets the HTTP status code (e.g., 200, 404, 500).
+- ****: Parses the JSON request body directly into a struct or map.
+- ****: Retrieves values from route parameters (e.g., ).
+- ****: Retrieves values from the query string (e.g., ).
+- ****: Crucial for middleware; calls the next handler in the chain.
+- ****: Stores data that can be accessed by subsequent middleware or handlers within a single request cycle.
+
+---
+
 ## 6. Logging System (Optimized)
 
 **File**: `logger.go`, `logger_internal.go`

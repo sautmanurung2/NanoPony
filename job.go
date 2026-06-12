@@ -16,6 +16,10 @@ type Job struct {
 	Meta map[string]any
 }
 
+// jobPool is a sync.Pool that reuses Job objects to reduce GC pressure.
+// Beginner Note: "GC pressure" happens when Go has to spend a lot of time
+// cleaning up old objects. Reusing objects (pooling) means less garbage
+// to clean up, which makes the whole system faster and uses less memory.
 var jobPool = sync.Pool{
 	New: func() any {
 		return &Job{

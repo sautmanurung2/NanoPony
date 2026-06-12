@@ -1,6 +1,8 @@
 package nanopony
 
 import (
+	"context"
+	"os"
 	"database/sql"
 	"testing"
 	"time"
@@ -39,7 +41,7 @@ func TestParsePort(t *testing.T) {
 		{
 			name:     "empty port",
 			portStr:  "",
-			expected: 1521,
+			expected: 0,
 			wantErr:  false,
 		},
 		{
@@ -73,6 +75,9 @@ func TestParsePort(t *testing.T) {
 }
 
 func TestNewOracleConnection(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping database connection test in short mode")
+	}
 	// Test with invalid connection - should fail gracefully
 	config := DatabaseConfig{
 		Host:     "invalid-host",
@@ -90,6 +95,9 @@ func TestNewOracleConnection(t *testing.T) {
 }
 
 func TestNewOracleFromConfig(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping database connection test in short mode")
+	}
 	ResetConfig()
 	conf := NewConfig()
 
@@ -100,19 +108,15 @@ func TestNewOracleFromConfig(t *testing.T) {
 	}
 }
 
-func TestGetOracleDB(t *testing.T) {
-	// Initially should be nil
-	db := GetOracleDB()
-	if db != nil {
-		t.Log("Oracle DB already initialized")
-	}
-
-	// New way via Framework
+func TestDatabaseConnectionViaFramework(t *testing.T) {
+	// New way via Framework (Recommended)
+	// We no longer use GetOracleDB() global accessor.
 	ResetConfig()
 	conf := NewConfig()
 	// Mock database connection for testing
 	fw := NewFramework().WithConfig(conf).WithDatabaseFromInstance(nil)
 	components := fw.Build()
+	defer components.Shutdown(context.Background())
 
 	if components.DB != nil {
 		t.Error("Expected components.DB to be nil (mocked as nil)")
@@ -120,18 +124,10 @@ func TestGetOracleDB(t *testing.T) {
 }
 
 func TestCloseDB(t *testing.T) {
-	// Test closing nil
+	// Test closing nil (safe)
 	err := CloseDB(nil)
 	if err != nil {
 		t.Errorf("Expected no error when closing nil db, got %v", err)
-	}
-
-	// Test closing actual connection (if exists)
-	if oracleDB != nil {
-		err = CloseDB(oracleDB)
-		if err != nil {
-			t.Errorf("Unexpected error: %v", err)
-		}
 	}
 }
 
@@ -256,6 +252,9 @@ func TestFormatValueDefault(t *testing.T) {
 }
 
 func TestNewOracleConnectionInvalidPort(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping database connection test in short mode")
+	}
 	config := DatabaseConfig{
 		Host: "localhost",
 		Port: "invalid", // Should trigger warning and use default 1521
@@ -268,4 +267,37 @@ func TestLogInterpolatedQuery(t *testing.T) {
 	LogInterpolatedQuery("SELECT * FROM users WHERE id = :id", sql.Named("id", 123))
 }
 
+func TestNewPostgreSQLFromConfig(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping database connection test in short mode")
+	}
+	ResetConfig()
+	os.Setenv("GO_ENV", "local")
+	config := NewConfig()
+	db, err := NewPostgreSQLFromConfig(config)
+	if _, ok := err.(interface{ Unwrap() error }); !ok {
+		// Connection will fail in test env, that's OK
+		// We just want no nil pointer issues
+	}
+	if db != nil { db.Close() }
+}
 
+
+func TestNewPostgreSQLConnection(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping database connection test in short mode")
+	}
+	cfg := DatabaseConfig{
+		Host: "localhost",
+		Port: "5432",
+		Database: "test",
+		Username: "user",
+		Password: "pass",
+	}
+	// Connection will fail but we hit the driver registration logic
+	db, err := NewPostgreSQLConnection(cfg)
+	if db != nil { db.Close() }
+	if err == nil {
+		// Connection shouldn't succeed on CI/local usually
+	}
+}

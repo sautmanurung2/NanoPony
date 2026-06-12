@@ -29,6 +29,7 @@ func BenchmarkFrameworkCreation(b *testing.B) {
 // BenchmarkFrameworkBuild tests memory allocation for framework build
 func BenchmarkFrameworkBuild(b *testing.B) {
 	b.ReportAllocs()
+	ctx := context.Background()
 
 	for i := 0; i < b.N; i++ {
 		nanopony.ResetConfig()
@@ -42,6 +43,7 @@ func BenchmarkFrameworkBuild(b *testing.B) {
 		if components == nil {
 			b.Fatal("Expected components to be built")
 		}
+		components.Shutdown(ctx)
 	}
 }
 
@@ -110,6 +112,7 @@ func BenchmarkFrameworkAddCleanup(b *testing.B) {
 // BenchmarkFrameworkCompleteSetup tests full framework setup
 func BenchmarkFrameworkCompleteSetup(b *testing.B) {
 	b.ReportAllocs()
+	ctx := context.Background()
 
 	for i := 0; i < b.N; i++ {
 		nanopony.ResetConfig()
@@ -123,6 +126,7 @@ func BenchmarkFrameworkCompleteSetup(b *testing.B) {
 		if components == nil {
 			b.Fatal("Expected components to be built")
 		}
+		components.Shutdown(ctx)
 	}
 }
 

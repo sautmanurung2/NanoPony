@@ -23,6 +23,7 @@ import (
 func BenchmarkFrameworks_Setup(b *testing.B) {
 	b.Run("NanoPony", func(b *testing.B) {
 		b.ReportAllocs()
+		ctx := context.Background()
 		for i := 0; i < b.N; i++ {
 			nanopony.ResetConfig()
 			config := nanopony.NewConfig()
@@ -33,6 +34,7 @@ func BenchmarkFrameworks_Setup(b *testing.B) {
 			if fw == nil {
 				b.Fatal("failed to build NanoPony")
 			}
+			fw.Shutdown(ctx)
 		}
 	})
 
@@ -204,7 +206,9 @@ func TestFrameworks_MemoryUsage(t *testing.T) {
 			WithConfig(config).
 			WithWorkerPool(10, 100, 2).
 			Build()
-		fw.Start(context.Background(), func(ctx context.Context, job *nanopony.Job) error { return nil })
+		ctx := context.Background()
+		fw.Start(ctx, func(ctx context.Context, job *nanopony.Job) error { return nil })
+		fw.Shutdown(ctx)
 	})
 
 	runMemoryTest("Fiber", func() {

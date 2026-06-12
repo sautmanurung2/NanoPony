@@ -42,13 +42,13 @@ func TestWorkerPoolNoMemoryLeak(t *testing.T) {
 			pool.Submit(ctx, job)
 		}
 
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 		pool.Stop()
 	}
 
 	// Force GC after test
 	runtime.GC()
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 
 	finalMem := getMemStats()
 	t.Logf("Final memory: %d KB", finalMem/1024)
@@ -96,13 +96,13 @@ func TestPollerNoMemoryLeak(t *testing.T) {
 
 		poller := NewPoller(config, pool, fetcher)
 		poller.Start()
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 		poller.Stop()
 	}
 
 	// Force GC after test
 	runtime.GC()
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 
 	finalMem := getMemStats()
 	t.Logf("Final memory: %d KB", finalMem/1024)
@@ -143,7 +143,7 @@ func TestFrameworkNoMemoryLeak(t *testing.T) {
 			return nil
 		})
 
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 
 		if err := components.Shutdown(ctx); err != nil {
 			t.Errorf("Shutdown error: %v", err)
@@ -152,7 +152,7 @@ func TestFrameworkNoMemoryLeak(t *testing.T) {
 
 	// Force GC after test
 	runtime.GC()
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 
 	finalMem := getMemStats()
 	t.Logf("Final memory: %d KB", finalMem/1024)

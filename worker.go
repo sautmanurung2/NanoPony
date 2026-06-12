@@ -1,5 +1,14 @@
 // worker.go — Concurrent job processing using a sharded worker pool.
 //
+// 💡 WHY SHARDING?
+// In Go, a channel is protected by a "mutex" (a lock). If you have 100 workers
+// all trying to read from the SAME channel, they will spend a lot of time
+// waiting for the lock. This is called "Lock Contention".
+//
+// By using a ShardedWorkerPool, we create N independent channels (shards).
+// Workers only listen to their own shard, which reduces waiting time and
+// allows the system to scale to millions of jobs per second.
+//
 // Architecture (fan-out pattern with sharding):
 //
 //	┌─── shard 0 (pool 0) ──→ workerChan ──→ worker...
@@ -22,12 +31,17 @@ import (
 )
 
 // ShardedWorkerPool splits jobs across multiple independent pools to reduce contention.
+// Beginner Note: "Sharding" means breaking a big group into smaller independent ones.
+// This prevents workers from "fighting" (lock contention) over the same queue,
+// which makes the system much faster under heavy load.
 type ShardedWorkerPool struct {
 	shards          []*workerPoolShard
 	numShards       uint64
 	nextShard       uint64
 	workersPerShard int
 	totalWorkers    int
+	logger          *LogManager
+	persistentQueue PersistentQueue
 }
 
 type workerPoolShard struct {
@@ -41,10 +55,6 @@ type workerPoolShard struct {
 }
 
 // NewWorkerPool creates a new ShardedWorkerPool.
-//
-// numWorkers = total worker count across all shards
-// queueSize  = total queue size across all shards
-// numShards  = number of shards
 func NewWorkerPool(
 	numWorkers int,
 	queueSize int,
@@ -98,6 +108,18 @@ func NewWorkerPool(
 	}
 }
 
+// WithLogger sets the logger for the worker pool.
+func (swp *ShardedWorkerPool) WithLogger(lm *LogManager) *ShardedWorkerPool {
+	swp.logger = lm
+	return swp
+}
+
+// WithPersistentQueue sets the persistent queue for the worker pool.
+func (swp *ShardedWorkerPool) WithPersistentQueue(pq PersistentQueue) *ShardedWorkerPool {
+	swp.persistentQueue = pq
+	return swp
+}
+
 // Start activates all shards.
 func (swp *ShardedWorkerPool) Start(
 	ctx context.Context,
@@ -146,6 +168,10 @@ func (swp *ShardedWorkerPool) worker(
 				)
 			}
 
+			if swp.persistentQueue != nil {
+				_ = swp.persistentQueue.Dequeue(context.Background(), job.ID)
+			}
+
 			job.Release()
 
 		case <-shard.ctx.Done():
@@ -181,11 +207,13 @@ func (swp *ShardedWorkerPool) reportError(
 	select {
 	case shard.errChan <- wrappedErr:
 	default:
-		LogFramework(
-			"WARNING",
-			"ShardedWorkerPool",
-			"Error channel full, discarded",
-		)
+		if swp.logger != nil {
+			swp.logger.LogFramework(
+				"WARNING",
+				"ShardedWorkerPool",
+				"Error channel full, discarded",
+			)
+		}
 	}
 }
 
@@ -207,6 +235,12 @@ func (swp *ShardedWorkerPool) Submit(
 	default:
 	}
 
+	if swp.persistentQueue != nil {
+		if err := swp.persistentQueue.Enqueue(ctx, job); err != nil {
+			return fmt.Errorf("failed to persist job: %w", err)
+		}
+	}
+
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -218,6 +252,9 @@ func (swp *ShardedWorkerPool) Submit(
 		return nil
 
 	default:
+		if swp.persistentQueue != nil {
+			_ = swp.persistentQueue.Dequeue(context.Background(), job.ID)
+		}
 		return ErrQueueFull
 	}
 }
@@ -235,6 +272,12 @@ func (swp *ShardedWorkerPool) SubmitBlocking(
 	default:
 	}
 
+	if swp.persistentQueue != nil {
+		if err := swp.persistentQueue.Enqueue(ctx, job); err != nil {
+			return fmt.Errorf("failed to persist job: %w", err)
+		}
+	}
+
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -247,6 +290,25 @@ func (swp *ShardedWorkerPool) SubmitBlocking(
 	}
 }
 
+
+// RestorePending loads pending jobs from the persistent queue and submits them.
+func (swp *ShardedWorkerPool) RestorePending(ctx context.Context) error {
+	if swp.persistentQueue == nil {
+		return nil
+	}
+	jobs, err := swp.persistentQueue.FetchPending(ctx)
+	if err != nil {
+		return fmt.Errorf("fetch pending jobs: %w", err)
+	}
+	for _, job := range jobs {
+		// SubmitBlocking might re-enqueue to sqlite due to how it's written above, 
+		// but SQLite uses INSERT OR REPLACE, so it's idempotent.
+		if err := swp.SubmitBlocking(ctx, job); err != nil {
+			return fmt.Errorf("submit pending job %s: %w", job.ID, err)
+		}
+	}
+	return nil
+}
 
 func (swp *ShardedWorkerPool) Stop() {
 	for _, shard := range swp.shards {

@@ -2,9 +2,11 @@ name: Tests
 
 on:
   push:
-    branches: [main, develop]
+    branches:
+      - '**'
   pull_request:
-    branches: [main]
+    branches:
+      - '**'
 
 jobs:
   test:
@@ -33,13 +35,13 @@ jobs:
           go test -coverprofile=coverage.out ./...
           COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
           echo "Total Coverage: $COVERAGE%"
-          if (( $(echo "$COVERAGE < 40.0" | bc -l) )); then
-            echo "Coverage too low (< 40%)"
+          if (( $(echo "$COVERAGE < 50.0" | bc -l) )); then
+            echo "Coverage too low (< 50%)"
             exit 1
-          elif (( $(echo "$COVERAGE > 60.0" | bc -l) )); then
-            echo "Coverage is good (> 60%)"
+          elif (( $(echo "$COVERAGE > 80.0" | bc -l) )); then
+            echo "Coverage is good (> 80%)"
           else
-            echo "Coverage is acceptable (40%-60%)"
+            echo "Coverage is acceptable (60%-80%)"
           fi
 
       - name: Run tests with race detector
