@@ -269,7 +269,6 @@ func processPayload(payload any) map[string]any {
 	}
 }
 
-
 const maxCopyDepth = 10
 
 // deepCopyMap performs a shallow copy of a map, and recursively copies nested maps.

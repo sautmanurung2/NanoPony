@@ -43,9 +43,9 @@ func TestKafkaProducerProtobuf(t *testing.T) {
 func TestKafkaProducerMarshaling(t *testing.T) {
 	// Test with a writer that will fail if it tries to send
 	writer := &kafka.Writer{
-		Addr:   kafka.TCP("localhost:1"), // Invalid addr
-		Topic:  "test-topic",
-		Async:  false,
+		Addr:  kafka.TCP("localhost:1"), // Invalid addr
+		Topic: "test-topic",
+		Async: false,
 	}
 	producer := NewKafkaProducer(writer)
 

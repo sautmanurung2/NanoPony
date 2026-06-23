@@ -247,7 +247,6 @@ func (swp *ShardedWorkerPool) SubmitBlocking(
 	}
 }
 
-
 func (swp *ShardedWorkerPool) Stop() {
 	for _, shard := range swp.shards {
 		shard.mu.Lock()

@@ -75,7 +75,6 @@ func TestWorkerPoolErrorReporting(t *testing.T) {
 		return context.DeadlineExceeded // Return an error to trigger reportError
 	})
 
-
 	// Catch error from shard's errChan
 	go func() {
 		err := <-pool.shards[0].errChan
@@ -146,7 +145,6 @@ func TestWorkerPoolSubmitToStoppedPool(t *testing.T) {
 	job2.Release()
 }
 
-
 func TestWorkerPoolNumShards(t *testing.T) {
 	pool := NewWorkerPool(4, 10, 2)
 	if pool.NumShards() != 2 {
@@ -177,7 +175,6 @@ func TestWorkerPoolDrainOnCancel(t *testing.T) {
 
 	// Drain logic should ensure jobs are released
 }
-
 
 func TestWorkerPoolSubmitQueueFull(t *testing.T) {
 	// Small queue per shard. With 1 worker and 1 shard, queue size 1.

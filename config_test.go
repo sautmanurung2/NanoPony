@@ -233,4 +233,3 @@ func TestConfigEnsure(t *testing.T) {
 		t.Error("EnsureElasticSearch should not return nil")
 	}
 }
-

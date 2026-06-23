@@ -15,7 +15,7 @@ func TestNewKafkaWriterErrors(t *testing.T) {
 	config := BuildConfig(func(c *Config) {
 		c.App.KafkaModels = "invalid"
 	})
-	
+
 	// Should return default writer instead of panicking or failing
 	w := NewKafkaWriterFromConfigRoundRobin(config)
 	if w == nil {
@@ -32,7 +32,7 @@ func TestFrameworkSafeBuildersSuccess(t *testing.T) {
 	})
 
 	fw := NewFramework().WithConfig(config)
-	
+
 	// WithKafkaWriterSafeRoundRobin should succeed (just creates struct)
 	_, err := fw.WithKafkaWriterSafeRoundRobin()
 	if err != nil {
@@ -62,10 +62,10 @@ func TestPollerStopIdempotent(t *testing.T) {
 func TestWorkerPoolReportErrorFull(t *testing.T) {
 	pool := NewWorkerPool(1, 1, 1)
 	shard := pool.shards[0]
-	
+
 	// Fill errChan
 	shard.errChan <- errors.New("first")
-	
+
 	// Should not block
 	pool.reportError(shard, "job1", 0, errors.New("second"))
 }
@@ -76,4 +76,3 @@ func TestWorkerPoolNumShardsCoverage(t *testing.T) {
 		t.Errorf("Expected 1 shard")
 	}
 }
-

@@ -267,5 +267,3 @@ func TestNewOracleConnectionInvalidPort(t *testing.T) {
 func TestLogInterpolatedQuery(t *testing.T) {
 	LogInterpolatedQuery("SELECT * FROM users WHERE id = :id", sql.Named("id", 123))
 }
-
-

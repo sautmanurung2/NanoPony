@@ -31,7 +31,7 @@ func TestIntegrationPollerWorkerPool(t *testing.T) {
 		if count > 5 {
 			return nil, nil // Stop fetching
 		}
-		
+
 		// Return 10 items per fetch
 		items := make([]interface{}, 10)
 		for i := 0; i < 10; i++ {

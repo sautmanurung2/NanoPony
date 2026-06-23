@@ -52,7 +52,7 @@ func TestStressWorkerPool(t *testing.T) {
 		job := AcquireJob()
 		job.ID = "stress-job"
 		job.Data = i
-		
+
 		// Use SubmitBlocking to handle backpressure properly
 		err := pool.SubmitBlocking(ctx, job)
 		if err != nil {

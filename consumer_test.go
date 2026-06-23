@@ -11,10 +11,10 @@ import (
 
 func TestKafkaConsumerMethods(t *testing.T) {
 	config := KafkaConsumerConfig{
-		Brokers:     []string{"localhost:1"}, // Invalid addr
-		Topic:       "test-topic",
-		GroupID:     "test-group",
-		RetryDelay:  1 * time.Millisecond,
+		Brokers:    []string{"localhost:1"}, // Invalid addr
+		Topic:      "test-topic",
+		GroupID:    "test-group",
+		RetryDelay: 1 * time.Millisecond,
 	}
 
 	consumer := NewKafkaConsumer(config)
@@ -48,7 +48,7 @@ func TestKafkaConsumerProto(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 
-	err := consumer.ConsumeWithContextProto(ctx, 
+	err := consumer.ConsumeWithContextProto(ctx,
 		func() proto.Message { return &emptypb.Empty{} },
 		func(msg proto.Message) error { return nil },
 	)
@@ -56,7 +56,6 @@ func TestKafkaConsumerProto(t *testing.T) {
 		t.Error("Expected error")
 	}
 }
-
 
 func TestMessageHandler(t *testing.T) {
 	handler := MessageHandler(func(message []byte) error {

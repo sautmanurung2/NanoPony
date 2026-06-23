@@ -294,7 +294,6 @@ func TestDeepCopyMapEdgeCases(t *testing.T) {
 	}
 }
 
-
 func TestProcessPayloadComplex(t *testing.T) {
 	// String payload
 	p1 := `{"a": 1}`
@@ -304,7 +303,6 @@ func TestProcessPayloadComplex(t *testing.T) {
 	} else if res1["a"] != float64(1) {
 		t.Errorf("Expected 1 (float64), got %v", res1["a"])
 	}
-
 
 	// Invalid byte slice
 	p2 := []byte(`{invalid}`)
@@ -322,8 +320,6 @@ func TestProcessPayloadComplex(t *testing.T) {
 		t.Errorf("Expected 1, got %v", res3["A"])
 	}
 }
-
-
 
 func TestInitLogWorkerIdempotent(t *testing.T) {
 	// Should be safe to call multiple times
@@ -343,7 +339,6 @@ func TestWriteToElasticsearchNoClient(t *testing.T) {
 	logger := newLogger("test", "user", "ref", "", "S", "P", "E", "", "")
 	logger.SendToElasticSearch("INFO", nil, ResponseLog{})
 }
-
 
 func TestSendToSinkFullChannel(t *testing.T) {
 	// This is hard to test deterministically without mocking channels,
@@ -371,4 +366,3 @@ func TestLoggerConsoleCreatesFile(t *testing.T) {
 		t.Errorf("Expected log file to be created for console mode, got error or no files: %v", err)
 	}
 }
-

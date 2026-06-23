@@ -272,4 +272,3 @@ func TestFrameworkPanicWrappers(t *testing.T) {
 	assertPanic(func() { f.WithProducer() })
 	assertPanic(func() { f.WithPoller(DefaultPollerConfig(), nil) })
 }
-
