@@ -351,3 +351,24 @@ func TestSendToSinkFullChannel(t *testing.T) {
 	// Since they are private, we rely on coverage during stress or manual inspection.
 }
 
+func TestLoggerConsoleCreatesFile(t *testing.T) {
+	// Ensure log directory exists
+	_ = os.MkdirAll("./logs", 0755)
+
+	logger := newLogger("TestConsoleFileService", "user", "ref", "", "System", "Process", "Entity", "", "")
+	response := ResponseLog{
+		Status:  "success",
+		Message: "Test console file message",
+	}
+
+	logger.sendLog("INFO", "console", nil, response)
+
+	// Wait for background worker to process the log
+	time.Sleep(100 * time.Millisecond)
+
+	files, err := os.ReadDir("./logs")
+	if err != nil || len(files) == 0 {
+		t.Errorf("Expected log file to be created for console mode, got error or no files: %v", err)
+	}
+}
+

@@ -91,6 +91,9 @@ func initLogWorker() {
 		go func() {
 			for req := range consoleChan {
 				req.entry.writeToConsole()
+				if req.mode == "console" {
+					req.entry.writeToLogFile()
+				}
 			}
 		}()
 
