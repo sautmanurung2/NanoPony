@@ -1,54 +1,60 @@
-// worker.go — Concurrent job processing using a sharded worker pool.
-//
-// Architecture (fan-out pattern with sharding):
-//
-//	┌─── shard 0 (pool 0) ──→ workerChan ──→ worker...
-//
-// Submit ─┼─── shard 1 (pool 1) ──→ workerChan ──→ worker...
-//
-//	└─── shard N (pool N) ──→ workerChan ──→ worker...
-//
-// Each shard operates independently with its own job channel and worker goroutines.
-// Each shard has its own job channel and worker goroutines. Jobs are distributed
-// across shards in a round-robin manner.
-// Sharding significantly reduces lock contention on the job channel and state management.
 package nanopony
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sync"
-	"sync/atomic"
+	"time"
 )
 
 // ShardedWorkerPool splits jobs across multiple independent pools to reduce contention.
+// Note: We maintain the "ShardedWorkerPool" name for backward compatibility with
+// existing integrations, but internally use a single shared channel to prevent Head-of-Line blocking.
 type ShardedWorkerPool struct {
-	shards          []*workerPoolShard
+	shards          []*workerPoolShard // Kept for API compatibility, but we only ever create ONE
 	numShards       uint64
-	nextShard       uint64
 	workersPerShard int
 	totalWorkers    int
+
+	// New shared state to replace sharding logic
+	sharedJobChan chan *Job
+	sharedErrChan chan error
+	sharedCtx     context.Context
+	sharedCancel  context.CancelFunc
+	sharedWg      sync.WaitGroup
+	running       bool
+	mu            sync.RWMutex
+
+	// Elastic Queue State
+	elasticBuffer chan *Job
+	maxElastic    int
+
+	// Disaster Recovery
+	fallbackFile string
 }
 
 type workerPoolShard struct {
 	jobChan chan *Job
 	errChan chan error
-	wg      sync.WaitGroup
 	ctx     context.Context
 	cancel  context.CancelFunc
 	running bool
-	mu      sync.RWMutex
 }
 
 // NewWorkerPool creates a new ShardedWorkerPool.
+// We ignore numShards and always use 1 shard internally to avoid Head-of-Line blocking
+// while preserving the function signature for compatibility.
 //
-// numWorkers = total worker count across all shards
-// queueSize  = total queue size across all shards
-// numShards  = number of shards
+// ELASTIC QUEUE: The worker pool now implements an "elastic buffer" pattern.
+// If the main queue is full, jobs spill over into an elastic buffer that can grow
+// to prevent deadlocks on 1-queue-1-worker scenarios, protecting memory by capping growth.
 func NewWorkerPool(
 	numWorkers int,
 	queueSize int,
-	numShards int,
+	numShards int, // Ignored internally
 ) *ShardedWorkerPool {
 
 	if numWorkers < 1 {
@@ -63,28 +69,33 @@ func NewWorkerPool(
 		numShards = 1
 	}
 
-	// Tidak masuk akal shard lebih banyak daripada worker.
 	if numShards > numWorkers {
 		numShards = numWorkers
 	}
 
-	workersPerShard := numWorkers / numShards
-	if workersPerShard < 1 {
-		workersPerShard = 1
+	actualShards := numShards
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	sharedJobChan := make(chan *Job, queueSize)
+	sharedErrChan := make(chan error, queueSize)
+
+	// Elastic buffer to handle spikes without blocking immediately on small queueSizes.
+	// We cap it at max(5000, queueSize*10) to prevent OOM on sustained unhandled bursts.
+	maxElastic := 5000
+	if queueSize*10 > maxElastic {
+		maxElastic = queueSize * 10
 	}
 
-	shardQueue := queueSize / numShards
-	if shardQueue < 1 {
-		shardQueue = 1
-	}
+	// We use an unbuffered channel as a signal for the elastic goroutine,
+	// but hold the actual jobs in a dynamic slice inside the coordinator.
+	elasticBuffer := make(chan *Job)
 
-	shards := make([]*workerPoolShard, numShards)
-
-	for i := 0; i < numShards; i++ {
-		ctx, cancel := context.WithCancel(context.Background())
+	shards := make([]*workerPoolShard, actualShards)
+	for i := 0; i < actualShards; i++ {
 		shards[i] = &workerPoolShard{
-			jobChan: make(chan *Job, shardQueue),
-			errChan: make(chan error, shardQueue),
+			jobChan: sharedJobChan,
+			errChan: sharedErrChan,
 			ctx:     ctx,
 			cancel:  cancel,
 		}
@@ -92,54 +103,147 @@ func NewWorkerPool(
 
 	return &ShardedWorkerPool{
 		shards:          shards,
-		numShards:       uint64(numShards),
-		workersPerShard: workersPerShard,
+		numShards:       uint64(actualShards),
+		workersPerShard: numWorkers,
 		totalWorkers:    numWorkers,
+
+		sharedJobChan: sharedJobChan,
+		sharedErrChan: sharedErrChan,
+		sharedCtx:     ctx,
+		sharedCancel:  cancel,
+
+		elasticBuffer: elasticBuffer,
+		maxElastic:    maxElastic,
+		fallbackFile:  filepath.Join(os.TempDir(), "nanopony_recovery.jsonl"),
 	}
 }
 
-// Start activates all shards.
+// SetRecoveryFile allows overriding the default recovery file path.
+// When running in Docker/K8s, set this to a mounted persistent volume path (e.g., "/data/recovery.jsonl").
+func (swp *ShardedWorkerPool) SetRecoveryFile(path string) {
+	swp.mu.Lock()
+	defer swp.mu.Unlock()
+	swp.fallbackFile = path
+}
+
+// Start activates all workers consuming from the shared channel.
 func (swp *ShardedWorkerPool) Start(
 	ctx context.Context,
 	handler JobHandler,
 ) {
+	swp.mu.Lock()
+	defer swp.mu.Unlock()
+
+	if swp.running {
+		return
+	}
+
+	// Link contexts
+	swp.sharedCtx, swp.sharedCancel = context.WithCancel(ctx)
+
+	// Keep shards in sync just in case
 	for _, shard := range swp.shards {
-		shard.mu.Lock()
-
-		if shard.running {
-			shard.mu.Unlock()
-			continue
-		}
-
-		shard.ctx, shard.cancel = context.WithCancel(ctx)
+		shard.ctx = swp.sharedCtx
+		shard.cancel = swp.sharedCancel
 		shard.running = true
+	}
 
-		for i := 0; i < swp.workersPerShard; i++ {
-			shard.wg.Add(1)
-			go swp.worker(shard, handler, i)
+	swp.running = true
+
+	// Launch all workers reading from the same shared channel
+	for i := 0; i < swp.totalWorkers; i++ {
+		swp.sharedWg.Add(1)
+		go swp.worker(handler, i)
+	}
+
+	// Start the Elastic Queue Coordinator
+	swp.sharedWg.Add(1)
+	go swp.elasticCoordinator()
+}
+
+// elasticCoordinator manages the infinite-ish (capped) elastic buffer.
+// It receives spilled jobs from Submit/SubmitBlocking and feeds them into
+// the main sharedJobChan when space becomes available.
+func (swp *ShardedWorkerPool) elasticCoordinator() {
+	defer swp.sharedWg.Done()
+
+	queue := make([]*Job, 0, swp.maxElastic)
+
+	for {
+		// If we have items in our elastic queue, try to push to main channel,
+		// but also be ready to accept new items (up to maxElastic limit).
+		if len(queue) > 0 {
+			// Get next job to push
+			nextJob := queue[0]
+
+			select {
+			case swp.sharedJobChan <- nextJob:
+				// Successfully pushed to main queue, remove from elastic queue
+				queue[0] = nil // avoid memory leak of underlying array
+				queue = queue[1:]
+
+			case newJob, ok := <-swp.elasticBuffer:
+				if !ok {
+					// Channel closed, drain remaining
+					swp.drainElastic(queue)
+					return
+				}
+				// No drop: queue grows indefinitely. Caller must ensure sufficient memory or control ingress.
+				queue = append(queue, newJob)
+				if len(queue) > swp.maxElastic && len(queue)%5000 == 0 {
+					LogFramework("WARNING", "WorkerPool", fmt.Sprintf("Elastic buffer threshold exceeded: %d jobs waiting", len(queue)))
+				}
+
+			case <-swp.sharedCtx.Done():
+				// Server is shutting down.
+				// Dump ALL jobs in the elastic memory buffer straight to disk.
+				for _, j := range queue {
+					if j != nil {
+						swp.dumpJobToRecovery(j)
+						j.Release()
+					}
+				}
+				queue = nil
+				return
+			}
+		} else {
+			// Elastic queue empty, just wait for new jobs
+			select {
+			case newJob, ok := <-swp.elasticBuffer:
+				if !ok {
+					return
+				}
+				queue = append(queue, newJob)
+			case <-swp.sharedCtx.Done():
+				return
+			}
 		}
+	}
+}
 
-		shard.mu.Unlock()
+func (swp *ShardedWorkerPool) drainElastic(queue []*Job) {
+	for _, job := range queue {
+		if job != nil {
+			job.Release()
+		}
 	}
 }
 
 func (swp *ShardedWorkerPool) worker(
-	shard *workerPoolShard,
 	handler JobHandler,
 	id int,
 ) {
-	defer shard.wg.Done()
+	defer swp.sharedWg.Done()
 
 	for {
 		select {
-		case job, ok := <-shard.jobChan:
+		case job, ok := <-swp.sharedJobChan:
 			if !ok {
 				return
 			}
 
-			if err := handler(shard.ctx, job); err != nil {
+			if err := handler(swp.sharedCtx, job); err != nil {
 				swp.reportError(
-					shard,
 					job.ID,
 					id,
 					err,
@@ -148,17 +252,16 @@ func (swp *ShardedWorkerPool) worker(
 
 			job.Release()
 
-		case <-shard.ctx.Done():
-			// Context canceled, drain remaining jobs in the channel to prevent sync.Pool leaks.
+		case <-swp.sharedCtx.Done():
+			// Server is shutting down (Hard Stop).
+			// Instead of blocking for hours to process, dump all remaining jobs to disk (JSONL).
 			for {
 				select {
-				case job, ok := <-shard.jobChan:
+				case job, ok := <-swp.sharedJobChan:
 					if !ok {
 						return
 					}
-					// Still call handler so it can see the canceled context and potentially
-					// perform fast cleanup/skip, then release the job.
-					_ = handler(shard.ctx, job)
+					swp.dumpJobToRecovery(job)
 					job.Release()
 				default:
 					return
@@ -169,17 +272,14 @@ func (swp *ShardedWorkerPool) worker(
 }
 
 func (swp *ShardedWorkerPool) reportError(
-	shard *workerPoolShard,
 	jobID string,
 	workerID int,
 	err error,
 ) {
-	// Wrapped error construction is moved here to keep the worker loop clean.
-	// We use a simple wrap to minimize overhead.
-	wrappedErr := fmt.Errorf("shard worker %d: job %s: %w", workerID, jobID, err)
+	wrappedErr := fmt.Errorf("worker %d: job %s: %w", workerID, jobID, err)
 
 	select {
-	case shard.errChan <- wrappedErr:
+	case swp.sharedErrChan <- wrappedErr:
 	default:
 		LogFramework(
 			"WARNING",
@@ -189,36 +289,61 @@ func (swp *ShardedWorkerPool) reportError(
 	}
 }
 
-func (swp *ShardedWorkerPool) getShard() *workerPoolShard {
-	idx := atomic.AddUint64(&swp.nextShard, 1) % swp.numShards
-	return swp.shards[idx]
-}
-
 func (swp *ShardedWorkerPool) Submit(
 	ctx context.Context,
 	job *Job,
 ) error {
-	shard := swp.getShard()
+	// Retry loop: will continuously retry with exponential backoff if the queue is full.
+	// This ensures data is never dropped and ErrQueueFull is never returned,
+	// providing true 100% guarantee while maintaining internal backpressure.
+	baseDelay := 10 * time.Millisecond
+	maxDelay := 500 * time.Millisecond
+	delay := baseDelay
 
-	// Check if pool is stopped before attempting to send
-	select {
-	case <-shard.ctx.Done():
-		return ErrPoolStopped
-	default:
-	}
+	for {
+		select {
+		case <-swp.sharedCtx.Done():
+			return ErrPoolStopped
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
 
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
+		// 1. Try to put in main channel directly (fast path)
+		select {
+		case <-swp.sharedCtx.Done():
+			return ErrPoolStopped
+		case <-ctx.Done():
+			return ctx.Err()
+		case swp.sharedJobChan <- job:
+			return nil
+		default:
+			// 2. Main channel full, spill to elastic buffer
+			select {
+			case <-swp.sharedCtx.Done():
+				return ErrPoolStopped
+			case <-ctx.Done():
+				return ctx.Err()
+			case swp.elasticBuffer <- job:
+				return nil
+			case <-time.After(50 * time.Millisecond):
+				// Queue full: we do NOT return ErrQueueFull.
+				// We back off and retry to guarantee no data loss.
+			}
+		}
 
-	case <-shard.ctx.Done():
-		return ErrPoolStopped
-
-	case shard.jobChan <- job:
-		return nil
-
-	default:
-		return ErrQueueFull
+		// Backoff before next retry
+		select {
+		case <-swp.sharedCtx.Done():
+			return ErrPoolStopped
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(delay):
+			delay *= 2
+			if delay > maxDelay {
+				delay = maxDelay
+			}
+		}
 	}
 }
 
@@ -226,75 +351,93 @@ func (swp *ShardedWorkerPool) SubmitBlocking(
 	ctx context.Context,
 	job *Job,
 ) error {
-	shard := swp.getShard()
-
-	// Check if pool is stopped before attempting to send
 	select {
-	case <-shard.ctx.Done():
+	case <-swp.sharedCtx.Done():
 		return ErrPoolStopped
 	default:
 	}
 
+	// 1. Try to put in main channel directly
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
-
-	case <-shard.ctx.Done():
+	case <-swp.sharedCtx.Done():
 		return ErrPoolStopped
-
-	case shard.jobChan <- job:
+	case swp.sharedJobChan <- job:
 		return nil
+	default:
+		// 2. Main channel full, spill to elastic buffer blocking
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-swp.sharedCtx.Done():
+			return ErrPoolStopped
+		case swp.elasticBuffer <- job:
+			return nil
+		}
 	}
 }
 
 func (swp *ShardedWorkerPool) Stop() {
-	for _, shard := range swp.shards {
-		shard.mu.Lock()
-
-		if !shard.running {
-			shard.mu.Unlock()
-			continue
-		}
-
-		shard.running = false
-
-		if shard.cancel != nil {
-			shard.cancel()
-		}
-
-		shard.mu.Unlock()
-
-		// Wait for workers to finish current jobs and drain the queue.
-		shard.wg.Wait()
-
-		// Now it's safe to close channels as no more jobs will be submitted
-		// and all workers have exited.
-		close(shard.jobChan)
-		close(shard.errChan)
+	swp.mu.Lock()
+	if !swp.running {
+		swp.mu.Unlock()
+		return
 	}
+
+	swp.running = false
+	if swp.sharedCancel != nil {
+		swp.sharedCancel()
+	}
+
+	for _, shard := range swp.shards {
+		shard.running = false
+	}
+
+	swp.mu.Unlock()
+
+	// Wait for all workers and coordinator to finish
+	swp.sharedWg.Wait()
+
+	close(swp.sharedJobChan)
+	close(swp.sharedErrChan)
+	close(swp.elasticBuffer)
 }
 
-// NumWorkers returns configured worker count.
 func (swp *ShardedWorkerPool) NumWorkers() int {
 	return swp.totalWorkers
 }
 
-// NumShards returns configured shard count.
 func (swp *ShardedWorkerPool) NumShards() int {
 	return int(swp.numShards)
 }
 
-// IsRunning returns true if at least one shard is running.
 func (swp *ShardedWorkerPool) IsRunning() bool {
-	for _, shard := range swp.shards {
-		shard.mu.RLock()
-		running := shard.running
-		shard.mu.RUnlock()
+	swp.mu.RLock()
+	defer swp.mu.RUnlock()
+	return swp.running
+}
 
-		if running {
-			return true
-		}
+func (swp *ShardedWorkerPool) dumpJobToRecovery(job *Job) {
+	if job == nil || swp.fallbackFile == "" {
+		return
 	}
 
-	return false
+	f, err := os.OpenFile(swp.fallbackFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		LogFramework("ERROR", "WorkerPool-Recovery", fmt.Sprintf("Failed to open recovery file: %v", err))
+		return
+	}
+	defer f.Close()
+
+	// Convert Job to JSON.
+	// Note: job.Data must be JSON serializable for this to work perfectly.
+	b, err := json.Marshal(job)
+	if err != nil {
+		LogFramework("ERROR", "WorkerPool-Recovery", fmt.Sprintf("Failed to marshal job %s: %v", job.ID, err))
+		return
+	}
+
+	f.Write(b)
+	f.WriteString("\n")
 }

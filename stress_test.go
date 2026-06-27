@@ -33,7 +33,7 @@ func TestStressWorkerPool(t *testing.T) {
 
 	// Start a goroutine to read errors to prevent channel blocking
 	go func() {
-		for i := 0; i < numShards; i++ {
+		for i := 0; i < pool.NumShards(); i++ {
 			shard := pool.shards[i]
 			go func(errChan <-chan error) {
 				for err := range errChan {

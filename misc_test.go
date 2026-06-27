@@ -67,7 +67,7 @@ func TestWorkerPoolReportErrorFull(t *testing.T) {
 	shard.errChan <- errors.New("first")
 
 	// Should not block
-	pool.reportError(shard, "job1", 0, errors.New("second"))
+	pool.reportError("job1", 0, errors.New("second"))
 }
 
 func TestWorkerPoolNumShardsCoverage(t *testing.T) {

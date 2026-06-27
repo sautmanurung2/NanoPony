@@ -36,9 +36,8 @@ var (
 
 // logRequest represents an internal request to process a log entry.
 type logRequest struct {
-	entry   *LoggerEntry
-	payload any // Payload for Elasticsearch processing
-	mode    string
+	entry *LoggerEntry
+	mode  string
 }
 
 // clone creates a safe copy of the LoggerEntry metadata without copying the mutex.

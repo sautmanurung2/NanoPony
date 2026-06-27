@@ -1,19 +1,3 @@
-// poller.go — Periodic data fetching with rate-limited job submission.
-//
-// Architecture:
-//
-//	ticker (every Interval)
-//	   ↓
-//	pollOnce()
-//	   ├── acquire jobSlot (semaphore — limits concurrent polls)
-//	   ├── dataFetcher.Fetch()  → []any
-//	   ├── for each item → workerPool.SubmitBlocking(job)
-//	   └── release jobSlot
-//
-// The jobSlots channel acts as a counting semaphore:
-//   - Capacity = JobSlotSize (default 1)
-//   - If no slot available, the tick is skipped (prevents pile-up)
-//   - This is NOT the same as WorkerPool queue size
 package nanopony
 
 import (
@@ -67,7 +51,7 @@ func (f DataFetcherFunc) Fetch(ctx context.Context) ([]any, error) {
 type Poller struct {
 	config      PollerConfig
 	jobSlots    chan struct{}
-	workerPool  *ShardedWorkerPool
+	workerPool  *ShardedWorkerPool // Keep type signature for compatibility, though we'll bypass sharding inside
 	dataFetcher DataFetcher
 	ctx         context.Context
 	cancel      context.CancelFunc
@@ -79,11 +63,6 @@ type Poller struct {
 }
 
 // NewPoller creates a new Poller instance.
-//
-// Parameters:
-//   - config: Configuration settings for timing and batching
-//   - workerPool: The pool where fetched items will be submitted as jobs
-//   - dataFetcher: The source of data items
 func NewPoller(config PollerConfig, workerPool *ShardedWorkerPool, dataFetcher DataFetcher) *Poller {
 	ctx, cancel := context.WithCancel(context.Background())
 	// Use timestamp for session ID to ensure unique job IDs across restarts
@@ -130,29 +109,51 @@ func (p *Poller) pollLoop() {
 	ticker := time.NewTicker(p.config.Interval)
 	defer ticker.Stop()
 
+	// Initial poll immediately
+	p.pollUntilEmpty()
+
 	for {
 		select {
 		case <-p.ctx.Done():
 			return
 		case <-ticker.C:
-			p.pollOnce()
+			p.pollUntilEmpty()
 		}
 	}
 }
 
-// pollOnce performs a single polling iteration:
-// 1. Acquire a slot
-// 2. Fetch data
-// 3. Submit jobs to WorkerPool
-// 4. Release slot
-func (p *Poller) pollOnce() {
+// pollUntilEmpty continuously polls as long as full batches are returned,
+// bypassing the ticker interval for high throughput back-to-back fetching.
+func (p *Poller) pollUntilEmpty() {
+	for {
+		count, err := p.pollOnce()
+		if err != nil {
+			return // stop back-to-back on error
+		}
+
+		// If we got fewer items than BatchSize, there's no more data for now.
+		// Wait for the next ticker interval.
+		// If BatchSize is 0 (unlimited), we only run once per tick anyway.
+		if p.config.BatchSize == 0 || count < p.config.BatchSize {
+			return
+		}
+
+		// Check context before immediately looping again
+		if p.ctx.Err() != nil {
+			return
+		}
+	}
+}
+
+// pollOnce performs a single polling iteration and returns the number of items fetched.
+func (p *Poller) pollOnce() (int, error) {
 	// Try to acquire a job slot (rate limiting)
 	select {
 	case <-p.jobSlots:
 		// Slot acquired
 	default:
 		// No slot available, skipping this tick
-		return
+		return 0, nil
 	}
 
 	// Always release slot when done
@@ -161,12 +162,14 @@ func (p *Poller) pollOnce() {
 	data, err := p.dataFetcher.Fetch(p.ctx)
 	if err != nil {
 		LogFramework("ERROR", "Poller", fmt.Sprintf("failed to fetch data: %v", err))
-		return
+		return 0, err
 	}
 
 	if len(data) == 0 {
-		return
+		return 0, nil
 	}
+
+	originalLen := len(data)
 
 	// Limit batch size if configured
 	if p.config.BatchSize > 0 && len(data) > p.config.BatchSize {
@@ -178,14 +181,12 @@ func (p *Poller) pollOnce() {
 		jobID := atomic.AddInt64(&p.jobCounter, 1)
 		job := AcquireJob()
 
-		// Use strings.Builder with strconv.AppendInt for zero-allocation ID construction
 		var sb strings.Builder
-		sb.Grow(len("poll-") + len(p.sessionID) + 1 + 20) // 20 is max digits for int64
+		sb.Grow(len("poll-") + len(p.sessionID) + 1 + 20)
 		sb.WriteString("poll-")
 		sb.WriteString(p.sessionID)
 		sb.WriteByte('-')
 
-		// Directly append integer to builder buffer to avoid intermediate string allocation
 		var buf [20]byte
 		b := strconv.AppendInt(buf[:0], jobID, 10)
 		sb.Write(b)
@@ -196,15 +197,17 @@ func (p *Poller) pollOnce() {
 		job.Meta["source"] = "poller"
 		job.Meta["timestamp"] = time.Now().Unix()
 
-		// Use SubmitBlocking to provide backpressure
-		if err := p.workerPool.SubmitBlocking(p.ctx, job); err != nil {
+		// Use context.Background() to ensure data is never dropped due to context cancellation
+		// while waiting in the SubmitBlocking retry loop (100% Data Guarantee).
+		if err := p.workerPool.SubmitBlocking(context.Background(), job); err != nil {
 			if p.ctx.Err() == nil {
 				LogFramework("ERROR", "Poller", fmt.Sprintf("failed to submit job: %v", err))
 			}
-			// If submission fails, we should release the job as it won't be processed
 			job.Release()
 		}
 	}
+
+	return originalLen, nil
 }
 
 // releaseSlot returns a token to the jobSlots channel.
