@@ -38,8 +38,9 @@
 - ✅ **Confluent Cloud**: Built-in SASL/TLS authentication.
 
 ### 🚀 High-Performance Worker Pool
-- ✅ **Sharded Architecture**: Minimizes lock contention under high load.
+- ✅ **Shared Queue with Elastic Buffer**: Eliminates Head-of-Line blocking and deadlock on queue spikes.
 - ✅ **Ultra-Efficient**: Uses `sync.Pool` to recycle `Job` objects, reducing GC pressure.
+- ✅ **100% Reliable Submit**: Eliminates `ErrQueueFull` using Elastic Buffer mechanism and exponential backoff.
 - ✅ **Backpressure**: Supports `SubmitBlocking` to prevent data loss.
 - ✅ **Thread-safe**: Robust state management using `sync.RWMutex`.
 

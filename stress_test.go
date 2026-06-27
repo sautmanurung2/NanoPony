@@ -63,6 +63,9 @@ func TestStressWorkerPool(t *testing.T) {
 	}
 
 	// Wait for queue to drain
+	for atomic.LoadInt32(&processedCount) < int32(totalJobs) {
+		time.Sleep(10 * time.Millisecond)
+	}
 	pool.Stop()
 	duration := time.Since(startTime)
 

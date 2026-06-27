@@ -158,6 +158,14 @@
 
 **Design Pattern:** Worker Pool (bounded goroutine pool with channel communication). Thread-safe via `sync.RWMutex`.
 
+**Main Functions:**
+- `NewWorkerPool(numWorkers, queueSize, numShards)` - Creates buffered channel, cancellable context
+- `Start(ctx, handler)` - Spawns N worker goroutines; mutex-protected against double-start
+- `worker(ctx, id)` - Select loop: context cancellation or job consumption; errors sent to `errChan` non-blocking
+- `Submit(ctx, job)` - Submit with exponential backoff and Elastic Buffer protection. Never returns `ErrQueueFull` for 100% reliability.
+- `Stop()` - Mutex protected; cancels context, closes `jobChan`, waits via `wg.Wait()`, closes `errChan`
+- `Errors()` - Returns read-only error channel for external monitoring
+
 ---
 
 ### 6. Poller
@@ -165,6 +173,14 @@
 **File:** `poller.go`
 
 **Purpose:** Periodic data fetching with rate-limited job submission.
+
+**Main Functions:**
+- `NewPoller(config, workerPool, dataFetcher)` - Pre-fills `jobSlots` channel with `JobSlotSize` tokens
+- `Start()` - Starts goroutine with `time.NewTicker`
+- `pollUntilEmpty()` - Processes data fetching (polling) sequentially until fetch result is less than `BatchSize`, bypassing ticker delay for maximum throughput.
+- `pollOnce()` - Acquires job slot (non-blocking), fetches data, submits each item as `Job` to worker pool. Returns number of items and error.
+- `releaseSlot()` - Returns token to job slots channel
+- `Stop()` - Cancels context, waits for goroutine to exit
 
 **Mechanism:** Timer-based polling + Semaphore (channel `jobSlots`) to limit concurrent polls.
 
@@ -197,7 +213,7 @@
 ### Poll-to-Process Flow
 
 ```
-   Ticker (every Interval)
+   Ticker (every Interval) or Loop (pollUntilEmpty)
         │
         ▼
    pollOnce()

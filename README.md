@@ -68,9 +68,10 @@
 ### 🚀 Worker Pool
 
 - ✅ **Ultra-Efficient sync.Pool** - Reuse objek Job untuk mengurangi GC pressure
+- ✅ **Shared Queue with Elastic Buffer** - Menghilangkan Head-of-Line blocking dan deadlock akibat lonjakan job
 - ✅ **Concurrent Job Processing** - Multiple workers untuk proses jobs secara parallel
 - ✅ **Bounded Queue** - Backpressure dengan queue size limit
-- ✅ **Non-blocking Submit** - Returns `ErrQueueFull` jika queue penuh
+- ✅ **100% Reliable Submit** - Menghilangkan `ErrQueueFull` menggunakan mekanisme Elastic Buffer dan backoff eksponensial
 - ✅ **Submit Blocking** - Menunggu sampai queue tersedia (recommended untuk feedback backpressure)
 - ✅ **Thread-safe** - sync.RWMutex untuk state management
 - ✅ **Error Channel** - Monitoring job failures via `Errors()` channel

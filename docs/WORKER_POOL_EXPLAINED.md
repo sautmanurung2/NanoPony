@@ -8,15 +8,14 @@ Dokumen ini menjelaskan arsitektur *sharded worker pool* di framework NanoPony. 
 
 ## Arsitektur: Sharded Pool
 
-NanoPony kini membagi beban kerja ke dalam beberapa *shard* (pool) yang independen.
+NanoPony kini menggunakan arsitektur antrean bersama (Shared Queue) dengan Elastic Buffer untuk mencegah pemblokiran Head-of-Line sekaligus mempertahankan nama `ShardedWorkerPool` untuk kompatibilitas.
 
 ```
                                ┌──→ Shard 0 (Pool 0) ──→ Worker...
-Submit ──→ Shard Selector ──┼──→ Shard 1 (Pool 1) ──→ Worker...
-                               └──→ Shard N (Pool N) ──→ Worker...
+Submit ──→ Shared Elastic Queue ──→ Shared Channel ──→ Workers...
 ```
 
-Setiap *shard* beroperasi secara independen dengan *channel* (`jobChan`) dan *goroutine worker* sendiri. Saat `Submit()` dipanggil, sistem memilih *shard* tujuan menggunakan mekanisme *round-robin* berbasis *atomic counter*.
+Saat `Submit()` dipanggil, pekerjaan dimasukkan ke dalam saluran bersama. Jika antrean utama penuh, pekerjaan dipindahkan ke memori penyangga (Elastic Buffer) dengan mekanisme eksponensial backoff, memastikan keandalan 100% tanpa kehilangan data.
 
 ---
 
@@ -37,7 +36,7 @@ type workerPoolShard struct {
 }
 ```
 
-*   **Reduced Contention**: Dengan *sharding*, proses submit *job* tidak lagi memperebutkan satu mutex *pool* yang sama, sehingga meningkatkan *throughput* secara signifikan di bawah beban tinggi.
+*   **Elastic Queue**: Dengan mekanisme Elastic Buffer, lonjakan pekerjaan (spike) ditangani tanpa penghentian instan (deadlock), memberikan ketahanan sistem saat antrean utama penuh.
 
 ---
 
@@ -82,13 +81,13 @@ func (swp *ShardedWorkerPool) worker(shard *workerPoolShard, handler JobHandler,
 
 | Aspek | Behavior |
 |-------|----------|
-| **Konkurensi** | *Fan-out* ke beberapa *shard* paralel. |
+| **Konkurensi** | *Single shared channel* menghindari masalah *Head-of-Line blocking*. |
 | **Blocking** | *Worker* sinkron per *job* (menunggu *handler* selesai). |
-| **Locking** | *Contention* sangat rendah berkat *sharding*. |
-| **Submit** | `Submit()` non-blocking, `SubmitBlocking()` blocking. |
+| **Locking** | Optimal berkat penggunaan antrean bersama dengan buffer. |
+| **Submit** | Menggunakan mekanisme backoff dan *Elastic Buffer* menjamin *queue* tidak membuang pekerjaan. |
 
 ---
 
 ## 4. Kesimpulan
 
-Sistem ini menggabungkan keandalan mekanisme *worker pool* dengan skalabilitas yang tinggi melalui *sharding*. Desain ini mempertahankan prinsip *backpressure* untuk menjaga stabilitas aplikasi di bawah beban kerja tinggi.
+Sistem ini menggabungkan keandalan mekanisme *worker pool* dengan skalabilitas tinggi melalui saluran tunggal bersama dan *Elastic Buffer*. Desain ini mempertahankan prinsip *backpressure* untuk menjaga stabilitas aplikasi di bawah beban kerja tinggi.

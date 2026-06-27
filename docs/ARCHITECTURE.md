@@ -230,7 +230,7 @@ type KafkaWriterConfig struct {
 - `NewWorkerPool(numWorkers, queueSize, numShards)` - Membuat channel buffered, context yang dapat dibatalkan
 - `Start(ctx, handler)` - Spawn N goroutine worker; dilindungi mutex terhadap double-start
 - `worker(ctx, id)` - Select loop: pembatalan context atau konsumsi job; error dikirim ke `errChan` secara non-blocking
-- `Submit(ctx, job)` - Submit non-blocking; mengembalikan `ErrQueueFull` jika channel penuh
+- `Submit(ctx, job)` - Submit dengan eksponensial backoff dan perlindungan Elastic Buffer. Tidak pernah mengembalikan `ErrQueueFull` untuk keandalan 100%.
 - `Stop()` - Dilindungi mutex; batal context, tutup `jobChan`, tunggu via `wg.Wait()`, tutup `errChan`
 - `Errors()` - Mengembalikan channel error read-only untuk monitoring eksternal
 
@@ -262,8 +262,8 @@ type KafkaWriterConfig struct {
 **Fungsi Utama:**
 - `NewPoller(config, workerPool, dataFetcher)` - Mengisi sebelumnya channel `jobSlots` dengan token `JobSlotSize`
 - `Start()` - Memulai goroutine dengan `time.NewTicker`
-- `poll()` - Loop ticker; memanggil `pollOnce()`
-- `pollOnce()` - Akuisisi job slot (non-blocking), fetch data, submit setiap item sebagai `Job` ke worker pool
+- `pollUntilEmpty()` - Memproses pengambilan data (polling) secara berurutan hingga hasil pengambilan kurang dari `BatchSize`, melangkahi jeda (ticker) demi throughput maksimal.
+- `pollOnce()` - Akuisisi job slot (non-blocking), fetch data, submit setiap item sebagai `Job` ke worker pool. Mengembalikan jumlah item dan error.
 - `releaseSlot()` - Mengembalikan token ke channel job slots
 - `Stop()` - Batal context, tunggu goroutine keluar
 
@@ -336,7 +336,7 @@ type KafkaWriterConfig struct {
 ### Alur Poll-to-Process
 
 ```
-   Ticker (setiap Interval)
+   Ticker (setiap Interval) atau Looping (pollUntilEmpty)
         │
         ▼
    pollOnce()
