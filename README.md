@@ -95,13 +95,12 @@
 
 - ✅ **MessageProducer Interface** - Abstraksi untuk producing messages
 - ✅ **Context Support** - ProduceWithContext untuk cancellation dan timeout
-- ✅ **JSON Serialization** - Auto marshal messages ke JSON
-- ✅ **Kafka-go Integration** - Menggunakan `segmentio/kafka-go`
+- ✅ **Native Pure Go Protocol** - 100% Go Standard Library (Zero 3rd-party dependencies)
 - ✅ **Safe Close** - Proper resource cleanup
 
 ### 📥 Kafka Consumer
 
-- ✅ **Reader-based Consumer** - Menggunakan kafka-go Reader
+- ✅ **Native Socket Consumer** - Menggunakan pure native Go socket
 - ✅ **Consumer Groups** - Support untuk GroupID
 - ✅ **Offset Management** - StartOffset config (FirstOffset, LastOffset)
 - ✅ **MessageHandler** - Function handler untuk setiap message
@@ -466,8 +465,9 @@ go run main.go
 ├── worker.go              # Logic Worker Pool & Concurrency
 ├── poller.go              # Logic Data Poller & Rate Limiting
 ├── database.go            # Koneksi Oracle DB & pooling
-├── kafka.go               # Wrapper kafka-go reader/writer
-├── producer.go            # Logic Kafka producer & consumer
+├── kafka.go               # Native Kafka producer/consumer & partitioner
+├── kafka_conn.go          # Native Kafka wire protocol & socket connection
+├── producer.go            # Logic Kafka producer & consumer wrapper
 ├── framework.go           # Main builder & lifecycle management
 ├── config.go              # Konfigurasi sistem (Structs)
 ├── config_init.go         # Inisialisasi environment vars (Logic)
@@ -499,8 +499,7 @@ go run main.go
 - Kafka Broker (opsional, untuk fitur messaging)
 
 ## Dependensi
-
-- [kafka-go](https://github.com/segmentio/kafka-go) - Kafka client
+ 
 - [go-ora](https://github.com/sijms/go-ora) - Oracle driver
 - [godotenv](https://github.com/joho/godotenv) - Environment variables loader
 

@@ -123,14 +123,29 @@ nanopony.LogInterpolatedQuery(
 
 ---
 
-## 3. Kafka Layer
+## 3. Kafka Layer (Native Pure Go Protocol)
 
-**File**: `kafka.go`
+**File**: `kafka.go`, `kafka_conn.go`, `producer.go`
+
+The Kafka subsystem in NanoPony is built 100% purely using the **Golang Standard Library** (`net`, `crypto/tls`, `encoding/binary`, `hash/crc32`, `sync`, `time`), with zero external third-party dependencies.
+
+### Core Components
+- **`KafkaConn`**: Low-level TCP socket connection with Kafka binary framing, supporting SASL/PLAIN handshake over TLS/TCP, correlation ID multiplexing, and binary response parsing.
+- **`KafkaWriter`**: Message producer component supporting batching, synchronous/asynchronous emit, and flexible partition balancing strategies (`RoundRobinBalancer`, `LeastBytesBalancer`, `HashBalancer`/Murmur2).
+- **`KafkaReader` / Consumer**: Message consumer component for sequential message fetching, committed offset tracking, and auto-reconnect logic.
+- **`KafkaProducer` & `KafkaConsumer`**: High-level wrappers integrated directly into the NanoPony framework lifecycle.
+
+### Supported Kafka Binary Protocols
+1. **Metadata API (Key 3, Version 1)**: Broker and topic partition discovery.
+2. **Produce API (Key 0, Version 2)**: Message batch publication with IEEE CRC32 checksum computation.
+3. **Fetch API (Key 1, Version 2)**: Partition message batch consumption.
+4. **ListOffsets API (Key 2, Version 1)**: Early offset (`-2`) and latest offset (`-1`) queries.
+5. **SASL Handshake & Authenticate (Key 17 & 36)**: SASL PLAIN authentication over TCP/TLS.
 
 ### Automatic Optimization
 When you call `.Build()` on the framework, NanoPony automatically adjusts the Kafka Writer's `BatchSize` to match the number of workers in the Worker Pool. This ensures a balanced throughput between data processing and message delivery.
 
-### Confluent Cloud Mode
+### Confluent Cloud Mode & Security
 If `KAFKA_MODELS=kafka-confluent`, NanoPony automatically enables SASL/PLAIN authentication and TLS using:
 - `API_KEY_KAFKA_CONFLUENT`
 - `API_SECRET_KAFKA_CONFLUENT`
@@ -259,10 +274,11 @@ Use `DynamicConfig` for optional settings or custom modules to keep the framewor
 
 ## Summary of Key Features
 
+✅ **Native Pure Go Kafka** - 100% Go standard library with zero third-party dependencies.  
 ✅ **Auto-Scale Kafka Batching** - Based on worker pool capacity.  
 ✅ **Oracle Pool Optimization** - Safe default settings for production.  
 ✅ **Dynamic Configuration** - Flexible for custom environment variables.  
 ✅ **Safe-Fail Validation** - Validates configuration upon startup.  
 ✅ **Aggregated Shutdown Errors** - Reports all issues at the end of the shutdown process.  
 ✅ **SQL Debugger** - Interpolation utility for readable SQL logging.  
-✅ **High Performance** - ~39x faster than Fiber for internal jobs, with optimized allocations on hot paths.
+✅ **High Performance & Quality** - >85.7% test coverage, 0 race condition, GC-friendly via `sync.Pool`.

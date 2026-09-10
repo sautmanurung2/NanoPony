@@ -50,6 +50,12 @@ Our logger is designed for *production monitoring*.
 * **Async Logging**: Logs are not written to files synchronously but via a channel to avoid slowing down the main process.
 * **Hybrid Output**: Can log to Console (for dev) and Elasticsearch (for prod) simultaneously.
 
+### 5. Native Kafka Subsystem (`kafka.go`, `kafka_conn.go`, `producer.go`)
+Kafka integration is implemented **100% natively using the Go standard library** with zero third-party dependencies:
+* **Wire Protocol Framing**: Uses `encoding/binary` and IEEE `hash/crc32` for binary produce and fetch request/response frames.
+* **Connection & Security**: Low-level TCP socket using `net.Conn` and `crypto/tls` with SASL PLAIN handshake support.
+* **Balancing**: Supports RoundRobin, LeastBytes, and Hash/Murmur2 partition balancing strategies.
+
 ---
 
 ## 📏 Coding Standards & Conventions

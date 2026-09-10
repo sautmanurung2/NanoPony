@@ -48,12 +48,14 @@
 - ✅ **Batch Processing**: Configurable batch sizes for efficient data fetching.
 - ✅ **Rate Limiting**: JobSlot semaphore system for controlled concurrency.
 - ✅ **Interface-based**: Easy to implement custom data sources via `DataFetcher`.
-- ✅ **Kafka Integration**: Native integration with `kafka-go`.
+- ✅ **Native Kafka Subsystem**: 100% pure Go standard library implementation with zero external third-party dependencies (replaces `segmentio/kafka-go`).
+- ✅ **Kafka Protocol Support**: Binary socket framing, Produce (API v2), Fetch (API v2), ListOffsets, Metadata discovery, Partition balancers (RoundRobin, LeastBytes, Hash/Murmur2), and SASL PLAIN / TLS.
 
-### 📝 Performance Highlights
-- ⚡ **Throughput**: Significantly optimized via sharded worker pools.
-- ⚡ **Memory Efficiency**: Minimal allocation per job.
-- ⚡ **Stability**: No memory leaks verified over extended operations.
+### 📝 Performance & Quality Highlights
+- ⚡ **Zero Third-Party Kafka Deps**: Pure Go implementation using `net`, `crypto/tls`, `encoding/binary`, and `hash/crc32`.
+- ⚡ **Throughput**: Significantly optimized via sharded worker pools and connection pooling.
+- ⚡ **Memory Efficiency**: Minimal allocation per job through `sync.Pool`.
+- ⚡ **Stability & Coverage**: Over **85.7% unit test coverage** and passed Go race detector (`-race`) without data races.
 
 ## Installation
 

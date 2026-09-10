@@ -52,7 +52,7 @@ We prioritize performance and stability.
 - `worker.go`: Worker Pool implementation and concurrency management.
 - `poller.go`: Periodic data fetching and rate limiting.
 - `logger.go`: Structured logging system.
-- `database.go` & `kafka.go`: Adaptors for Oracle and Kafka.
+- `database.go`, `kafka.go` & `kafka_conn.go`: Oracle adaptors and native Kafka wire protocol implementation (100% Go standard library).
 
 ## Code of Conduct
 Please be respectful, professional, and collaborative in all interactions.

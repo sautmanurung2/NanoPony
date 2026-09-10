@@ -123,14 +123,29 @@ nanopony.LogInterpolatedQuery(
 
 ---
 
-## 3. Layer Kafka
+## 3. Layer Kafka (Native Pure Go Protocol)
 
-**File**: `kafka.go`
+**File**: `kafka.go`, `kafka_conn.go`, `producer.go`
+
+Subsistem Kafka di NanoPony dibangun murni 100% menggunakan **Golang Standard Library** (`net`, `crypto/tls`, `encoding/binary`, `hash/crc32`, `sync`, `time`) tanpa dependensi third-party eksternal apa pun (zero third-party dependency).
+
+### Komponen Utama
+- **`KafkaConn`**: Koneksi soket TCP low-level dengan binary wire framing, mendukung SASL/PLAIN handshake over TLS/TCP, multiplexing correlation ID, serta parsing respon Kafka.
+- **`KafkaWriter`**: Komponen producer pesan dengan dukungan batching, asinkron/sinkron emit, serta strategi partisi yang fleksibel (`RoundRobinBalancer`, `LeastBytesBalancer`, `HashBalancer`/Murmur2).
+- **`KafkaReader` / Consumer**: Komponen consumer pesan untuk fetch message berurutan, tracking committed offset, dan auto-reconnect logic.
+- **`KafkaProducer` & `KafkaConsumer`**: Wrapper tingkat tinggi yang terintegrasi langsung dengan lifecycle framework NanoPony.
+
+### Protokol Binary Kafka yang Didukung
+1. **Metadata API (Key 3, Version 1)**: Discovery broker dan partisi topic.
+2. **Produce API (Key 0, Version 2)**: Pengiriman batch pesan dengan komputasi CRC32 checksum IEEE.
+3. **Fetch API (Key 1, Version 2)**: Pengambilan batch pesan dari partisi broker.
+4. **ListOffsets API (Key 2, Version 1)**: Query offset awal (`-2`) dan offset terbaru (`-1`).
+5. **SASL Handshake & Authenticate (Key 17 & 36)**: Autentikasi mekanisme SASL PLAIN.
 
 ### Optimasi Otomatis
 Saat Anda memanggil `.Build()` pada framework, NanoPony secara otomatis menyesuaikan `BatchSize` pada Kafka Writer agar sesuai dengan jumlah worker di Worker Pool. Hal ini memastikan throughput yang seimbang antara pemrosesan data dan pengiriman pesan.
 
-### Mode Confluent Cloud
+### Mode Confluent Cloud & Security
 Jika `KAFKA_MODELS=kafka-confluent`, NanoPony otomatis mengaktifkan autentikasi SASL/PLAIN dan TLS menggunakan:
 - `API_KEY_KAFKA_CONFLUENT`
 - `API_SECRET_KAFKA_CONFLUENT`
@@ -259,10 +274,11 @@ Gunakan `DynamicConfig` untuk pengaturan yang bersifat opsional atau modul kusto
 
 ## Ringkasan Fitur Utama
 
+✅ **Native Pure Go Kafka** - 100% Go standard library tanpa library third-party.  
 ✅ **Auto-Scale Kafka Batching** - Berdasarkan kapasitas worker pool.  
 ✅ **Oracle Pool Optimization** - Pengaturan default yang aman untuk produksi.  
 ✅ **Dynamic Configuration** - Fleksibel untuk variabel environment kustom.  
 ✅ **Safe-Fail Validation** - Validasi konfigurasi di awal aplikasi berjalan.  
 ✅ **Aggregated Shutdown Errors** - Melaporkan semua masalah saat proses shutdown berakhir.  
 ✅ **SQL Debugger** - Utilitas interpolasi query untuk logging yang mudah dibaca.  
-✅ **High Performance** - ~39x lebih cepat dari Fiber untuk internal jobs, dengan alokasi memori yang dioptimalkan pada hot paths.
+✅ **High Performance & Quality** - Unit test coverage >85.7%, 0 race condition, GC-friendly via `sync.Pool`.

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/segmentio/kafka-go"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
@@ -41,7 +40,7 @@ type MessageProducer interface {
 	Close() error
 }
 
-// KafkaProducer implements MessageProducer using kafka-go Writer.
+// KafkaProducer implements MessageProducer using native pure Go KafkaWriter.
 // It provides JSON serialization for messages.
 //
 // Example:
@@ -50,11 +49,11 @@ type MessageProducer interface {
 //	producer := NewKafkaProducer(writer)
 //	defer producer.Close()
 type KafkaProducer struct {
-	writer *kafka.Writer
+	writer *KafkaWriter
 }
 
 // NewKafkaProducer creates a new Kafka producer from an existing writer.
-func NewKafkaProducer(writer *kafka.Writer) *KafkaProducer {
+func NewKafkaProducer(writer *KafkaWriter) *KafkaProducer {
 	return &KafkaProducer{
 		writer: writer,
 	}
@@ -81,7 +80,7 @@ func (p *KafkaProducer) ProduceProtoWithKey(topic string, key []byte, message pr
 // writeKafkaMessage is an internal helper that handles the common logic for sending messages
 // and logging the outcomes to reduce code duplication.
 func (p *KafkaProducer) writeKafkaMessage(ctx context.Context, topic string, payload any, messageBytes []byte, logData string, loggerEntry *LoggerEntry) (bool, error) {
-	kafkaMsg := kafka.Message{
+	kafkaMsg := KafkaMessage{
 		Topic: topic,
 		Value: messageBytes,
 		WriterData: KafkaMessageMetadata{
@@ -108,7 +107,7 @@ func (p *KafkaProducer) writeKafkaMessage(ctx context.Context, topic string, pay
 // writeKafkaMessageWithKey is an internal helper that handles the common logic for sending messages with a key
 // and logging the outcomes to reduce code duplication.
 func (p *KafkaProducer) writeKafkaMessageWithKey(ctx context.Context, topic string, key []byte, payload any, messageBytes []byte, logData string, loggerEntry *LoggerEntry) (bool, error) {
-	kafkaMsg := kafka.Message{
+	kafkaMsg := KafkaMessage{
 		Topic: topic,
 		Value: messageBytes,
 		Key:   key,

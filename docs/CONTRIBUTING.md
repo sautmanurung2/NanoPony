@@ -52,7 +52,7 @@ Kami memprioritaskan performa dan stabilitas.
 - `worker.go`: Implementasi Worker Pool dan manajemen konkurensi.
 - `poller.go`: Pengambilan data periodik dan pembatasan laju (rate limiting).
 - `logger.go`: Sistem logging terstruktur.
-- `database.go` & `kafka.go`: Adaptor untuk Oracle dan Kafka.
+- `database.go`, `kafka.go` & `kafka_conn.go`: Adaptor Oracle dan implementasi native Kafka wire protocol (100% Go standard library).
 
 ## Kode Etik (Code of Conduct)
 Harap bersikap hormat, profesional, dan kolaboratif dalam semua interaksi.

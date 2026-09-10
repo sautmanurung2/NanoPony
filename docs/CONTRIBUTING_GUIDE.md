@@ -50,6 +50,12 @@ Logger kami didesain untuk *production monitoring*.
 * **Async Logging:** Log tidak langsung ditulis ke file secara *blocking*, melainkan lewat channel agar tidak memperlambat proses utama.
 * **Hybrid Output:** Bisa ke Console (untuk dev) dan Elasticsearch (untuk prod) secara bersamaan.
 
+### 5. Subsistem Native Kafka (`kafka.go`, `kafka_conn.go`, `producer.go`)
+Komunikasi dengan Apache Kafka diimplementasikan secara **100% native murni Golang standard library** tanpa library pihak ketiga:
+* **Wire Protocol Framing:** Menggunakan `encoding/binary` dan IEEE `hash/crc32` untuk produce dan fetch request/response.
+* **Koneksi & Sekuriti:** Menggunakan socket `net.Conn` dan `crypto/tls` dengan dukungan SASL PLAIN handshake.
+* **Balancing:** Mendukung RoundRobin, LeastBytes, dan Hash/Murmur2 partition balancer.
+
 ---
 
 ## 📏 Standar Coding & Konvensi

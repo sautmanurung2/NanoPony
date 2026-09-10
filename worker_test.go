@@ -333,15 +333,19 @@ func TestWorkerPoolSubmitBlockingNoJobLoss(t *testing.T) {
 	pool := NewWorkerPool(1, 3, 1)
 	ctx := context.Background()
 
+	totalJobs := 20
 	processed := int32(0)
+	var wg sync.WaitGroup
+	wg.Add(totalJobs)
+
 	pool.Start(ctx, func(ctx context.Context, job *Job) error {
-		time.Sleep(10 * time.Millisecond)
+		defer wg.Done()
+		time.Sleep(2 * time.Millisecond)
 		atomic.AddInt32(&processed, 1)
 		return nil
 	})
 
 	// Submit many jobs using SubmitBlocking
-	totalJobs := 20
 	for i := 0; i < totalJobs; i++ {
 		job := AcquireJob()
 		job.ID = "job"
@@ -349,11 +353,12 @@ func TestWorkerPoolSubmitBlockingNoJobLoss(t *testing.T) {
 		if err != nil {
 			t.Errorf("SubmitBlocking should not fail, got %v", err)
 			job.Release()
+			wg.Done()
 		}
 	}
 
 	// Wait for all jobs to be processed
-	time.Sleep(500 * time.Millisecond)
+	wg.Wait()
 
 	pool.Stop()
 

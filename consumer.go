@@ -2,10 +2,11 @@ package nanopony
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"sync"
 	"time"
 
-	"github.com/segmentio/kafka-go"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -13,7 +14,7 @@ import (
 // It receives the raw message bytes and returns an error if processing fails.
 type MessageHandler func(message []byte) error
 
-// KafkaConsumer implements a Kafka consumer using kafka-go Reader.
+// KafkaConsumer implements a native Kafka consumer using pure Go sockets.
 // It provides a simple way to consume messages from a single topic.
 //
 // Example:
@@ -30,8 +31,13 @@ type MessageHandler func(message []byte) error
 //	    return nil
 //	})
 type KafkaConsumer struct {
-	reader     *kafka.Reader
+	config     KafkaConsumerConfig
 	retryDelay time.Duration
+
+	mu     sync.Mutex
+	conn   *KafkaConn
+	offset int64
+	closed bool
 }
 
 // KafkaConsumerConfig holds configuration for creating a consumer
@@ -43,32 +49,33 @@ type KafkaConsumerConfig struct {
 	// GroupID is the consumer group ID
 	GroupID string
 	// StartOffset is the initial offset to start from.
-	// Use kafka.FirstOffset or kafka.LastOffset. Defaults to LastOffset.
+	// Use FirstOffset or LastOffset. Defaults to LastOffset.
 	StartOffset int64
 	// RetryDelay is the delay before retrying after a handler error.
 	// Default is 1 second. Set to 0 to disable (immediate retry).
 	RetryDelay time.Duration
+	// Transport holds transport security settings (TLS/SASL)
+	Transport *KafkaTransport
 }
 
 // NewKafkaConsumer creates a new Kafka consumer with the given configuration.
 // If StartOffset is 0, it defaults to LastOffset.
 // If RetryDelay is 0, it defaults to 1 second backoff on handler errors.
 func NewKafkaConsumer(config KafkaConsumerConfig) *KafkaConsumer {
-	readerConfig := kafka.ReaderConfig{
-		Brokers:     config.Brokers,
-		Topic:       config.Topic,
-		GroupID:     config.GroupID,
-		StartOffset: config.StartOffset,
+	startOffset := config.StartOffset
+	if startOffset == 0 {
+		startOffset = LastOffset
 	}
 
-	// Default to LastOffset if not specified
-	if config.StartOffset == 0 {
-		readerConfig.StartOffset = kafka.LastOffset
+	retryDelay := config.RetryDelay
+	if retryDelay == 0 {
+		retryDelay = 1 * time.Second
 	}
 
 	return &KafkaConsumer{
-		reader:     kafka.NewReader(readerConfig),
-		retryDelay: config.RetryDelay,
+		config:     config,
+		retryDelay: retryDelay,
+		offset:     startOffset,
 	}
 }
 
@@ -76,18 +83,37 @@ func NewKafkaConsumer(config KafkaConsumerConfig) *KafkaConsumer {
 // This is a blocking call that runs until the context is cancelled.
 //
 // Message processing flow:
-// 1. Read message from Kafka
+// 1. Fetch message from Kafka
 // 2. Call handler with message value
-// 3. If handler succeeds, commit the message
+// 3. If handler succeeds, advance offset
 // 4. If handler fails, wait for RetryDelay before retry (default 1s backoff)
-//
-// Note: If the handler returns an error, the message is NOT committed
-// and will be re-delivered on the next consumption cycle.
 func (c *KafkaConsumer) ConsumeWithContext(ctx context.Context, handler MessageHandler) error {
-	// Default retry delay if not configured
-	retryDelay := c.retryDelay
-	if retryDelay == 0 {
-		retryDelay = 1 * time.Second
+	if len(c.config.Brokers) == 0 {
+		return errors.New("kafka consumer has no brokers configured")
+	}
+
+	broker := c.config.Brokers[0]
+	conn, err := DialKafka(ctx, broker, c.config.Transport)
+	if err != nil {
+		return fmt.Errorf("failed to connect to kafka: %w", err)
+	}
+
+	c.mu.Lock()
+	c.conn = conn
+	c.mu.Unlock()
+
+	defer func() {
+		_ = c.Close()
+	}()
+
+	// Resolve initial offset if set to FirstOffset or LastOffset
+	if c.offset < 0 {
+		resolvedOffset, err := conn.GetOffset(c.config.Topic, 0, c.offset)
+		if err == nil && resolvedOffset >= 0 {
+			c.offset = resolvedOffset
+		} else {
+			c.offset = 0
+		}
 	}
 
 	for {
@@ -95,28 +121,41 @@ func (c *KafkaConsumer) ConsumeWithContext(ctx context.Context, handler MessageH
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
-			msg, err := c.reader.ReadMessage(ctx)
+			messages, _, err := conn.FetchMessages(c.config.Topic, 0, c.offset, 1048576)
 			if err != nil {
-				return fmt.Errorf("failed to read message: %w", err)
-			}
-
-			// Process the message with handler
-			if err := handler(msg.Value); err != nil {
-				// Handler failed - message is NOT committed
-				// Log error and apply backoff before retry to prevent tight loops
-				LogFramework("WARNING", "KafkaConsumer", fmt.Sprintf("handler error: %v (retrying after %v)", err, retryDelay))
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
+				// Retry fetching after a brief backoff
 				select {
 				case <-ctx.Done():
 					return ctx.Err()
-				case <-time.After(retryDelay):
-					// Backoff complete, continue to retry
+				case <-time.After(500 * time.Millisecond):
+					continue
 				}
-				continue
 			}
 
-			// Commit the message after successful processing
-			if err := c.reader.CommitMessages(ctx, msg); err != nil {
-				return fmt.Errorf("failed to commit message: %w", err)
+			if len(messages) == 0 {
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-time.After(200 * time.Millisecond):
+					continue
+				}
+			}
+
+			for _, msg := range messages {
+				if err := handler(msg.Value); err != nil {
+					LogFramework("WARNING", "KafkaConsumer", fmt.Sprintf("handler error: %v (retrying after %v)", err, c.retryDelay))
+					select {
+					case <-ctx.Done():
+						return ctx.Err()
+					case <-time.After(c.retryDelay):
+					}
+					// Do not advance offset on error, retry the same message
+					break
+				}
+				c.offset = msg.Offset + 1
 			}
 		}
 	}
@@ -134,10 +173,20 @@ func (c *KafkaConsumer) ConsumeWithContextProto(ctx context.Context, factory fun
 	})
 }
 
-// Close closes the consumer and releases resources
+// Close closes the consumer and releases network resources
 func (c *KafkaConsumer) Close() error {
-	if c.reader != nil {
-		return c.reader.Close()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.closed {
+		return nil
+	}
+	c.closed = true
+
+	if c.conn != nil {
+		err := c.conn.Close()
+		c.conn = nil
+		return err
 	}
 	return nil
 }

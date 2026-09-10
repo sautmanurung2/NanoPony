@@ -29,7 +29,7 @@
 
 **Key Features:**
 - ✅ **Ultra-Efficient sync.Pool**: Reuses Job objects for high performance and low GC pressure.
-- ✅ **Kafka Producer & Consumer**: Integration with Kafka using `kafka-go`.
+- ✅ **Kafka Producer & Consumer**: Integration with Kafka using pure Go native protocol (Zero external dependencies).
 - ✅ **Oracle Database**: Connection management using `go-ora` with connection pooling.
 - ✅ **Worker Pool**: Concurrent job processing with bounded queues.
 - ✅ **Poller**: Periodic data fetching with configurable intervals.
@@ -39,7 +39,7 @@
 - ✅ **Structured Logging**: File rotation and Elasticsearch integration.
 
 **Core Dependencies:**
-- `segmentio/kafka-go` - Kafka client
+- `Native Go Protocol` - Native Kafka client (100% Go Standard Library)
 - `sijms/go-ora/v2` - Oracle driver
 - `elastic/go-elasticsearch/v8` - Elasticsearch client
 - `joho/godotenv` - Environment variables loader

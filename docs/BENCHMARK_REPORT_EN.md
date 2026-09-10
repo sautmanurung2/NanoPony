@@ -6,36 +6,53 @@
 
 ---
 
-## 🚀 Performance Summary (Update June 2026)
+## 🚀 Performance Summary (Update September 2026)
 
-Following a series of optimizations on system *hot paths*, NanoPony achieves extremely high efficiency for internal job processing:
+Following a series of optimizations on system *hot paths* and the implementation of a native pure Go standard library Kafka subsystem, NanoPony achieves extremely high efficiency for internal job processing and event streaming:
 
 | Metric | Value | Note |
 | :--- | :--- | :--- |
 | **Throughput (Worker Pool)** | **~438.5 ns/op** | High performance thanks to sharded worker pool architecture |
 | **Memory Allocation** | **2 allocs/op** | Highly efficient heap usage (16 B/op) |
 | **Memory Leak Status** | **✅ PASSED** | Negative memory growth (-58 KB) after 50 cycles |
+| **Kafka Wire Protocol** | **Zero-Third-Party** | 100% Go stdlib (`net`, `crypto/tls`, `encoding/binary`, `hash/crc32`) |
+| **Test Coverage & Safety** | **85.7% (0 Race)** | Verified via `-race`, in-memory TCP mock server without external Kafka cluster |
 
 ---
 
-## 📊 Benchmark Results (vs Other Frameworks)
+## 📊 Multi-Framework Benchmark Results (Latest Update)
 
-NanoPony is designed to process *jobs* (background tasks) efficiently without the overhead of an HTTP stack. Here is a comparison with popular web frameworks:
+The benchmark was executed head-to-head on a Linux environment (13th Gen Intel Core i7-13700H) using `go test -tags benchmark -bench=. -benchmem` in the `benchmark/` directory.
 
-| Framework | Throughput (Job Processing) | Status |
-| :--- | :--- | :--- |
-| **NanoPony** | **~1.48 µs/op** | 🚀 **Overall Champion** |
-| **Iris** | ~3.10 µs/op | 🥈 Fast |
-| **Echo** | ~3.17 µs/op | 🥉 Fast |
-| **Fiber** | ~19.87 µs/op | 🐢 Slow (in this scenario) |
+### 1. Job Processing Throughput
+NanoPony is purpose-built to process event and background workloads without HTTP stack overhead:
 
-> **Analysis:** NanoPony excels by focusing on *internal job processing*. Our *sharded worker pool* architecture drastically reduces *lock contention* compared to frameworks designed for HTTP request-response cycles.
+| Framework | Speed (Throughput) | Memory (B/op) | Allocation (Allocs/op) | Rank & Status |
+| :--- | :--- | :--- | :--- | :--- |
+| **NanoPony** | **~3.94 µs/op** (3,943 ns/op) | **98 B/op** | **2 allocs/op** | 🚀 **Rank 1 (Fastest & Most Efficient)** |
+| **Echo** | ~6.00 µs/op (5,999 ns/op) | 5,312 B/op | 13 allocs/op | 🥈 Fast |
+| **Iris** | ~6.86 µs/op (6,860 ns/op) | 5,312 B/op | 13 allocs/op | 🥉 Fast |
+| **Fiber** | ~26.11 µs/op (26,112 ns/op) | 5,533 B/op | 21 allocs/op | 🐢 Slow (~6.6x slower) |
+
+### 2. Setup Overhead & Idle Memory
+
+| Framework | Setup Overhead | Setup Memory | Idle Memory Footprint |
+| :--- | :--- | :--- | :--- |
+| **NanoPony** | 689.4 µs/op | 4,037 B/op (17 allocs) | **14 KB** (Active Worker Pool) |
+| **Fiber** | 4.7 µs/op | 2,912 B/op (12 allocs) | **2 KB** |
+| **Echo** | 1,538.2 µs/op | 3,632 B/op (53 allocs) | **0 KB** |
+| **Iris** | 216.3 µs/op | 21,560 B/op (221 allocs) | **14 KB** |
+
+> **Analysis:**
+> - **Superior Throughput**: NanoPony processes jobs **6.6x faster than Fiber**, **1.5x faster than Echo**, and **1.7x faster than Iris**.
+> - **Extreme Memory Efficiency (54x Lower Allocation)**: Leveraging `sync.Pool` job recycling and zero third-party library overhead, NanoPony requires only **98 B/op** and **2 allocations** per job. By contrast, conventional web frameworks expend **5,300 - 5,500 B/op** and 13 - 21 allocations per cycle.
+> - **Deliberate Setup**: NanoPony's initialization upfront boots the worker pool goroutines, bounded channels, and verifies native protocols so that execution hot paths experience zero lock contention and no buffer reallocations.
 
 ---
 
-## ⚙️ Optimization Details (Updated June 2026)
+## ⚙️ Optimization Details (Updated June - September 2026)
 
-To achieve current throughput, we implemented the following optimizations:
+To achieve current throughput and eliminate external library overhead, we implemented the following optimizations:
 
 ### 1. Sharded Worker Pool
 We split the single `WorkerPool` into multiple independent *shards*.
@@ -45,16 +62,20 @@ We split the single `WorkerPool` into multiple independent *shards*.
 Replaced `fmt.Sprintf` with `strings.Builder` and `strconv.AppendInt`.
 - **Benefit**: Eliminates unnecessary *heap* allocations during job ID creation in the Poller.
 
-### 3. Job Lifecycle Management (sync.Pool)
-Utilized `sync.Pool` to recycle `Job` objects.
-- **Benefit**: Significantly reduces *Garbage Collector* load by reusing existing memory allocations.
+### 3. Job Lifecycle Management (sync.Pool & Atomic CAS)
+Utilized `sync.Pool` to recycle `Job` objects guarded by an `inUse atomic.Bool` fence via Compare-And-Swap (CAS).
+- **Benefit**: Significantly reduces *Garbage Collector* load while preventing double-release / data race issues under intense concurrent execution.
 
 ### 4. Zero-Allocation Field Access
 Field access within `FrameworkComponents` is optimized for zero allocations (0 allocs/op).
 
+### 5. Native Pure Go Kafka Wire Protocol (September 2026)
+Replaced third-party libraries (`github.com/segmentio/kafka-go`, `klauspost/compress`, `pierrec/lz4`) with a wire protocol built strictly on the Go standard library (`net`, `crypto/tls`, `encoding/binary`, `hash/crc32`).
+- **Benefit**: Eliminates heavy external dependencies, minimizes binary footprint, avoids excessive reflection allocations, and supports distributed partitioning strategies (RoundRobin, LeastBytes, Hash/Murmur2) over raw TCP/TLS sockets.
+
 ---
 
-## 🔍 Memory Leak Stability Test Results
+## 🔍 Memory Leak Stability & Concurrency Safety Test Results
 
 | Component | Explanation | Status |
 | :--- | :--- | :--- |
@@ -62,11 +83,12 @@ Field access within `FrameworkComponents` is optimized for zero allocations (0 a
 | **WorkerPool** | Stress test 1,000 jobs | ✅ Stable (+66 KB growth) |
 | **Concurrent** | 20 simultaneous instances | ✅ Stable (+42 KB growth) |
 | **Poller** | Long running (2 seconds) | ✅ Stable (100% processed) |
+| **Native Kafka Protocol** | Mock in-memory TCP socket test (Produce/Fetch/ListOffsets/Metadata/SASL) | ✅ Stable (0 leak, 0 race, 85.7% coverage) |
 
 ---
 
 ## 🎯 Final Conclusion
 
-The NanoPony framework is a *high-performance* solution for Kafka-Oracle integration. With its modular architecture and advanced job lifecycle management optimizations, NanoPony delivers excellent efficiency for background processing systems requiring high throughput with a minimal memory footprint.
+The NanoPony framework is a *high-performance* solution for Kafka-Oracle integration. With its pure native Kafka implementation (zero third-party dependencies) and modular architecture featuring advanced job lifecycle optimizations, NanoPony delivers outstanding efficiency for background processing systems requiring high throughput with minimal memory footprint and clean dependencies.
 
-*Report generated on June 3, 2026. Data valid for v0.0.59.*
+*Report updated on September 10, 2026. Data valid for v0.0.60 (Pure Native Kafka).*
