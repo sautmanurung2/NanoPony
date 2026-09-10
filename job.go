@@ -3,6 +3,7 @@ package nanopony
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 )
 
 // Job represents a unit of work to be processed by the worker pool.
@@ -14,6 +15,8 @@ type Job struct {
 	Data any
 	// Meta contains optional metadata (e.g., source, timestamp)
 	Meta map[string]any
+
+	inUse atomic.Bool
 }
 
 var jobPool = sync.Pool{
@@ -27,13 +30,18 @@ var jobPool = sync.Pool{
 // AcquireJob retrieves a Job from the pool.
 // Always call job.Release() when finished with the job to return it to the pool.
 func AcquireJob() *Job {
-	return jobPool.Get().(*Job)
+	j := jobPool.Get().(*Job)
+	j.inUse.Store(true)
+	return j
 }
 
 // Release returns the job to the pool after resetting its fields.
 // Do not use the job after calling Release.
 func (j *Job) Release() {
 	if j == nil {
+		return
+	}
+	if !j.inUse.CompareAndSwap(true, false) {
 		return
 	}
 	j.ID = ""

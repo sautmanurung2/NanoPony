@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/segmentio/kafka-go"
 )
 
 // Framework errors
@@ -63,7 +62,7 @@ var (
 type Framework struct {
 	config       *Config
 	db           *sql.DB
-	kafkaWriter  *kafka.Writer
+	kafkaWriter  *KafkaWriter
 	producer     *KafkaProducer
 	workerPool   *ShardedWorkerPool
 	poller       *Poller
@@ -187,7 +186,7 @@ func (f *Framework) WithKafkaWriterSafeRoundRobin() (*Framework, error) {
 
 // WithKafkaWriterFromInstance allows using an existing Kafka writer
 // instead of creating a new one from config.
-func (f *Framework) WithKafkaWriterFromInstance(writer *kafka.Writer) *Framework {
+func (f *Framework) WithKafkaWriterFromInstance(writer *KafkaWriter) *Framework {
 	f.kafkaWriter = writer
 	return f
 }
@@ -348,7 +347,7 @@ type FrameworkComponents struct {
 	// DB is the Oracle database connection
 	DB *sql.DB
 	// KafkaWriter is the Kafka writer for producing messages
-	KafkaWriter *kafka.Writer
+	KafkaWriter *KafkaWriter
 	// Producer is the Kafka producer wrapper
 	Producer *KafkaProducer
 	// WorkerPool manages the concurrent job processing
@@ -395,9 +394,8 @@ func (fc *FrameworkComponents) CheckReadiness(ctx context.Context) error {
 
 	// Check Kafka Writer (by checking connectivity if possible, or just validation)
 	if fc.KafkaWriter != nil {
-		// Basic validation: ensure brokers are reachable
-		// Note: kafka-go doesn't have a direct 'Ping', but we can check if it's nil
-		if fc.KafkaWriter.Addr == nil || len(fc.KafkaWriter.Addr.String()) == 0 {
+		// Basic validation: ensure brokers are configured
+		if len(fc.KafkaWriter.Brokers) == 0 {
 			return fmt.Errorf("kafka writer has no brokers configured")
 		}
 	}
