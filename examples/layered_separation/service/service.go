@@ -436,7 +436,7 @@ func (s *eventService) PublishUserEvent(ctx context.Context, userID int, eventTy
 	}
 
 	topic := s.cfg.KafkaTopic(s.cfg.Kafka.UserEventsTopic)
-	_, err := s.producer.ProduceWithContext(ctx, topic, event)
+	_, err := s.producer.ProduceWithContext(ctx, topic, event, nil)
 	if err != nil {
 		return fmt.Errorf("failed to publish user event: %w", err)
 	}
@@ -455,7 +455,7 @@ func (s *eventService) PublishOrderEvent(ctx context.Context, orderID int, event
 	}
 
 	topic := s.cfg.KafkaTopic(s.cfg.Kafka.OrderEventsTopic)
-	_, err := s.producer.ProduceWithContext(ctx, topic, event)
+	_, err := s.producer.ProduceWithContext(ctx, topic, event, nil)
 	if err != nil {
 		return fmt.Errorf("failed to publish order event: %w", err)
 	}
@@ -473,7 +473,7 @@ func (s *eventService) PublishNotification(ctx context.Context, title string, me
 	}
 
 	topic := s.cfg.KafkaTopic(s.cfg.Kafka.NotificationTopic)
-	_, err := s.producer.ProduceWithContext(ctx, topic, notification)
+	_, err := s.producer.ProduceWithContext(ctx, topic, notification, nil)
 	if err != nil {
 		return fmt.Errorf("failed to publish notification: %w", err)
 	}

@@ -346,7 +346,7 @@ func (s *userServiceImpl) ActivateUser(ctx context.Context, userID int) error {
 		"timestamp":  time.Now().Unix(),
 	}
 
-	success, err := s.producer.ProduceWithContext(ctx, "user-events", event)
+	success, err := s.producer.ProduceWithContext(ctx, "user-events", event, nil)
 	if err != nil {
 		return fmt.Errorf("failed to send kafka message: %w", err)
 	}
@@ -373,7 +373,7 @@ func (s *userServiceImpl) SendUserEventToKafka(ctx context.Context, userID int, 
 		"timestamp":  time.Now().Unix(),
 	}
 
-	success, err := s.producer.ProduceWithContext(ctx, "user-events", eventData)
+	success, err := s.producer.ProduceWithContext(ctx, "user-events", eventData, nil)
 	if err != nil {
 		return err
 	}
@@ -445,7 +445,7 @@ func (s *orderServiceImpl) ProcessPendingOrders(ctx context.Context) error {
 			"timestamp":  time.Now().Unix(),
 		}
 
-		if _, err := s.producer.ProduceWithContext(ctx, "order-events", notification); err != nil {
+		if _, err := s.producer.ProduceWithContext(ctx, "order-events", notification, nil); err != nil {
 			log.Printf("[%s] Failed to send notification for order %d: %v",
 				s.ServiceName(), order.ID, err)
 		}
@@ -483,7 +483,7 @@ func (s *orderServiceImpl) CreateOrderAndNotify(ctx context.Context, order *Orde
 		"timestamp":  time.Now().Unix(),
 	}
 
-	if _, err := s.producer.ProduceWithContext(ctx, "order-events", notification); err != nil {
+	if _, err := s.producer.ProduceWithContext(ctx, "order-events", notification, nil); err != nil {
 		return fmt.Errorf("failed to send kafka message: %w", err)
 	}
 
@@ -501,7 +501,7 @@ type pendingOrderFetcher struct {
 	orderRepo OrderRepository
 }
 
-func (f *pendingOrderFetcher) Fetch() ([]interface{}, error) {
+func (f *pendingOrderFetcher) Fetch(ctx context.Context) ([]interface{}, error) {
 	orders, err := f.orderRepo.GetPendingOrders()
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch pending orders: %w", err)
@@ -566,7 +566,7 @@ func main() {
 
 	// 3. Setup Kafka writer dan producer (mock untuk demo)
 	fmt.Println("[3] Inisialisasi Kafka producer...")
-	kafkaWriter := nanopony.NewKafkaWriterFromConfig(config)
+	kafkaWriter := nanopony.NewKafkaWriterFromConfigRoundRobin(config)
 	producer := nanopony.NewKafkaProducer(kafkaWriter)
 	fmt.Println("    ✓ Kafka producer initialized")
 	fmt.Println()
@@ -611,7 +611,7 @@ func main() {
 
 	// 8. Menjalankan framework
 	fmt.Println("[7] Menjalankan framework...")
-	components.Start(ctx, func(ctx context.Context, job nanopony.Job) error {
+	components.Start(ctx, func(ctx context.Context, job *nanopony.Job) error {
 		order, ok := job.Data.(Order)
 		if !ok {
 			return fmt.Errorf("invalid job data type")

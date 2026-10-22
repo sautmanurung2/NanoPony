@@ -43,8 +43,7 @@ type pendingOrderFetcher struct {
 	orderRepo interfaces.OrderRepository
 }
 
-func (f *pendingOrderFetcher) Fetch() ([]interface{}, error) {
-	ctx := context.Background()
+func (f *pendingOrderFetcher) Fetch(ctx context.Context) ([]interface{}, error) {
 	orders, err := f.orderRepo.GetPendingOrders(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch pending orders: %w", err)
@@ -147,7 +146,7 @@ func main() {
 
 	// Initialize Kafka writer dan producer
 	nanoponyConfig := nanopony.NewConfig()
-	kafkaWriter := nanopony.NewKafkaWriterFromConfig(nanoponyConfig)
+	kafkaWriter := nanopony.NewKafkaWriterFromConfigRoundRobin(nanoponyConfig)
 	producer := nanopony.NewKafkaProducer(kafkaWriter)
 	fmt.Println("✓ Kafka producer initialized")
 
@@ -215,7 +214,7 @@ func main() {
 	defer cancel()
 
 	// Job handler untuk worker pool
-	components.Start(ctx, func(ctx context.Context, job nanopony.Job) error {
+	components.Start(ctx, func(ctx context.Context, job *nanopony.Job) error {
 		order, ok := job.Data.(models.Order)
 		if !ok {
 			return fmt.Errorf("invalid job data type")
@@ -385,7 +384,7 @@ func main() {
 	fmt.Println("   ✓ Interface Layer: Repository and Service contracts")
 	fmt.Println("   ✓ Repository Layer: Data access implementations")
 	fmt.Println("   ✓ Service Layer: Business logic and orchestration")
-	fmt.Println("\n💡 Press Ctrl+C to shutdown\n")
+	fmt.Print("\n💡 Press Ctrl+C to shutdown\n\n")
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
